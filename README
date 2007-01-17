@@ -36,34 +36,40 @@ accesses the 8388V over the serial port.  Some tests require multiple nodes.  In
 these cases, one node will be the 8388V under test, and the other will be the
 node running the python framework.  The tests are:
 
-all: [unimplemented]
-Run all of the tests.
+all [unimplemented]: Run all of the tests.
 
-ll-simple: [unimplemented]
-Acquire and return an IP address using link-local addressing.  IP address can be
-any valid address from the 169.254.*.* link local space.
+ll-simple [unimplemented]: Acquire and return an IP address using link-local
+addressing.  IP address can be any valid address from the 169.254.*.* link local
+space.
 
-ll-conflict: [unimplemented]
-This test requires two nodes, A and B.  A responds to the first two ARP requests
-from B.  B should try different random link local addresses until it finds one
-that A does not respond to.
+ll-conflict [unimplemented]: This test requires two nodes, A (the host) and B
+(the 8388V).  A responds to the first two ARP requests from B.  B should try
+different random link local addresses until it finds one that A does not respond
+to.
 
-ll-fight: [unimplemented]
-This test requires two nodes, A and B.  A listens for ARP requests from B and
-assumes that B is trying to acquire the link local address found in those ARP
-requests.  A assigns itself the IP address in B, thereby causing a conflict.  It
-does this by sending a very very late ARP reply to B.  B is expected to send a
-single ARP reply.  After seing this reply, A sends another ARP reply at which
-point B is expected to seek another address.
+ll-fight [unimplemented]: This test requires two nodes, A (the host) and B (the
+8388V).  A listens for ARP requests from B and assumes that B is trying to
+acquire the link local address found in those ARP requests.  A assigns itself
+the IP address in B's ARP request, thereby causing a conflict.  A sends a very
+very late ARP reply to B.  B is expected to send a single ARP reply.  After
+seeing this reply, A sends another ARP reply to maintain its claim on the
+address.  Finally, B should seek another address.
 
-mdns-simple: [unimplemented]
+mdns-simple [unimplemented]: This test requires two nodes, A (the host) and B
+(the 8388V).  B assigns itself a known host name.  A pings B at the known host
+name.
 
-mdns-conflict: [unimplemented]
+mdns-conflict [unimplemented]: This test requires two nodes, A (the host) and B
+(the 8388V).  B tries to claim the name myname but A claims to have it.  Next, B
+tries to claim myname-02.  A waits until it sees two attempts by B to claim this
+name, then claims to have it.  Next, B attempts to claim myname-03.  A waits
+until it sees three attempts by B to claim this name, then claims to have it.
+Finally, B attempts to claim myname-04 and A lets B have the name.
 
-mdns-: [unimplemented]
-
-mdns-
+sd-simple [unimplemented]: This test requires two nodes, A (the host) and B (the
+8388V).  A browses for http service and B responds.
 
 TODO
 ----
 
+Implement!
