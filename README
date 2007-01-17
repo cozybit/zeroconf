@@ -1,0 +1,69 @@
+oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+o
+o Zeroconf Suite for 8388V
+o
+oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+
+Introduction
+------------
+
+Zeroconf is a suite of software that allows a user to:
+
+-- Acquire an IP address in the event that no DHCP server is available (IPv4LL)
+-- Resolve names to IP addresses (mDNS)
+-- Discover services available on a network (DNS-SD)
+
+The IPv4LL implementation is written from scratch by cozybit.  The mDNS and
+DNS-SD implementations are a port of the Apple Darwin mDNSResponder code, which
+is licensed under the Apache 2.0 license.  In addition to the standard zeroconf
+features, this suite implements a simple webserver that can be advertised using
+mDNS.
+
+Building
+--------
+
+The zerconf suite is based on the 8388V No Host SDK.  To build it, simply type
+"make" in the Build directory of the SDK.  The output is an image called
+nh8388v.axf that can be loaded into the 8388V RAM, or an image called csb0.bin
+that can be loaded into flash using writespi.axf from Marvell.
+
+Testing
+-------
+
+The zeroconf implementation can be operated from the serial console of the
+8388V.  To automate testing, a python framework found in the test subdirectory
+accesses the 8388V over the serial port.  Some tests require multiple nodes.  In
+these cases, one node will be the 8388V under test, and the other will be the
+node running the python framework.  The tests are:
+
+all: [unimplemented]
+Run all of the tests.
+
+ll-simple: [unimplemented]
+Acquire and return an IP address using link-local addressing.  IP address can be
+any valid address from the 169.254.*.* link local space.
+
+ll-conflict: [unimplemented]
+This test requires two nodes, A and B.  A responds to the first two ARP requests
+from B.  B should try different random link local addresses until it finds one
+that A does not respond to.
+
+ll-fight: [unimplemented]
+This test requires two nodes, A and B.  A listens for ARP requests from B and
+assumes that B is trying to acquire the link local address found in those ARP
+requests.  A assigns itself the IP address in B, thereby causing a conflict.  It
+does this by sending a very very late ARP reply to B.  B is expected to send a
+single ARP reply.  After seing this reply, A sends another ARP reply at which
+point B is expected to seek another address.
+
+mdns-simple: [unimplemented]
+
+mdns-conflict: [unimplemented]
+
+mdns-: [unimplemented]
+
+mdns-
+
+TODO
+----
+
