@@ -69,6 +69,8 @@ wlansdk8388v: $(OBJS)
 	@cat $(MOD_NAME).h >> $(FMIMAGE)
 	@mv $(FMIMAGE) $(MOD_NAME)_$(MAC_REV)_$(WLAN_RF).h
 	@rm $(MOD_NAME).h
+	mv rom.bin wlan8388v.img
+	$(TOOLS_DIR)/rom profile
 
 clean:
 	-rm -f $(EXE_NAME) *.o $(PRODUCT_NAME).bin  $(PRODUCT_NAME)_mfg.bin

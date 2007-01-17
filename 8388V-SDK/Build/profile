@@ -1,0 +1,20 @@
+[romsize]
+192k
+[romwidth]
+8
+; gen stats
+[stat]
+[versionbasic]
+0x04031703
+[versionext]
+0x00000000
+[patchtable]
+0x2FFFC 0x5FFFFFFA
+[recordtable]
+0x0
+wlan8388v.img
+;helper.bin
+;fred_helper.bin
+[output]
+csb0.bin
+
