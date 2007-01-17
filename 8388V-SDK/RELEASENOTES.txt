@@ -1,0 +1,32 @@
+"NoHost-8388V" Firmware ReleaseNotes
+-------------------------------------------------------------------------- 
+
+Feature Pack=W8015:FP1:A0 
+  SDK Release Version: 2.3.0 
+
+  Date: 10/12/2006
+
+  New Features
+  --------------
+  (1) No Host Application, userif and eping without ETCP
+  (2) Support for command parser.
+  (3) Support for link loss reassociation
+
+  Bug Fixes:
+  ----------
+  12898 : Add No Host SDK
+
+Feature Pack=W8015:FP12:A0 
+  SDK Release Version: 2.3.0 
+
+  Date: 10/12/2006
+
+  New Features
+  --------------
+  (1) No Host Application, userif and eping with ETCP
+  (2) Support for command parser.
+  (3) Support for link loss reassociation
+  
+  Bug Fixes:
+  ----------
+  12898 : Add No Host SDK

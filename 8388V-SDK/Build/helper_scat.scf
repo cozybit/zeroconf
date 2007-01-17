@@ -1,0 +1,79 @@
+;;; Copyright ARM Ltd 2001. All rights reserved.
+;
+; This scatterloading descriptor file defines: one load region (ROM_LOAD)
+; and five execution regions (ROM_EXEC, RAM, HEAP, STACKS, UART0).
+;
+; The entire program (code & data) is placed in ROM at ROM_LOAD.
+;
+; The RO code will execute from ROM_EXEC.  Its execution address (0x0) is the same
+; as its load address (0x0), so it does not need to be moved (a 'root region').
+; The exception vector table (AREA Vect in vectors.s) must appear at 0x0, so is
+; placed '+First' in the image.
+;
+; The RW data will get relocated (copied) from ROM_LOAD to RAM at 0x28000000.
+; The ZI data will get created (initialized) in RAM, above the RW data.
+;
+; The region HEAP is used to locate the bottom of the heap immediately above
+; the ZI data ("+0"). The heap will grow up from this address.
+;
+; The region STACKS is used to locate the top of the memory used to store
+; the stacks for each mode. The stacks will grow down from this address.
+;
+; The region UART0 is used to map the position of the Integrator UART0 registers.
+;
+; Regions marked UNINIT will be left uninitialized, i.e. they will not be
+; zero-initialized by the C library when it starts-up.
+
+; W8388V has 16KB of DTCM, but only the lower 8KB are available
+; for FW to use. The Other 8KB are reserved for ThreadX use.
+LR_DTCM 0x04000000
+{
+   DTCM 0x04000000 0x2000
+   {
+      os_if_tx.o     (+RW, +ZI)
+   }
+}
+
+LR_SQ 0xc0001000        ; this value must equal to that of SQRAM_NEXT
+                        ; to tame the compiler.
+{
+   SQRAM_NEXT 0xc0001000 0x27000
+   {
+      mf_hw_drv.o
+      hal_mib.o
+      hal_sys.o
+      mlmeApi.o
+      tkip.o
+      security.o
+#      crypt_new.o
+      macMgmtEvt.o
+      mlmeApi.o
+      parser.o
+      mib.o
+      tlv.o
+      dot11d.o
+      mf_hw_drv.o
+      util.o
+#      rc4.o 
+      root.o
+      hal_gpio.o
+      * (.sqbuf)
+      * (+RW, +ZI)
+   }
+   SQRAM_START 0xc0000000 0xe00
+   {
+      * (.sq_start)
+   }
+
+}
+
+LR_ITCM 0x0
+{
+   ITCM 0x0 0x1f300
+   {
+      tx_ill.o (Init, +First)
+#      jump2main.o
+      * (+RO)
+   }
+}
+
