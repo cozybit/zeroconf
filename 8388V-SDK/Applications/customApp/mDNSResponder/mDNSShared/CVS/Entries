@@ -1,0 +1,25 @@
+/CommonServices.h/1.6/Thu Aug 24 22:41:53 2006//
+/DebugServices.c/1.6/Mon Aug 14 23:24:56 2006//
+/DebugServices.h/1.5/Mon Aug 14 23:24:56 2006//
+/GenLinkedList.c/1.4/Mon Aug 14 23:24:56 2006//
+/GenLinkedList.h/1.3/Mon Aug 14 23:24:56 2006//
+/PlatformCommon.c/1.9/Tue Jan  9 22:37:44 2007//
+/PlatformCommon.h/1.6/Tue Jan  9 22:37:43 2007//
+/dns-sd.1/1.6/Mon Aug 14 23:24:56 2006//
+/dns_sd.h/1.70/Wed Jan 10 01:20:32 2007//
+/dnsextd.8/1.2/Mon Aug 14 23:24:56 2006//
+/dnsextd.c/1.61/Fri Jan  5 08:30:54 2007//
+/dnsextd.h/1.4/Fri Dec 22 20:59:51 2006//
+/dnsextd_lexer.l/1.3/Mon Aug 14 23:24:56 2006//
+/dnsextd_parser.y/1.6/Fri Dec 22 20:59:51 2006//
+/dnssd_clientlib.c/1.11/Mon Aug 14 23:05:53 2006//
+/dnssd_clientshim.c/1.13/Thu Jan  4 20:57:49 2007//
+/dnssd_clientstub.c/1.59/Fri Jan  5 08:30:55 2007//
+/dnssd_ipc.c/1.17/Fri Oct 27 00:38:22 2006//
+/dnssd_ipc.h/1.27/Fri Oct 27 00:38:22 2006//
+/mDNS.1/1.8/Mon Aug 14 23:24:56 2006//
+/mDNSDebug.c/1.7/Mon Aug 14 23:24:56 2006//
+/mDNSResponder.8/1.8/Fri Oct  6 17:31:33 2006//
+/uds_daemon.c/1.233/Wed Jan 10 20:49:37 2007//
+/uds_daemon.h/1.17/Fri Jan  5 05:46:07 2007//
+D
