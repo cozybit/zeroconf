@@ -44,10 +44,32 @@ class vir8388:
 				results.append( ssid[0] )
 		return results
 
+	def set_ssid( self, ssid ):
+		self.ser.write( "iwconfig essid "+ssid+"\r" )
+
+	def set_mode( self, mode='managed' ):
+		if mode != 'managed' and mode != 'ad-hoc':
+			return
+		self.ser.write( "iwconfig mode "+mode+"\r" )
+
+	def set_tcp( self, ip, netmask, gateway ):
+		self.ser.write( "econfig %s %s %s\r" % ( ip, netmask, gateway ) )
+
 # unit testing
 if __name__ == '__main__':
 	print "testing 8388 interface..."
 	v = vir8388()
 #	v.clear_buffer()
 	r = v.scan()
-	print r
+	if len( r ) == 0:
+		print "no SSIDs found, exiting"
+		sys.exit( 0 )
+
+	for id in r:
+		print id
+	id = raw_input( '> ' )
+	v.set_ssid( id )
+	ip = raw_input( 'ip? ' )
+	netmask = raw_input( 'netmask? ' )
+	gateway = raw_input( 'gateway? ' )
+	v.set_tcp( ip, netmask, gateway )
