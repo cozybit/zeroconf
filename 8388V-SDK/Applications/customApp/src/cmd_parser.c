@@ -16,6 +16,7 @@
 #include <string.h>
 #include "IEEE_types.h"
 #include "userif.h"
+
 extern IEEEtypes_Bss_e  bss_type;
 extern IEEEtypes_Bss_e  currbss_type;
 extern int send_ping;
@@ -29,6 +30,8 @@ extern char ping_ipaddr[4];
 extern int link_present;
 extern IEEEtypes_MacAddr_t specificBSSID;
 extern int cmd_in_progress;
+
+int tcp_ready = 0;
 
 int string_pos = 0;
 #define STRING_SIZE  100
@@ -221,6 +224,7 @@ void cmd_parser(void)
 		get_ipaddr(curr_pos, def_gtwy);	    		
 #ifdef EMBEDDED_TCPIP		
 		userif_prepare_config_etcp();
+		tcp_ready = 1; /* XXX */
 #endif     
 	 }
      else if(!memcmp(user_string,"ping",4)){
