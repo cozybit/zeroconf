@@ -16,6 +16,8 @@
 #include <string.h>
 #include "IEEE_types.h"
 #include "userif.h"
+#include "trsocket.h"
+#include "linklocal.h"
 
 extern IEEEtypes_Bss_e  bss_type;
 extern IEEEtypes_Bss_e  currbss_type;
@@ -65,6 +67,8 @@ void print_usage(void)
 	DBG_P(( DBG_L0 "	econfig <clientip> <netmask> <gateway>\r\n")); 
 	DBG_P(( DBG_L0 "	ping <ip address>\r\n")); 
 	DBG_P(( DBG_L0 "	ping stop\r\n")); 
+	DBG_P(( DBG_L0 "	linklocal start\r\n")); 
+	DBG_P(( DBG_L0 "	linklocal stop\r\n")); 
 #ifdef UART_DRV
 	DBG_P(( DBG_L0 ">")); 
 #endif
@@ -241,6 +245,21 @@ void cmd_parser(void)
           send_ping = 1;
 		}
      }
+
+	 /* Link-local address manager. */
+	 else if(!memcmp(user_string, "linklocal", 9)) {
+		 curr_pos = &user_string[get_next_word(user_string)];
+		 if(!memcmp(curr_pos, "start", 5)) {
+			 /* Launch the link local manager */
+			 if(ll_init())
+				 DBG_P(( DBG_L0 "Error launching link local.\r\n"));
+		 } else if(!memcmp(curr_pos, "stop", 4)) {
+			 /* Kill the link local manager. */
+			 if(ll_shutdown())
+				 DBG_P(( DBG_L0 "Error shutting down link local.\r\n"));
+		 }
+	 }
+
 	 else {
 		 print_usage();
 	 }

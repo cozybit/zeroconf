@@ -26,7 +26,9 @@ CFLAGS += -I$(SDK_WLAN_INCLUDE_DIR)/ -I$(SDK_WLAN_CUSTOM_APP_INCLUDE_DIR)/ \
 
 # list of objects
 ifeq (1, $(BUILT_NO_HOST))
-OBJS = customApp.o mli.o version_nohost.o eping.o userif.o hostsme_sm.o cmd_parser.o peersta_api.o
+OBJS = \
+	customApp.o mli.o version_nohost.o eping.o userif.o hostsme_sm.o \
+	cmd_parser.o peersta_api.o linklocal.o
 else
 OBJS = customApp.o mli.o version_sdk.o
 endif
@@ -34,7 +36,7 @@ endif
 # compilation rules
 %.o: $(SDK_WLAN_CUSTOM_APP_SRC_DIR)/%.s
 	$(AS) $(ASFLAGS) -o $*.o $<
-	
+
 %.o: $(SDK_WLAN_CUSTOM_APP_SRC_DIR)/%.c
 	$(CC) -c -o $*.o $(CFLAGS) $(EXTRACFLAGS) $<
 
