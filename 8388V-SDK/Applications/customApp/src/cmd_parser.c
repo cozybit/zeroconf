@@ -60,6 +60,7 @@ char user_string[STRING_SIZE];
 void print_usage(void)
 {
 	DBG_P(( DBG_L0 "Command List:\r\n")); 
+	DBG_P(( DBG_L0 "	help\r\n")); 
 	DBG_P(( DBG_L0 "	iwlist scan\r\n")); 
 	DBG_P(( DBG_L0 "	iwconfig essid <essid>\r\n")); 
 	DBG_P(( DBG_L0 "	iwconfig ap <bssid>\r\n")); 
@@ -69,10 +70,6 @@ void print_usage(void)
 	DBG_P(( DBG_L0 "	ping stop\r\n")); 
 	DBG_P(( DBG_L0 "	linklocal start\r\n")); 
 	DBG_P(( DBG_L0 "	linklocal stop\r\n")); 
-#ifdef UART_DRV
-	DBG_P(( DBG_L0 ">")); 
-#endif
-
 }
 
 /**
@@ -158,6 +155,10 @@ int cmd_parser_read_line(void)
 	 {
 		 if (user_string[string_pos] == CMD_END_CHAR) {
 			 user_string[string_pos] = '\0'; 
+#ifdef UART_DRV
+			 DBG_P(( DBG_L0 "\r\n")); 
+			 dbg_FlushingOut();
+#endif
              string_pos = 0;
 			 return 1;		 
 		 }
@@ -177,7 +178,11 @@ void cmd_parser(void)
    char * curr_pos = &user_string[0];
    dbg_FlushingOut();
    if(!cmd_in_progress && cmd_parser_read_line()) {   
-     if(!memcmp(user_string,"iwlist",6)){
+     if(strlen(user_string) == 0) {
+		 /* Do Nothing. */
+	 }
+
+     else if(!memcmp(user_string,"iwlist",6)){
 		userif_prepare_scan_cmd(0);
 	 }     
      else if(!memcmp(user_string,"iwconf",6)){
@@ -260,11 +265,21 @@ void cmd_parser(void)
 		 }
 	 }
 
-	 else {
+	 else if(!memcmp(user_string, "help", 4)) {
 		 print_usage();
 	 }
+
+	 else {
 #ifdef UART_DRV
-	 DBG_P(( DBG_L0 "\r\n>")); 
+		 DBG_P(( DBG_L0 "Unknown command.\r\n")); 
+#endif		 
+	 }
+
+	 while(cmd_in_progress)
+		 os_TaskDelay(10);
+
+#ifdef UART_DRV
+	 DBG_P(( DBG_L0 "> ")); 
 #endif
 
    }

@@ -777,8 +777,12 @@ void process_cbproc_response(void) {
 void UserIF_Main(ULONG data)
 {
 	UINT32	 Events;
-	print_usage();
     /* Main Loop*/
+
+#ifdef UART_DRV
+	DBG_P(( DBG_L0 "\r\n> ")); 
+#endif
+
     while(1) {
 		  /* First time also Wait till FW is ready*/
         Events = os_EventWait(sysinfo_NO_HOST_EVENT,
