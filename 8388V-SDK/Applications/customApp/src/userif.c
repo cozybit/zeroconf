@@ -31,15 +31,13 @@
 #include "peersta_api.h"
 #include "userif.h"
 #ifdef EMBEDDED_TCPIP
+
 #include "tcpip_socki.h"
 #endif
-
-#include "mdns.h"
-
 /*  Configuration used for Treck ETCP stack/Raw Data configuration*/
-char ip_addr[4] = {192,168,1,88};  
-char net_mask[4] = {255,255,255,0}; 
-char def_gtwy[4] = {192,168,1,1}; 
+char ip_addr[4] ;  
+char net_mask[4] ; 
+char def_gtwy[4] ; 
 
 
 /* Events received from the firmware to the UserIF task*/
@@ -102,27 +100,6 @@ int link_present;
 int cmd_in_progress;
 IEEEtypes_MacAddr_t specificBSSID;
 extern int use_peer_sta_api;
-
-void test_infra_join( char *essid  )
-{
-    /* set ESSID */
-    specificSSID.Len = strlen( essid );
-    memcpy((void *)specificSSID.SsId, essid, strlen(essid));
-    /* set managed mode */
-    bss_type = BSS_INFRASTRUCTURE;
-    if( link_present ) {
-        if( currbss_type != BSS_INDEPENDENT ) {
-            userif_prepare_deauth_cmd();
-        }
-        else {
-            userif_prepare_adhoc_stop_cmd();
-        }
-    }
-    else {
-        userif_prepare_scan_cmd(1);
-    }
-    link_present = 0;
-}
 
 extern void cmd_parser(void);
 extern void print_usage(void);
@@ -801,7 +778,6 @@ void UserIF_Main(ULONG data)
 {
 	UINT32	 Events;
 	print_usage();
-
     /* Main Loop*/
     while(1) {
 		  /* First time also Wait till FW is ready*/
@@ -890,8 +866,6 @@ Status_e  userif_init(void)
 		return FAIL;
 	}
 
-	mdnsInit(); /* XXX */
-
 	/* Get the buffer used to send commands*/
     cmd_buffer = (uint8*) mli_GetCmdReqBuffer();
 	/* Get the buffer used to receive commands*/
@@ -911,8 +885,7 @@ Status_e  userif_init(void)
 #else
 	mli_installTickFunction(send_raw_pkt);
 #endif
-	mli_installTickFunction(cmd_parser); 
-
+	mli_installTickFunction(cmd_parser); 	
     return SUCCESS;
 }
 
