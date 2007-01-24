@@ -92,7 +92,7 @@ int mdns_parse_message( struct mdns_message *m, char *b )
 		m->answers[i].class = mdns_read_n16( m );
 		m->answers[i].ttl = mdns_read_n32( m );
 		m->answers[i].rdlength = mdns_read_n16( m );
-		m->answers[i].rdata = (union mdns_rr*)m->cur;
+		m->answers[i].rdata = (void *)m->cur;
 	}
 	return 1;	
 }
@@ -117,7 +117,7 @@ void mdns_add_question( struct mdns_message *m, const char* qname,
 }
 
 void mdns_add_answer( struct mdns_message *m, const char *name, UINT16 type,
-	UINT16 class, UINT32 ttl, UINT16 length, union mdns_rr *data )
+	UINT16 class, UINT32 ttl, UINT16 length, void *data )
 {
 	strcpy( m->cur, name );
 	m->cur += strlen( name ) + 1;
@@ -199,26 +199,26 @@ void debug_print_message( struct mdns_message *m )
 				m->answers[i].ttl,m->answers[i].rdlength );
 		switch( m->answers[i].type ) {
 			case T_A:
-			printf( "\tA type, IP=0x%X\n", m->answers[i].rdata->a.ip );
+			printf( "\tA type, IP=0x%X\n", *((UINT32*)m->answers[i].rdata) );
 			break;
 			case T_NS:
 			printf( "\tNS type, name=\"" );
-			debug_print_name( m->answers[i].rdata->ns.name );
+			debug_print_name( (char *)m->answers[i].rdata );
 			printf( "\"\n" );
 			break;
 			case T_CNAME:
 			printf( "\tCNAME type, name=\"" ); 
-			debug_print_name( m->answers[i].rdata->cname.name );
+			debug_print_name( (char *)m->answers[i].rdata );
 			printf( "\"\n" );
 			break;
 			case T_SRV:
 			printf( "\tSRV type, name=\"" );
-			debug_print_name( m->answers[i].rdata->srv.name );
+			debug_print_name( (char *)m->answers[i].rdata );
 			printf( "\"\n" );
 			break;
 			case T_PTR:
 			printf( "\tPTR type, name=\"" );
-			debug_print_name( m->answers[i].rdata->ptr.name );
+			debug_print_name( (char *)m->answers[i].rdata );
 			printf( "\"\n" );
 			break;
 			case T_TXT:

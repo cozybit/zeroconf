@@ -43,16 +43,6 @@ struct mdns_question {
 	UINT16 qclass; /* question class */
 };
 
-/* mDNS resource data (RDATA) */
-union mdns_rr {
-	struct { UINT32 ip; } a;
-	struct { char *name; } ns;
-	struct { char *name; } cname;
-	struct { char *name; } ptr;
-	struct { char *data; } txt;
-	struct { char *name; } srv;
-};
-
 /* mDNS resource record (RR) format */
 struct mdns_resource {
 	char *name;
@@ -60,7 +50,7 @@ struct mdns_resource {
 	UINT16 class; /* resource class for the RDATA field */
 	UINT32 ttl; /* how long the record may be cached */
 	UINT16 rdlength; /* length of RDATA field */
-	union mdns_rr *rdata;
+	void *rdata;
 };
 
 /* mDNS message representation */
