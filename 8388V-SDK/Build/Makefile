@@ -24,11 +24,13 @@ include sdk.mak
 CFLAGS += -I$(SDK_WLAN_INCLUDE_DIR)/ -I$(SDK_WLAN_CUSTOM_APP_INCLUDE_DIR)/ \
           -I$(SDK_TCP_INCLUDE_DIR)
 
+CFLAGS += -DSYS_THREADX_TRECK
+
 # list of objects
 ifeq (1, $(BUILT_NO_HOST))
 OBJS = \
 	customApp.o mli.o version_nohost.o eping.o userif.o hostsme_sm.o \
-	cmd_parser.o peersta_api.o linklocal.o
+	cmd_parser.o peersta_api.o linklocal.o sys_threadx_treck.o
 else
 OBJS = customApp.o mli.o version_sdk.o
 endif

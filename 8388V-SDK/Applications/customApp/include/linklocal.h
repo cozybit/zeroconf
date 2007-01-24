@@ -7,12 +7,13 @@
 #ifndef _LINKLOCAL_H_
 #define _LINKLOCAL_H_
 
+#include "system.h"
+
 /******************************************************************************
  * Public Functions
  ******************************************************************************/
 
-int ll_init(void);
-
-int ll_shutdown(void);
+sys_status ll_init(void);
+sys_status ll_shutdown(void);
 
 #endif
