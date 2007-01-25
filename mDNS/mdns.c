@@ -181,6 +181,7 @@ void debug_print_txt( char *txt, UINT16 len )
 void debug_print_message( struct mdns_message *m )
 {
 	int i;
+	struct rr_srv *srv;
 
 	DB_PRINT( "printing message:\n" );
 
@@ -226,8 +227,11 @@ void debug_print_message( struct mdns_message *m )
 			DB_PRINT( "\"\n" );
 			break;
 			case T_SRV:
-			DB_PRINT( "\tSRV type, name=\"" );
-			debug_print_name( (char *)m->answers[i].rdata );
+			DB_PRINT( "\tSRV type, " );
+			srv = (struct rr_srv*)m->answers[i].rdata;
+			printf( "priority: %u, weight: %u, port: %u, target: \"", 
+				ntohs(srv->priority), ntohs(srv->weight), ntohs(srv->port) );
+			/*debug_print_name( srv->target ); FIXME */
 			DB_PRINT( "\"\n" );
 			break;
 			case T_PTR:

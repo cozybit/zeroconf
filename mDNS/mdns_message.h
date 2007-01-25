@@ -37,6 +37,13 @@ struct mdns_header {
 	UINT16 arcount;
 };
 
+struct rr_srv {
+	UINT16 priority;
+	UINT16 weight;
+	UINT16 port;
+	char *target;
+};
+
 /* mDNS question (query) representation */
 struct mdns_question {
 	char *qname;
