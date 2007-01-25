@@ -31,6 +31,13 @@ void mdns_write_n32( struct mdns_message *m, UINT32 n )
 	m->cur += sizeof(UINT32);
 }
 
+void mdns_mark_response( struct mdns_message *m )
+{
+	m->header->flags.fields.qr = 1; /* response */
+	m->header->flags.fields.aa = 1; /* authoritative */
+	m->header->flags.fields.rcode = 0;
+}
+
 /* a name may be one of:
  *  - a series of labels terminated by a NULL byte
  *  - a series of labels terminated by a pointer
@@ -43,11 +50,11 @@ int mdns_traverse_name( struct mdns_message *m )
 			break;
 		}
 		else if( *(m->cur) <= MDNS_MAX_LABEL_LEN ) /* valid label */
-			m->cur += *(m->cur)+1;
+			m->cur += *(m->cur)+1; /* move to next label */
 		else /* invalid label */
 			return 0;
 	}
-	m->cur++;
+	m->cur++; /* move past terminating byte */
 	return 1;
 }
 
@@ -59,12 +66,17 @@ int mdns_parse_message( struct mdns_message *m, char *b )
 	m->num_questions = ntohs(m->header->qdcount);
 	m->num_answers = ntohs(m->header->ancount);
 
-	#if 0
-	if( m->header->flags.opcode != 0 ) {
+	m->header->flags.num = ntohs(m->header->flags.num);
+
+	if( m->header->flags.fields.opcode != 0 ) {
 		DB_PRINT( "dropping message with opcode != 0\n" ); 
 		return 0;
 	}
-	#endif
+
+	if( m->header->flags.fields.rcode != 0 ) {
+		DB_PRINT( "dropping message with rcode != 0\n" ); 
+		return 0;
+	}
 
 	m->cur = (char *)m->header + sizeof(struct mdns_header);
 
@@ -186,11 +198,12 @@ void debug_print_message( struct mdns_message *m )
 	DB_PRINT( "printing message:\n" );
 
 	DB_PRINT( "--------------------------------------------------------\n"
-			"header:\nID=%u, FLAGS=0x0%2X QR=%u, OPCODE=%u\n"
+			"header:\nID=%u, FLAGS=0x%02X QR=%s, AA=%d OPCODE=%u\n"
 			"QDCOUNT=%u, ANCOUNT=%u, NSCOUNT=%u, ARCOUNT=%u\n",
-			ntohs(m->header->id), ntohs(*((UINT16*)m->header+2)), 
-			m->header->flags.qr, 
-			m->header->flags.opcode,
+			ntohs(m->header->id), m->header->flags.num,
+			m->header->flags.fields.qr ? "response" : "query",
+			m->header->flags.fields.aa,
+			m->header->flags.fields.opcode,
 			ntohs(m->header->qdcount), ntohs(m->header->ancount),
 			ntohs(m->header->nscount), ntohs(m->header->arcount) );
 
