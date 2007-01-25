@@ -1,5 +1,23 @@
 #!/usr/bin/python
 
+
+# vir8388.py -- 8388V serial console interface
+#
+# This module provides a 'vir8388' object, which is an interface to the 8388V
+# serial debug console.  The constructor takes two optional arguments, 'port' and
+# 'rate', whose defaults are /dev/ttyS0 and 57600 respectively.
+#
+# methods:
+# clear_buffer() -- reads and ignores anything in the serial input 
+#                   buffer, effectively 'flushing' it
+#
+# scan() -- performs a wireless network scan and returns a list of
+#           AP SSIDs found or an empty list if none were found.
+#
+# set_ssid( ssid ) -- sets the 8388V's SSID
+#
+# set_tcp( ip, netmask, gateway ) -- sets up TCP
+
 import sys
 import serial
 import time
@@ -30,7 +48,7 @@ class vir8388:
 		while c != '':
 			c = self.ser.read(1)
 
-	# runs 'wilist scan', returns a list of SSIDs found
+	# runs 'iwlist scan', returns a list of SSIDs found
 	def scan( self ):
 		results = []
 		self.ser.write( "iwlist scan\r" )

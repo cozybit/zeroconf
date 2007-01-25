@@ -1,15 +1,74 @@
+oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+o
+o Test Framework for cozybit Zeroconf implementation
+o
+oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
 
-vir8388.py -- 8388V serial console interface
-			  this module provides a 'vir8388' object, which is an interface to
-			  the 8388V serial debug console.  The constructor takes two 
-			  optional arguments, 'port' and 'rate', whose defaults are
-			  /dev/ttyS0 and 57600 respectively.
+Introduction
+------------
 
-		methods:
-			
-			clear_buffer() -- reads and ignores anything in the serial input 
-							  buffer, effectively 'flushing' it
-			scan() -- performs a wireless network scan and returns a list of
-					  AP SSIDs found or an empty list if none were found.
-			set_ssid( ssid ) -- sets the 8388V's SSID
-			set_tcp( ip, netmask, gateway ) -- sets up TCP
+This framework automates testing for the cozybit Zeroconf implementation.  The
+test engine (zc_engine.py) instantiates a challenger system and a subject
+system.  Then it runs tests, using the challenger system to test the subject
+system.  The tests are defined in the files test_*.py.
+
+Using the framework
+-------------------
+
+1: Create a configuration file
+
+To run these tests, you should first create a configuration.py file.  The easy
+way to do this is to copy configuration.sample.py and edit the variables defined
+therein.  See configuration.sample.py for definitions of the variables.
+
+2: Run the tests
+
+From the command line, either run tests one at a time like so:
+
+   $ ./zc_engine test_mytest.py
+
+Or run all tests (i.e., attempt to run any test named test_*.py):
+
+   $ ./zc_engine
+
+Adding Tests
+------------
+
+If you wish to add tests, create a file called test_mytest.py.  In that file,
+create a class called test_mytest that inherits the base class test_base in
+zc_base.py.  Within the run method of your class, you can call functions that
+operate on the subject and challenger systems, which are passed in as arguments.
+The current configuration is also passed in, so you can use variables defined in
+config.py.  The test class can then be called as described above.  See
+zc_base.py for more details.
+
+As you implement new tests, you will surely find that the challenger and subject
+base classes do not implement all of the functionality that you need.  See the
+notes below about developing challenger and subject base classes for details
+on extending them.
+
+For details on the specific tests, see the comments in the test_*.py files.
+
+Adding/Extending Challenger and Subject Implementations
+-------------------------------------------------------
+
+The test engine instantiates whatever challenger and subject systems are
+specified in the config.py.  These values must match challenger and subject
+systems that exist in the current directory and extend the challenger_base and
+subject_base classes.  These base classes are defined in zc_base.py.  See that
+file for extensive per-method documentation.
+
+As mentioned above, you will likely need to add methods to the challenger and
+subject systems in order to implement various tests.  As you do this, please
+strive to keep the base classes up-to-date, and please strive to keep
+platform-dependent features from creeping in to the tests.  Similarly, if you
+add variables to your config.py file, please add them to config.sample.py too.
+For example, Zeroconf can run on any network device using IP.  So, adding
+WiFi-specific commands to the challenger and subject base-classes is not
+appropriate.  Instead, add WiFi specific variables to config.py, and expect the
+challenger and subject implementations to get that information from the conf
+object that is passed in.
+
+Hopefully, this test framework will eventually stabilize and we can easily
+implement new tests, new challengers, and new subjects without altering the
+interfaces.
