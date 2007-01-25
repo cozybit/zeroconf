@@ -18,23 +18,23 @@
 
 /* mDNS message header */
 struct mdns_header {
-    UINT16 id; 
-    struct { UINT16
-        qr:1,       /* query/response */
-        opcode:4,
-        aa:1,       /* authoritative answer */
-        tc:1,       /* truncated */
-        rd:1,       /* recursion desired */
-        ra:1,       /* recursion available */
-        z:1,        /* zero */
-        ad:1,       /* authentic data RFC-2535 */
-        cd:1,       /* checking disabled  RFC-2535*/
-        rcode:4;    /* response code */
-    } flags;
-    UINT16 qdcount; /* number of entries in questions section */
-    UINT16 ancount; /* number of resource records in answer section */
-    UINT16 nscount;
-    UINT16 arcount;
+	UINT16 id; 
+	struct { UINT16
+		qr:1,		/* query/response */
+		opcode:4,	/* should be 0 for mDNS messages */
+		aa:1,		/* authoritative answer */
+		tc:1,		/* truncated */
+		rd:1,		/* recursion desired */
+		ra:1,		/* recursion available */
+		z:1,		/* zero */
+		ad:1,		/* authentic data RFC-2535 */
+		cd:1,		/* checking disabled  RFC-2535*/
+		rcode:4;	/* response code */
+	} flags;
+	UINT16 qdcount; /* number of entries in questions section */
+	UINT16 ancount; /* number of resource records in answer section */
+	UINT16 nscount;
+	UINT16 arcount;
 };
 
 /* mDNS question (query) representation */

@@ -59,10 +59,12 @@ int mdns_parse_message( struct mdns_message *m, char *b )
 	m->num_questions = ntohs(m->header->qdcount);
 	m->num_answers = ntohs(m->header->ancount);
 
+	#if 0
 	if( m->header->flags.opcode != 0 ) {
-		/* DB_PRINT( "dropping message with opcode != 0\n" ); */
+		DB_PRINT( "dropping message with opcode != 0\n" ); 
 		return 0;
 	}
+	#endif
 
 	m->cur = (char *)m->header + sizeof(struct mdns_header);
 
@@ -102,6 +104,7 @@ int mdns_parse_message( struct mdns_message *m, char *b )
 		m->answers[i].ttl = mdns_read_n32( m );
 		m->answers[i].rdlength = mdns_read_n16( m );
 		m->answers[i].rdata = (void *)m->cur;
+		m->cur += m->answers[i].rdlength;
 	}
 	return 1;	
 }
@@ -182,9 +185,11 @@ void debug_print_message( struct mdns_message *m )
 	DB_PRINT( "printing message:\n" );
 
 	DB_PRINT( "--------------------------------------------------------\n"
-			"header:\nID=%u, QR=%u, OPCODE=%u\n"
+			"header:\nID=%u, FLAGS=0x0%2X QR=%u, OPCODE=%u\n"
 			"QDCOUNT=%u, ANCOUNT=%u, NSCOUNT=%u, ARCOUNT=%u\n",
-			ntohs(m->header->id), m->header->flags.qr, m->header->flags.opcode,
+			ntohs(m->header->id), ntohs(*((UINT16*)m->header+2)), 
+			m->header->flags.qr, 
+			m->header->flags.opcode,
 			ntohs(m->header->qdcount), ntohs(m->header->ancount),
 			ntohs(m->header->nscount), ntohs(m->header->arcount) );
 

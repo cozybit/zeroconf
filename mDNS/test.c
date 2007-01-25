@@ -56,8 +56,9 @@ int main( void )
 	mdns_transmit_init( &tx_message, tx_buffer );
 	mdns_add_question( &tx_message, "\5""aloha""\xC""_workstation""\4""_tcp"
 		"\5""local", T_ANY, 1 );
-	mdns_add_question( &tx_message, "\5""hello""\x5""_http""\4""_tcp"
+	mdns_add_question( &tx_message, "\5""hello""\5""_http""\4""_tcp"
 		"\5""local", T_ANY, 1 );
+	mdns_add_question( &tx_message, "\x19" "HP LaserJet 3390 (D421E3)" "\xF"  "_pdl-datastream" "\4" "_tcp" "\5" "local", T_SRV, 1 );
 	
 	printf( "sending...\n" );
 	size = (unsigned int)tx_message.cur - (unsigned int)tx_message.header;
