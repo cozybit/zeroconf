@@ -2,9 +2,10 @@
 #define MDNS_MESSAGE_H
 
 /* settings */
-#define MDNS_MAX_NAME_LEN	255
-#define MDNS_MAX_QUESTIONS	8
-#define MDNS_MAX_ANSWERS	8
+#define MDNS_MAX_NAME_LEN	255	/* defined by the standard */
+#define MDNS_MAX_LABEL_LEN	63	/* defined by the standard */
+#define MDNS_MAX_QUESTIONS	32
+#define MDNS_MAX_ANSWERS	10
 
 /* types (that are used in mDNS) */
 #define T_A		1	/* host address */

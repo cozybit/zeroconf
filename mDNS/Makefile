@@ -4,6 +4,9 @@ CFLAGS=-Wall
 main: main.o mdns.o
 	gcc main.o mdns.o -o main
 
+test: test.o mdns.o
+	gcc test.o mdns.o -o test
+
 main.o: main.c
 	gcc $(CFLAGS) $(CDEFS) -c main.c
 

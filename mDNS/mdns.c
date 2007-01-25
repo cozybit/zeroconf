@@ -35,17 +35,20 @@ void mdns_write_n32( struct mdns_message *m, UINT32 n )
  *  - a series of labels terminated by a NULL byte
  *  - a series of labels terminated by a pointer
  *  - a pointer */
-void mdns_traverse_name( struct mdns_message *m )
+int mdns_traverse_name( struct mdns_message *m )
 {
 	while( *(m->cur) != 0x00 ) {
 		if( ( *(m->cur) & 0xC0 ) ) { /* pointer */
 			m->cur++;
 			break;
 		}
-		else /* label */
+		else if( *(m->cur) <= MDNS_MAX_LABEL_LEN ) /* valid label */
 			m->cur += *(m->cur)+1;
+		else /* invalid label */
+			return 0;
 	}
 	m->cur++;
+	return 1;
 }
 
 int mdns_parse_message( struct mdns_message *m, char *b )
@@ -57,22 +60,25 @@ int mdns_parse_message( struct mdns_message *m, char *b )
 	m->num_answers = ntohs(m->header->ancount);
 
 	if( m->header->flags.opcode != 0 ) {
-		DB_PRINT( "dropping message with opcode != 0\n" );
+		/* DB_PRINT( "dropping message with opcode != 0\n" ); */
 		return 0;
 	}
 
 	m->cur = (char *)m->header + sizeof(struct mdns_header);
 
-	for( i = 0; i < m->num_questions; i++ ) {
+	for( i = 0; i < m->num_questions && i < MDNS_MAX_QUESTIONS; i++ ) {
 		/* get qname */
 		m->questions[i].qname = m->cur;
-		mdns_traverse_name( m ); /* move past qname */
+		if( !mdns_traverse_name( m ) ) { /* move past qname */
+			DB_PRINT( "dropping message: invalid label in question %d\n",i);
+			return 0;
+		}
 		/* get qtype */
 		t = mdns_read_n16( m );
 		if( t <= T_ANY )
 			m->questions[i].qtype = t;
 		else {
-			DB_PRINT( "dropping message with invalid type %u\n", t );
+			DB_PRINT( "dropping message: invalid type %u\n", t );
 			return 0;
 		}
 		/* get qclass */
@@ -80,14 +86,17 @@ int mdns_parse_message( struct mdns_message *m, char *b )
 		if( ( t & ~0x8000 ) == 1 )
 			m->questions[i].qclass = t;
 		else {
-			DB_PRINT( "dropping message with invalid class %u\n", t );
+			DB_PRINT( "dropping message: invalid class %u\n", t );
 			return 0;
 		}
 	}
 
-	for( i = 0; i < m->num_answers; i++ ) {
+	for( i = 0; i < m->num_answers && i < MDNS_MAX_ANSWERS; i++ ) {
 		m->answers[i].name = m->cur;
-		mdns_traverse_name( m );
+		if( !mdns_traverse_name( m ) ) {
+			DB_PRINT( "dropping message: invalid label in answer %d\n", i);
+			return 0;
+		}
 		m->answers[i].type = mdns_read_n16( m );
 		m->answers[i].class = mdns_read_n16( m );
 		m->answers[i].ttl = mdns_read_n32( m );
@@ -147,7 +156,7 @@ void debug_print_name( char *name )
         else {
             if( *s & 0xC0 ) { /* pointer */
                 ptr = ((*s & ~(0xC0))<<8) | *(s+1);
-                printf( "[PTR=0x%02X]", ptr );
+                DB_PRINT( "[PTR=0x%02X]", ptr );
                 return;
             }
             else {
@@ -170,9 +179,9 @@ void debug_print_message( struct mdns_message *m )
 {
 	int i;
 
-	printf( "printing message:\n" );
+	DB_PRINT( "printing message:\n" );
 
-	printf( "--------------------------------------------------------\n"
+	DB_PRINT( "--------------------------------------------------------\n"
 			"header:\nID=%u, QR=%u, OPCODE=%u\n"
 			"QDCOUNT=%u, ANCOUNT=%u, NSCOUNT=%u, ARCOUNT=%u\n",
 			ntohs(m->header->id), m->header->flags.qr, m->header->flags.opcode,
@@ -180,18 +189,18 @@ void debug_print_message( struct mdns_message *m )
 			ntohs(m->header->nscount), ntohs(m->header->arcount) );
 
 	for( i = 0; i < m->num_questions; i++ ) {
-		printf( "--------------------------------------------------------\n"
+		DB_PRINT( "--------------------------------------------------------\n"
 				"question %d: \"", i );
 		debug_print_name( m->questions[i].qname );
-		printf( "\" (type %u, class %u)\n", m->questions[i].qtype, 
+		DB_PRINT( "\" (type %u, class %u)\n", m->questions[i].qtype, 
 				m->questions[i].qclass);
 	}
 
 	for( i = 0; i < m->num_answers; i++ ) {
-		printf( "--------------------------------------------------------\n"
+		DB_PRINT( "--------------------------------------------------------\n"
 				"resource %d: \"", i );
 		debug_print_name( m->answers[i].name );
-		printf( "\" (type %u, class %u%s)\n\tttl=%u, rdlength=%u\n",
+		DB_PRINT( "\" (type %u, class %u%s)\n\tttl=%u, rdlength=%u\n",
 				m->answers[i].type, 
 				m->answers[i].class & 0x8000 ? 
 					m->answers[i].class & ~(0x8000) : m->answers[i].class, 
@@ -199,36 +208,36 @@ void debug_print_message( struct mdns_message *m )
 				m->answers[i].ttl,m->answers[i].rdlength );
 		switch( m->answers[i].type ) {
 			case T_A:
-			printf( "\tA type, IP=0x%X\n", *((UINT32*)m->answers[i].rdata) );
+			DB_PRINT( "\tA type, IP=0x%X\n", *((UINT32*)m->answers[i].rdata) );
 			break;
 			case T_NS:
-			printf( "\tNS type, name=\"" );
+			DB_PRINT( "\tNS type, name=\"" );
 			debug_print_name( (char *)m->answers[i].rdata );
-			printf( "\"\n" );
+			DB_PRINT( "\"\n" );
 			break;
 			case T_CNAME:
-			printf( "\tCNAME type, name=\"" ); 
+			DB_PRINT( "\tCNAME type, name=\"" ); 
 			debug_print_name( (char *)m->answers[i].rdata );
-			printf( "\"\n" );
+			DB_PRINT( "\"\n" );
 			break;
 			case T_SRV:
-			printf( "\tSRV type, name=\"" );
+			DB_PRINT( "\tSRV type, name=\"" );
 			debug_print_name( (char *)m->answers[i].rdata );
-			printf( "\"\n" );
+			DB_PRINT( "\"\n" );
 			break;
 			case T_PTR:
-			printf( "\tPTR type, name=\"" );
+			DB_PRINT( "\tPTR type, name=\"" );
 			debug_print_name( (char *)m->answers[i].rdata );
-			printf( "\"\n" );
+			DB_PRINT( "\"\n" );
 			break;
 			case T_TXT:
-			printf( "\tTXT type, data=\"" ); 
+			DB_PRINT( "\tTXT type, data=\"" ); 
 			debug_print_txt( (char *)m->answers[i].rdata, 
 				m->answers[i].rdlength );
-			printf( "\"\n" );
+			DB_PRINT( "\"\n" );
 			break;
 			default:
-			printf( "\tunknown RR type\n" );
+			DB_PRINT( "\tunknown RR type\n" );
 			break;
 		}
 	}
