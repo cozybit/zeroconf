@@ -38,6 +38,11 @@ void mdns_mark_response( struct mdns_message *m )
 	m->header->flags.fields.rcode = 0;
 }
 
+void mdns_mark_question( struct mdns_message *m )
+{
+	m->header->flags.fields.qr = 0; /* query */
+}
+
 /* a name may be one of:
  *  - a series of labels terminated by a NULL byte
  *  - a series of labels terminated by a pointer
@@ -73,10 +78,12 @@ int mdns_parse_message( struct mdns_message *m, char *b )
 		return 0;
 	}
 
+	#if 0
 	if( m->header->flags.fields.rcode != 0 ) {
 		DB_PRINT( "dropping message with rcode != 0\n" ); 
 		return 0;
 	}
+	#endif
 
 	m->cur = (char *)m->header + sizeof(struct mdns_header);
 
@@ -152,115 +159,4 @@ void mdns_add_answer( struct mdns_message *m, const char *name, UINT16 type,
 	memcpy( m->cur, data, length );
 	m->cur += length;
 	m->header->ancount += htons(1);
-}
-
-/* debug printing */
-
-void debug_print_name( char *name )
-{
-	UINT8 cur = 0;
-	UINT16 ptr;
-	char *s = name;
-	
-	while( *s ) {
-		if( cur > 0 ) {
-            putchar( *s );
-            s++;
-            cur--;
-        }
-        else {
-            if( *s & 0xC0 ) { /* pointer */
-                ptr = ((*s & ~(0xC0))<<8) | *(s+1);
-                DB_PRINT( "[PTR=0x%02X]", ptr );
-                return;
-            }
-            else {
-                putchar( '.' );
-                cur = *s;
-            }
-            s++;
-        }
-	}
-}
-
-void debug_print_txt( char *txt, UINT16 len )
-{
-	UINT16 i;
-	for( i = 0; i < len; i++ )
-		putchar( txt[i] );
-}
-
-void debug_print_message( struct mdns_message *m )
-{
-	int i;
-	struct rr_srv *srv;
-
-	DB_PRINT( "printing message:\n" );
-
-	DB_PRINT( "--------------------------------------------------------\n"
-			"header:\nID=%u, FLAGS=0x%02X QR=%s, AA=%d OPCODE=%u\n"
-			"QDCOUNT=%u, ANCOUNT=%u, NSCOUNT=%u, ARCOUNT=%u\n",
-			ntohs(m->header->id), m->header->flags.num,
-			m->header->flags.fields.qr ? "response" : "query",
-			m->header->flags.fields.aa,
-			m->header->flags.fields.opcode,
-			ntohs(m->header->qdcount), ntohs(m->header->ancount),
-			ntohs(m->header->nscount), ntohs(m->header->arcount) );
-
-	for( i = 0; i < m->num_questions; i++ ) {
-		DB_PRINT( "--------------------------------------------------------\n"
-				"question %d: \"", i );
-		debug_print_name( m->questions[i].qname );
-		DB_PRINT( "\" (type %u, class %u)\n", m->questions[i].qtype, 
-				m->questions[i].qclass);
-	}
-
-	for( i = 0; i < m->num_answers; i++ ) {
-		DB_PRINT( "--------------------------------------------------------\n"
-				"resource %d: \"", i );
-		debug_print_name( m->answers[i].name );
-		DB_PRINT( "\" (type %u, class %u%s)\n\tttl=%u, rdlength=%u\n",
-				m->answers[i].type, 
-				m->answers[i].class & 0x8000 ? 
-					m->answers[i].class & ~(0x8000) : m->answers[i].class, 
-				m->answers[i].class & 0x8000 ? " FLUSH" : "", 
-				m->answers[i].ttl,m->answers[i].rdlength );
-		switch( m->answers[i].type ) {
-			case T_A:
-			DB_PRINT( "\tA type, IP=0x%X\n", *((UINT32*)m->answers[i].rdata) );
-			break;
-			case T_NS:
-			DB_PRINT( "\tNS type, name=\"" );
-			debug_print_name( (char *)m->answers[i].rdata );
-			DB_PRINT( "\"\n" );
-			break;
-			case T_CNAME:
-			DB_PRINT( "\tCNAME type, name=\"" ); 
-			debug_print_name( (char *)m->answers[i].rdata );
-			DB_PRINT( "\"\n" );
-			break;
-			case T_SRV:
-			DB_PRINT( "\tSRV type, " );
-			srv = (struct rr_srv*)m->answers[i].rdata;
-			printf( "priority: %u, weight: %u, port: %u, target: \"", 
-				ntohs(srv->priority), ntohs(srv->weight), ntohs(srv->port) );
-			/*debug_print_name( srv->target ); FIXME */
-			DB_PRINT( "\"\n" );
-			break;
-			case T_PTR:
-			DB_PRINT( "\tPTR type, name=\"" );
-			debug_print_name( (char *)m->answers[i].rdata );
-			DB_PRINT( "\"\n" );
-			break;
-			case T_TXT:
-			DB_PRINT( "\tTXT type, data=\"" ); 
-			debug_print_txt( (char *)m->answers[i].rdata, 
-				m->answers[i].rdlength );
-			DB_PRINT( "\"\n" );
-			break;
-			default:
-			DB_PRINT( "\tunknown RR type\n" );
-			break;
-		}
-	}
 }

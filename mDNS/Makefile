@@ -1,8 +1,8 @@
 CDEFS=-DMDNS_HOST_TEST
 CFLAGS=-Wall
 
-main: main.o mdns.o
-	gcc main.o mdns.o -o main
+main: main.o mdns.o debug.o
+	gcc main.o mdns.o debug.o -o main
 
 test: test.o mdns.o
 	gcc test.o mdns.o -o test
@@ -15,6 +15,9 @@ test.o: test.c
 
 mdns.o: mdns.c
 	gcc $(CFLAGS) $(CDEFS) -c mdns.c
+
+debug.o: debug.c
+	gcc $(CFLAGS) $(CDEFS) -c debug.c
 
 clean:
 	rm *.o main

@@ -3,12 +3,21 @@
 
 #include "mdns_message.h"
 
+enum mdns_status_t {
+	FIRST_PROBE,	/* wait a random amount of time and probe */
+	SECOND_PROBE,	/* wait 250ms and probe */
+	THIRD_PROVE,	/* wait 250ms and probe */
+	ANNOUNCE,		/* send announcement message to claim name */
+	STARTED			/* we have claimed our name */
+};
+
 UINT16 mdns_read_n16( struct mdns_message *m );
 UINT32 mdns_read_n32( struct mdns_message *m );
 void mdns_write_n16( struct mdns_message *m, UINT16 n );
 void mdns_write_n32( struct mdns_message *m, UINT32 n );
 
 void mdns_mark_response( struct mdns_message *m );
+void mdns_mark_question( struct mdns_message *m );
 int mdns_parse_message( struct mdns_message *m, char *b );
 void debug_print_message( struct mdns_message *m );
 void mdns_transmit_init( struct mdns_message *m, char *b );
