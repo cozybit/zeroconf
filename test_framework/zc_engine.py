@@ -35,6 +35,14 @@ def create_challenger(name):
 		raise ImportError, "Can't create challenger " + name
 	return challenger
 
+def create_subject(name):
+	from zc_base import subject_base
+	mod = __import__(name, globals(), locals(), [])
+	subject = eval("mod." + name + "(conf)")
+	if subject.__class__.__bases__[0] != subject_base:
+		raise ImportError, "Can't create subject " + name
+	return subject
+
 # This is the actual test engine.  It runs the tests specified on the command
 # line.  If no test is specified, it attempts to load and run all files in the
 # current directory that are called test_*
@@ -57,7 +65,7 @@ else:
 
 conf = load_config()
 challenger = create_challenger(conf.CHALLENGER_NAME)
-subject = 0 # For now, the subject is not used
+subject = create_subject(conf.SUBJECT_NAME)
 
 for test_name in test_names:
 	test = import_test(test_name)

@@ -11,7 +11,12 @@ CHALLENGER_NAME = "challenger_linux"
 
 # This is the name of the python interface to the subject system.  The subject
 # system is the one that we are testing.
-SUBJECT_NAME = "subject_8388V.py"
+SUBJECT_NAME = "subject_8388V"
+
+# subject_8388V-specific variables.  Other subjects probably don't use these.
+# serial port and rate of the 8388V subject.
+PORT_8388V = "/dev/ttyS0"
+RATE_8388V = 57600
 
 # These are the network interfaces on the subject and challenger systems.
 # These interfaces should be capable of joining the same network (duh).

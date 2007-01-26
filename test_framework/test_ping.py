@@ -2,6 +2,7 @@
 # with the MANAGED network and ping the gateway.  This is really just to test
 # the framework.  It will probably change in functionality.
 
+import time
 from zc_base import test_base
 
 class test_ping(test_base):
@@ -11,7 +12,8 @@ class test_ping(test_base):
 
 	def run(self, challenger, subject, conf):
 		challenger.set_ip()
-		if challenger.ping(conf.MANAGED_GW) == False:
+		subject.set_ip()
+		if challenger.ping(conf.MANAGED_SUBJECT_IP) == False:
 			return "Failed to ping " + conf.MANAGED_GW
 		else:
 			return ""

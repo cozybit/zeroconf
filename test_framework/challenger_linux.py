@@ -41,8 +41,8 @@ class challenger_linux(challenger_base):
 			raise zc_test_exception, r
 		return
 
-	def get_tcp( self ):
-		return ""
+#	def get_tcp( self ):
+#		return ""
 
 	def ping( self, ip ):
 		cmd = "ping -c 1 -I " + self.conf.CHALLENGER_INTERFACE + " " + ip
