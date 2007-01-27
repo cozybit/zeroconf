@@ -84,16 +84,32 @@ int main( void )
 	struct mdns_message rx_message;
 	struct sockaddr_in from;
 	socklen_t in_size = sizeof(struct sockaddr_in);
-	char target[] = "\xC""hello, world";
+	UINT8 status = FIRST_PROBE;
 
-	UINT8 status = 0;
-	UINT32 service_ip = htonl(0xC0A8011C); /* 192.168.1.28 */
+	/* device settings */
+	struct mdns_rr my_a, my_srv, my_ptr;
+	struct rr_a service_a;
 	struct rr_srv service_srv;
+	struct rr_ptr service_ptr;
 
+	service_a.ip = 0xC0A8011C; /* 192.168.1.28 */
 	service_srv.priority = 0;
 	service_srv.weight = 0;
-	service_srv.port = htons(80);
-	service_srv.target = target;
+	service_srv.port = 80;
+	service_srv.target = "\6andrey\5local";
+	service_ptr.name = "\5_http\4_tcp";
+
+	my_a.data.a = &service_a;
+	my_a.length = rr_length_a;
+	my_a.transfer = rr_transfer_a;
+
+	my_srv.data.srv = &service_srv;
+	my_srv.length = rr_length_a;
+	my_srv.transfer = rr_transfer_srv;
+
+	my_ptr.data.ptr = &service_ptr;
+	my_ptr.length = rr_length_ptr;
+	my_ptr.transfer = rr_transfer_ptr;
 
 	mc_sock = m_socket();
 	if( mc_sock < 0 ) {
@@ -104,7 +120,7 @@ int main( void )
 	/* set up probe to claim name */
 	mdns_transmit_init( &tx_message, tx_buffer );
 	mdns_mark_question( &tx_message );
-	mdns_add_question( &tx_message, SERVICE_NAME SERVICE_TYPE, T_ANY, 1 );
+	mdns_add_question( &tx_message, SERVICE_NAME SERVICE_TYPE, T_ANY, C_IN );
 
 	while( 1 ) {
 		timeout.tv_sec = 0;
@@ -129,12 +145,19 @@ int main( void )
 			if( status == ANNOUNCE ) {
 				mdns_transmit_init( &tx_message, tx_buffer );
 				mdns_mark_response( &tx_message );
+				/* A */
 				mdns_add_answer( &tx_message, SERVICE_NAME SERVICE_TYPE, 
-					T_A, 1, 225, sizeof(UINT32), &service_ip );
+					T_A, C_FLUSH, 225, &my_a );
+				/* SRV */
 				mdns_add_answer( &tx_message, SERVICE_NAME SERVICE_TYPE, 
-					T_SRV, 1, 225, sizeof(struct rr_srv)+strlen(target), 
-					&service_srv );
+					T_SRV, C_FLUSH, 225, &my_srv );
+#if 0
+				/* PTR */
+				mdns_add_answer( &tx_message, SERVICE_NAME SERVICE_TYPE,
+					T_PTR, C_FLUSH, 255, &my_ptr );
+#endif
 			}
+			DB_PRINT( "sending message...\n" );
 			send_message( &tx_message, mc_sock );
 			status++;
 		}

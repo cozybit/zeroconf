@@ -7,6 +7,10 @@
 #define MDNS_MAX_QUESTIONS	32
 #define MDNS_MAX_ANSWERS	10
 
+/* class */
+#define C_IN	0x0001	/* Internet */
+#define C_FLUSH	0x8001	/* FLUSH */
+
 /* types (that are used in mDNS) */
 #define T_A		1	/* host address */
 #define T_NS	2	/* authoritative name server */
@@ -40,11 +44,22 @@ struct mdns_header {
 	UINT16 arcount;
 };
 
-struct rr_srv {
-	UINT16 priority;
-	UINT16 weight;
-	UINT16 port;
-	char *target;
+/* Resource Record (RR) representations */
+struct rr_a { UINT32 ip; };
+struct rr_cname { char *name; };
+struct rr_txt { char *data; };
+struct rr_ns { char *name; };
+struct rr_srv { UINT16 priority; UINT16 weight; UINT16 port; char *target; };
+struct rr_ptr { char *name; };
+
+/* Resource Record (RR) pointer */
+union rr_p {
+	struct rr_a *a;
+	struct rr_cname *cname;
+	struct rr_txt *txt;
+	struct rr_ns *ns;
+	struct rr_srv *srv;
+	struct rr_ptr *ptr;
 };
 
 /* mDNS question (query) representation */
@@ -68,11 +83,16 @@ struct mdns_resource {
 struct mdns_message {
 	struct mdns_header *header;
 	char *cur;
-	char *end;
 	/* pointers to (and representations of) questions and answers */
 	struct mdns_question questions[MDNS_MAX_QUESTIONS];
 	struct mdns_resource answers[MDNS_MAX_ANSWERS];
 	UINT16 num_questions, num_answers; /* for convenience */
+};
+
+struct mdns_rr {
+	void(*transfer)( struct mdns_message *m, union rr_p r );
+	UINT16(*length)( union rr_p r );
+	union rr_p data;
 };
 
 #endif
