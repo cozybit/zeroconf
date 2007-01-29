@@ -10,9 +10,6 @@ test: test.o mdns.o
 main.o: main.c
 	gcc $(CFLAGS) $(CDEFS) -c main.c
 
-test.o: test.c
-	gcc $(CFLAGS) $(CDEFS) -c test.c
-
 mdns.o: mdns.c
 	gcc $(CFLAGS) $(CDEFS) -c mdns.c
 
