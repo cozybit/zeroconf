@@ -93,13 +93,18 @@ int main( void )
 	struct rr_ptr service_ptr;
 	struct rr_txt service_txt;
 
-	service_a.ip = 0xC0A8011C; /* 192.168.1.28 */
+	/* XXX: use system data here */
+	service_a.ip = 0xC0A80169; /* 192.168.1.105 */
+
 	service_srv.priority = 0;
 	service_srv.weight = 0;
 	service_srv.port = 80;
-	service_srv.target = "\6andrey\5local";
-	service_ptr.name = SERVICE_PTR;
-	service_txt.data = "";
+	service_srv.target = SERVICE_TARGET;
+
+	//service_ptr.name = "\6andrey\5_http\4_tcp\5local";
+	service_ptr.name = SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN;
+	
+	service_txt.data = "\xF""path=index.html";
 
 	my_a.data.a = &service_a;
 	my_a.length = rr_length_a;
@@ -126,7 +131,7 @@ int main( void )
 	/* set up probe to claim name */
 	mdns_transmit_init( &tx_message, tx_buffer );
 	mdns_mark_question( &tx_message );
-	mdns_add_question( &tx_message, SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN,
+	mdns_add_question( &tx_message, "\6andrey\5_http\4_tcp\5local",
 		T_ANY, C_IN );
 
 	while( 1 ) {
@@ -153,21 +158,20 @@ int main( void )
 				mdns_transmit_init( &tx_message, tx_buffer );
 				mdns_mark_response( &tx_message );
 				/* A */
-				mdns_add_answer( &tx_message, 
-					SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN, 
+				mdns_add_answer( &tx_message, SERVICE_TARGET, 
 					T_A, C_FLUSH, 225, &my_a );
 				/* SRV */
 				mdns_add_answer( &tx_message, 
-					SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN, 
+					SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN,
 					T_SRV, C_FLUSH, 225, &my_srv );
 				/* TXT */
-				mdns_add_answer( &tx_message, 
-					SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN, 
+				mdns_add_answer( &tx_message,
+					SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN,
 					T_TXT, C_FLUSH, 225, &my_txt );
 				/* PTR */
 				mdns_add_answer( &tx_message, 
-					SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN,
-					T_PTR, C_FLUSH, 255, &my_ptr );
+					SERVICE_TYPE SERVICE_DOMAIN,
+					T_PTR, C_IN, 255, &my_ptr );
 			}
 			DB_PRINT( "sending message...\n" );
 			send_message( &tx_message, mc_sock );
