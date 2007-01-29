@@ -8,6 +8,8 @@
 #endif
 #include "mdns.h"
 
+#define TEST_IP	0xC0A80169
+
 void debug_print_message( struct mdns_message *m );
 
 #endif

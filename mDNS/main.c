@@ -94,7 +94,7 @@ int main( void )
 	struct rr_txt service_txt;
 
 	/* XXX: use system data here */
-	service_a.ip = 0xC0A80169; /* 192.168.1.105 */
+	service_a.ip = TEST_IP;
 
 	service_srv.priority = 0;
 	service_srv.weight = 0;
@@ -151,6 +151,14 @@ int main( void )
 							(struct sockaddr*)&from, &in_size ) ) > 0 ) {
 				if( mdns_parse_message( &rx_message, rx_buffer ) )
 					debug_print_message( &rx_message );
+				/* TODO: parse, decide if/how to respond */
+				if( status == STARTED && 
+					from.sin_addr.s_addr != htonl(TEST_IP) && 
+					MDNS_IS_QUERY( rx_message ) ) {
+					/* XXX just respond to anyone that isn't myself */
+					DB_PRINT( "responding to query...\n" );
+					send_message( &tx_message, mc_sock );
+				}
 			}
 		}
 		else if( status < STARTED ) {

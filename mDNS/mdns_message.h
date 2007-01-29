@@ -95,4 +95,7 @@ struct mdns_rr {
 	union rr_p data;
 };
 
+#define MDNS_IS_QUERY(msg)		(msg.header->flags.fields.qr == 0)
+#define MDNS_IS_RESPONSE(msg)	(msg.header->flags.fields.qr == 1)
+
 #endif
