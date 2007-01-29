@@ -77,8 +77,9 @@ static
 /* ONLY WORKS ON LITTLE ENDIAN MACHINE! */
 unsigned int ll_random_ip()
 {
-	unsigned int ip_addr;
-	ip_addr = sys_random(0x0100, 0xfeff) << 16;
+	unsigned int ip_addr = 0;
+	ip_addr = sys_random(0, 255) << 24;
+	ip_addr = ip_addr | sys_random(1, 254) << 16;
 	ip_addr = ip_addr | (254<<8) | 169;
 	return ip_addr;
 }
@@ -317,5 +318,6 @@ sys_status ll_shutdown(void)
 	sys_thread_halt(&ll_main_thread);
 	sys_thread_delete(&ll_main_thread);
 	sys_remove_rx_pkt_handler(ll_handle_arp);
+	sys_tcpip_halt();
 	return SYS_SUCCESS;
 }

@@ -295,6 +295,16 @@ mli_installCustomTxDataHandler(MLI_CUSTOM_DATA_TX_HANDLER_TYPE cbfunc);
 extern Status_e 
 mli_installCustomRxDataHandler(MLI_CUSTOM_DATA_RX_HANDLER_TYPE cbfunc);
 
+/***************************************************************************/
+/** @brief mli_removeCustomRxDataHandler: removes Rx Data handler
+ *
+ * @param cbfunc - pointer to the custom Rx handler
+ *
+ * @return FAIL if error, SUCCESS otherwise.
+ */
+extern Status_e
+mli_removeCustomRxDataHandler(MLI_CUSTOM_DATA_RX_HANDLER_TYPE cbfunc);
+
 /*************************************************************************/
 /** @brief mli_appInterfaceInit Initialise all custom modules and applications
  *

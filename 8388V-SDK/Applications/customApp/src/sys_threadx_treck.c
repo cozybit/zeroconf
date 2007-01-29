@@ -21,9 +21,13 @@ sys_status sys_add_rx_pkt_handler(sys_pkt_handler handler)
 	return SYS_FAIL;
 }
 
+extern MLI_CUSTOM_DATA_RX_HANDLER_TYPE rxDataHandler[MLI_MAX_CUSTOM_HANDLERS];
+
 sys_status sys_remove_rx_pkt_handler(sys_pkt_handler handler)
 {
-	/* Marvell SDK has no facility to unregister pkt handlers. */
+	if(mli_removeCustomRxDataHandler(handler) == 0)
+		return SYS_SUCCESS;
+
 	return SYS_FAIL;
 }
 
@@ -250,5 +254,9 @@ sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask)
 sys_status sys_tcpip_halt(void)
 {
 	/* Functionality not exported by SDK. */
+	memset(ip_addr, 0, 4);
+	memset(net_mask, 0, 4);
+	memset(def_gtwy, 0, 4);
+	tcp_ready = 0;
 	return SYS_SUCCESS;
 }

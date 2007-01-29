@@ -470,7 +470,25 @@ Status_e mli_installCustomRxDataHandler(MLI_CUSTOM_DATA_RX_HANDLER_TYPE cbfunc)
 	return SUCCESS;
 }
 
+// function to install Rx data Handler
+Status_e mli_removeCustomRxDataHandler(MLI_CUSTOM_DATA_RX_HANDLER_TYPE cbfunc)
+{
+	int i;
+	for(i=0; i<MLI_MAX_CUSTOM_HANDLERS; i++) {
 
+		if(rxDataHandler[i] == cbfunc) {
+			numberRxDataHandlers--;
+			while(i<MLI_MAX_CUSTOM_HANDLERS-1) {
+				rxDataHandler[i] = rxDataHandler[i+1];
+				i++;
+			}
+			rxDataHandler[i] = 0;
+			return SUCCESS;
+		}
+
+	}
+	return FAIL;
+}
 
 // store the tx data packet pointer in a queue
 void mli_TxDataEnqueue(wcb_t *io_pPkt, MLI_RET_TX_BUFF retTxBuff)
