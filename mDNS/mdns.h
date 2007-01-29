@@ -40,4 +40,6 @@ void mdns_add_question( struct mdns_message *m, char* qname,
 	UINT16 qtype, UINT16 qclass );
 void mdns_add_answer( struct mdns_message *m, char *name, UINT16 type,
 	UINT16 class, UINT32 ttl, struct mdns_rr *rr );
+void mdns_add_ns( struct mdns_message *m, char *name, UINT16 type,
+	UINT16 class, UINT32 ttl, struct mdns_rr *rr );
 #endif

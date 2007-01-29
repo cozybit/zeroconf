@@ -75,6 +75,8 @@ void print_usage(void)
 	DBG_P(( DBG_L0 "	ping stop\r\n")); 
 	DBG_P(( DBG_L0 "	linklocal start\r\n")); 
 	DBG_P(( DBG_L0 "	linklocal stop\r\n")); 
+	DBG_P(( DBG_L0 "	mdns start\r\n")); 
+	DBG_P(( DBG_L0 "	mdns stop\r\n")); 
 }
 
 /**
@@ -289,6 +291,23 @@ void cmd_parser(void)
 			 if(ret)
 				 DBG_P(( DBG_L0 "Error killing link local: %d.\r\n", ret));
 		 }
+	 }
+
+	 /* mDNS responder */
+	 else if(!memcmp(user_string, "mdns", 4)) {
+	 	curr_pos = &user_string[get_next_word(user_string)];
+		if(!memcmp(curr_pos, "start", 5)) {
+			/* launch the mDNS responder */
+			ret = mdns_responder_init();
+			if(ret)
+				DBG_P(( DBG_L0 "Error launching mDNS responder: %d.\r\n",ret));
+		}
+		else if(!memcmp(curr_pos, "stop", 4)) {
+			/* stop the mDNS responder */
+			ret = mdns_responder_shutdown();
+			if(ret)
+				DBG_P(( DBG_L0 "Error stopping mDNS responder: %d.\r\n", ret));
+		}
 	 }
 
 	 else if(!memcmp(user_string, "help", 4)) {
