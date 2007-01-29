@@ -35,4 +35,7 @@ MANAGED_GW = "192.168.1.1"
 # This is the SSID of an ad-hoc network that the challenger or subject can
 # create and/or join.
 ADHOC_SSID = "brian-test"
+ADHOC_CHALLENGER_IP = "169.254.1.1"
+ADHOC_NETMASK = "255.255.0.0"
+ADHOC_GW = "0.0.0.0"
 
