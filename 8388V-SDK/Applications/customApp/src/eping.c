@@ -221,8 +221,8 @@ void  eping_process_pkt(uint8 * pkt)
 			icmphdr = (icmp_hdr *)(pkt + 42);	   	     
 			if(icmphdr->code == ECHO_REP) {
 #ifdef EMBEDDED_TCPIP
-	      DBG_P(( DBG_L0 "eping: reply from IP address %d.%d.%d.%d\r\n",
-				  iphdr->saddr[0],iphdr->saddr[1],iphdr->saddr[2],iphdr->saddr[3]));
+//	      DBG_P(( DBG_L0 "eping: reply from IP address %d.%d.%d.%d\r\n",
+//				  iphdr->saddr[0],iphdr->saddr[1],iphdr->saddr[2],iphdr->saddr[3]));
 #else
 	      DBG_P(( DBG_L0 "Raw Data: Ping Reply from IP address %d.%d.%d.%d\r\n",
 				  iphdr->saddr[0],iphdr->saddr[1],iphdr->saddr[2],iphdr->saddr[3]));

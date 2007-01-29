@@ -72,39 +72,90 @@ sys_status sys_thread_wake(sys_thread *t)
  * Queue Interface
  ******************************************************************************/
 
-sys_status sys_queue_create(sys_queue *q, void *qmem, unsigned int qsize)
+/* For now, to avoid dynamic memory allocation, we totally fudge this queue
+ * interface.  It allocates one queue from this static memory.  This is a totaly
+ * unsafe implementation thread wise.
+ */
+
+static sys_queue *q_ptr = 0;
+
+#define Q_SIZE 1024
+static char q_mem[Q_SIZE];
+static int item_size_in_queue = 0;
+static int item_size_out_of_queue = 0;
+
+sys_status sys_queue_create(sys_queue *q, unsigned int q_items, int q_item_size)
 {
-	return tx_queue_create(q, "cozybit queue", sizeof(sys_queue_item),
-						   qmem, qsize*sizeof(sys_queue_item));
+	int item_size;
+
+	if(q_ptr != 0)
+		/* Somebody already owns the only queue. */
+		return SYS_FAIL;
+
+	/* Round item_size up to the nearest supported item size */
+	item_size = TX_1_ULONG;
+	while(item_size*4 < q_item_size) {
+		item_size <<= 1;
+		if(item_size > TX_16_ULONG)
+			/* We don't support items bigger than TX_16_ULONG */
+			return SYS_FAIL;
+	}
+
+	/* Now check for enough memory */
+	if( (q_items * item_size * 4) > Q_SIZE )
+		return TX_NO_MEMORY;
+
+	item_size_in_queue = item_size * 4;
+	item_size_out_of_queue = q_item_size;
+
+	q_ptr = q;
+
+	return tx_queue_create(q, "cozybit queue", item_size,
+						   q_mem, Q_SIZE);
 }
 
 sys_status sys_queue_delete(sys_queue *q)
 {
+	q_ptr = 0;
 	return tx_queue_delete(q);
 }
 
-sys_status sys_queue_put(sys_queue *q, sys_queue_item *qdata, sys_time ms)
+sys_status sys_queue_put(sys_queue *q, void *qdata, sys_time ms)
 {
 	unsigned int ticks;
+	char *item[TX_16_ULONG * 4];
+	sys_status stat;
 
 	if(ms == SYS_FOREVER)
 		ticks = TX_WAIT_FOREVER;
 	else
 		ticks = ms / SYS_MSEC_PER_TICK;
 
-	return tx_queue_send(q, qdata, ticks);
+	memset(item, 0, item_size_in_queue);
+	memcpy(item, qdata, item_size_out_of_queue);
+
+	stat = tx_queue_send(q, item, ticks);
+
+	return stat;
 }
 
-sys_status sys_queue_get(sys_queue *q, sys_queue_item *qdata, sys_time ms)
+sys_status sys_queue_get(sys_queue *q, void *qdata, sys_time ms)
 {
 	unsigned int ticks;
+	char *item[TX_16_ULONG * 4];
+	sys_status stat;
 
 	if(ms == SYS_FOREVER)
 		ticks = TX_WAIT_FOREVER;
 	else
 		ticks = ms / SYS_MSEC_PER_TICK;
 
-	return tx_queue_receive(q, qdata, ticks);
+	stat = tx_queue_receive(q, item, ticks);
+
+	if(stat == TX_SUCCESS)
+		memcpy(qdata, item, item_size_out_of_queue);
+
+	return stat;
 }
 
 /******************************************************************************
@@ -156,4 +207,48 @@ unsigned short sys_random(unsigned short floor, unsigned short ceiling)
 	rand &= 0xffff;
 
 	return (unsigned short)rand;
+}
+
+
+/******************************************************************************
+ * Link-Layer Network Interface
+ ******************************************************************************/
+
+/* This function is in the Marvell SDK, but not in the headers. */
+extern int GetMACAddr(void *, char *);
+sys_status sys_link_get_mac(char mac[6])
+{
+	return GetMACAddr(NULL, mac);
+}
+
+/******************************************************************************
+ * TCP/IP-Layer Network Interface
+ ******************************************************************************/
+
+extern char ip_addr[4];
+extern char net_mask[4];
+extern char def_gtwy[4];
+extern int tcp_ready;
+extern 
+
+sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask)
+{
+	/* This code borrowed from cmd_parser.c.  It uses lots of global variables
+	 * and doesn't check for errors.  Yuck.
+	 */
+	memcpy(ip_addr, &ip, 4);
+	memcpy(net_mask, &netmask, 4);
+	memset(def_gtwy, 0, 4);
+	userif_prepare_config_etcp();
+	tcp_ready = 1;
+
+	/* Eventually, command thread will config stack. */
+
+	return SYS_SUCCESS;
+}
+
+sys_status sys_tcpip_halt(void)
+{
+	/* Functionality not exported by SDK. */
+	return SYS_SUCCESS;
 }

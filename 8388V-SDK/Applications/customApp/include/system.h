@@ -18,12 +18,14 @@
 #if defined SYS_THREADX_TRECK
 
 /* System-specific includes */
+#include "wltypes.h"
 #include "mli.h"
 #include "dbg_Facility.h"
 #include "trsocket.h"
 #include "trmacro.h"
 #include "trtype.h"
 #include "trproto.h"
+#include "userif.h"
 
 /* Return Values */
 #define	SYS_SUCCESS TX_SUCCESS
@@ -59,13 +61,18 @@ typedef sys_thread_return (*sys_thread_entry)(sys_thread_data data);
 
 /* Queue Types */
 typedef TX_QUEUE sys_queue;
-typedef unsigned long sys_queue_item;
 
 /* Mutex Types */
 typedef TX_MUTEX sys_mutex;
 
+/* Link Layer Types */
+
 /* Debug print macro */
 #define DEBUG(...) DBG_P(( DBG_L0 __VA_ARGS__));
+
+/* Compiler stuff */
+#define PACKED_STRUCT_BEGIN __packed
+#define PACK_STRUCT_END
 
 #elif defined SYS_LINUX
 
@@ -173,14 +180,13 @@ sys_status sys_thread_wake(sys_thread *t);
  * sys_queue_create: Create a queue
  *
  * q: pointer to queue to create
- * qmem: pointer to region of memory.  Should be at least
- *       qsize*sizeof(sys_queue_item)
- * qsize: number of elements in q
+ * q_items: number of elements in q
+ * q_item_size: size of each item in queue
  *
  * Returns: SYS_SUCCESS
  *          Other: system defined
  */
-sys_status sys_queue_create(sys_queue *q, void *qmem, unsigned int qsize);
+sys_status sys_queue_create(sys_queue *q, unsigned int q_items, int q_item_size);
 
 /**
  * sys_queue_delete: Delete a queue
@@ -196,7 +202,8 @@ sys_status sys_queue_delete(sys_queue *q);
  * sys_queue_put: Put item in queue
  *
  * q: pointer to queue
- * qdata: pointer to item that should be copied.
+ * qdata: pointer to item that should be copied into queue.  It should be the
+ *        same size as q_item_size used to initialize q.
  * ms: Maximum time in milliseconds to wait for space in queue.  Use SYS_FOREVER
  *     to wait indefinitely, or 0 to not wait at all.
  *
@@ -204,13 +211,14 @@ sys_status sys_queue_delete(sys_queue *q);
  *          SYS_QUEUE_EMPTY: Timed out waiting for space in queue
  *          Other: system defined
  */
-sys_status sys_queue_put(sys_queue *q, sys_queue_item *qdata, sys_time ms);
+sys_status sys_queue_put(sys_queue *q, void *qdata, sys_time ms);
 
 /**
  * sys_queue_get: Get next item from queue
  *
  * q: pointer to queue
- * qdata: location where item should be copied.
+ * qdata: pointer to memory where item from queue should be copied.  It should
+ *        be the same size as q_item_size used to initialize q.
  * ms: Maximum time in milliseconds to wait for next item.  Use SYS_FOREVER to
  *     wait indefinitely, or 0 to not wait at all.
  *
@@ -218,7 +226,7 @@ sys_status sys_queue_put(sys_queue *q, sys_queue_item *qdata, sys_time ms);
  *          SYS_QUEUE_EMPTY: Timed out waiting for next item.
  *          Other: system defined
  */
-sys_status sys_queue_get(sys_queue *q, sys_queue_item *qdata, sys_time ms);
+sys_status sys_queue_get(sys_queue *q, void *qdata, sys_time ms);
 
 /******************************************************************************
  * Mutex Interface
@@ -280,5 +288,27 @@ sys_status sys_mutex_release(sys_mutex *m);
  * Returns: Random number chosen uniformly between floor and ceiling.
  */
 unsigned short sys_random(unsigned short floor, unsigned short ceiling);
+
+/******************************************************************************
+ * Link-Layer Network Interface
+ ******************************************************************************/
+
+/**
+ * sys_link_get_mac: Retrieve MAC address from system
+ *
+ * mac: pointer to location to copy the mac address.
+ *
+ * Returns: SYS_SUCCESS
+ *          Other: system defined
+ */
+sys_status sys_link_get_mac(char mac[6]);
+
+/******************************************************************************
+ * TCP/IP-Layer Network Interface
+ ******************************************************************************/
+
+sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask);
+
+sys_status sys_tcpip_halt(void);
 
 #endif

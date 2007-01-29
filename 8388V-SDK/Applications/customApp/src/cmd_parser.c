@@ -17,6 +17,7 @@
 #include "IEEE_types.h"
 #include "userif.h"
 #include "trsocket.h"
+#include "tcpip_socki.h"
 #include "linklocal.h"
 
 extern IEEEtypes_Bss_e  bss_type;
@@ -32,6 +33,9 @@ extern char ping_ipaddr[4];
 extern int link_present;
 extern IEEEtypes_MacAddr_t specificBSSID;
 extern int cmd_in_progress;
+
+/* Borrowed from treck congifuration handler */
+extern treck_conf_t *stTreckConf;
 
 int tcp_ready = 0;
 
@@ -66,6 +70,7 @@ void print_usage(void)
 	DBG_P(( DBG_L0 "	iwconfig ap <bssid>\r\n")); 
 	DBG_P(( DBG_L0 "	iwconfig mode ad-hoc/managed\r\n")); 
 	DBG_P(( DBG_L0 "	econfig <clientip> <netmask> <gateway>\r\n")); 
+	DBG_P(( DBG_L0 "	printconf -- returns ip, netmask, and gateway\r\n"));
 	DBG_P(( DBG_L0 "	ping <ip address>\r\n")); 
 	DBG_P(( DBG_L0 "	ping stop\r\n")); 
 	DBG_P(( DBG_L0 "	linklocal start\r\n")); 
@@ -176,6 +181,8 @@ int cmd_parser_read_line(void)
 void cmd_parser(void)
 {
    char * curr_pos = &user_string[0];
+   int ret;
+
    dbg_FlushingOut();
    if(!cmd_in_progress && cmd_parser_read_line()) {   
      if(strlen(user_string) == 0) {
@@ -236,6 +243,23 @@ void cmd_parser(void)
 		tcp_ready = 1; /* XXX */
 #endif     
 	 }
+
+     else if(!memcmp(user_string, "printconf", 9)){
+		 unsigned char ip[4] = {0, 0, 0, 0};
+		 unsigned char nm[4] = {0, 0, 0, 0};
+		 unsigned char gw[4] = {0, 0, 0, 0};
+
+		 if(treck_init != 0) {
+			 memcpy((void *)ip, ip_addr, 4);
+			 memcpy((void *)nm, net_mask, 4);
+			 memcpy((void *)gw, def_gtwy, 4);
+		 }
+
+		 DBG_P(( DBG_L0 "%d.%d.%d.%d,", ip[0], ip[1], ip[2], ip[3]));
+		 DBG_P(( DBG_L0 "%d.%d.%d.%d,", nm[0], nm[1], nm[2], nm[3]));
+		 DBG_P(( DBG_L0 "%d.%d.%d.%d\r\n", gw[0], gw[1], gw[2], gw[3]));
+	 }
+
      else if(!memcmp(user_string,"ping",4)){
 		curr_pos = &user_string[get_next_word(user_string)];
         if(!memcmp(curr_pos,"stop",4)) {
@@ -256,12 +280,14 @@ void cmd_parser(void)
 		 curr_pos = &user_string[get_next_word(user_string)];
 		 if(!memcmp(curr_pos, "start", 5)) {
 			 /* Launch the link local manager */
-			 if(ll_init())
-				 DBG_P(( DBG_L0 "Error launching link local.\r\n"));
+			 ret = ll_init();
+			 if(ret)
+				 DBG_P(( DBG_L0 "Error launching link local: %d.\r\n", ret));
 		 } else if(!memcmp(curr_pos, "stop", 4)) {
 			 /* Kill the link local manager. */
-			 if(ll_shutdown())
-				 DBG_P(( DBG_L0 "Error shutting down link local.\r\n"));
+			 ret = ll_shutdown();
+			 if(ret)
+				 DBG_P(( DBG_L0 "Error killing link local: %d.\r\n", ret));
 		 }
 	 }
 
