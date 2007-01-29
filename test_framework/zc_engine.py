@@ -68,9 +68,10 @@ challenger = create_challenger(conf.CHALLENGER_NAME)
 subject = create_subject(conf.SUBJECT_NAME)
 
 for test_name in test_names:
+	print "Running " + test_name + ": ",
 	test = import_test(test_name)
 	error = test.run(challenger, subject, conf)
 	if(error == ""):
-		print "PASS: " + test_name
+		print "PASS"
 	else:
-		print "FAIL: " + test_name + ": " + error
+		print "FAIL: " + error

@@ -19,6 +19,17 @@ class challenger_linux(challenger_base):
 	def __del__( self ):
 		return
 
+	def set_wifi( self, ssid="ANY", mode="managed", channel=6 ):
+		iface = self.conf.CHALLENGER_INTERFACE
+		cmd = "iwconfig " + iface + " mode " + mode
+		cmd += " essid " + ssid
+		if mode != "managed":
+			cmd += " channel %d"%(channel)
+			
+		r = os.system(cmd)
+		if r != 0:
+			raise zc_test_exception, r
+
 	def set_ip( self, ip="", netmask="", gateway="" ):
 		if ip == "":
 			ip = self.conf.MANAGED_CHALLENGER_IP
@@ -27,14 +38,8 @@ class challenger_linux(challenger_base):
 		if gateway == "":
 			gateway = self.conf.MANAGED_GW
 
-		# set up wifi
-		essid = self.conf.MANAGED_SSID
-		iface = self.conf.CHALLENGER_INTERFACE
-		r = os.system("iwconfig " + iface + " mode managed essid " + essid)
-		if r != 0:
-			raise zc_test_exception, r
-
 		# set up IP stuff
+		iface = self.conf.CHALLENGER_INTERFACE
 		cmd = "ifconfig " + iface + " netmask " + netmask + " " + ip
 		r = os.system(cmd)
 		if r != 0:
@@ -48,6 +53,8 @@ class challenger_linux(challenger_base):
 		cmd = "ping -c 1 -I " + self.conf.CHALLENGER_INTERFACE + " " + ip
 		if self.conf.DEBUG == 0:
 			cmd += " >/dev/null"
+		else:
+			print cmd + "\n"
 		r = os.system(cmd)
 		if r == 0:
 			return True

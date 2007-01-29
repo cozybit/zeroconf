@@ -22,6 +22,11 @@ class zc_test_exception(Exception):
 ##############################################################################
 # challenger_base: Base class for systems that act as challengers.
 #
+# set_wifi(ssid, mode, channel) -- sets up a system's wifi.  If unimplemented,
+#                                  it is assumed that a system does not have
+#                                  wifi.  Defaults are ssid="ANY",
+#                                  mode="managed", and channel=6.
+#
 # set_ip(ip, netmask, gateway) -- sets up system's TCP/IP stack.  If any
 #                                 arguments are empty strings, function should
 #                                 use the MANAGED_* values from config.py
@@ -35,6 +40,9 @@ class zc_test_exception(Exception):
 
 class challenger_base:
 	def __init__( self, conf ):
+		return
+
+	def set_wifi( self, ssid="ANY", mode="managed", channel=6 ):
 		return
 
 	def set_ip( self, ip="", netmask="", gateway="" ):
@@ -51,6 +59,11 @@ class challenger_base:
 
 ##############################################################################
 # subject_base: Base class for all Zeroconf systems that are to be tested.
+#
+# set_wifi(ssid, mode, channel) -- sets up a system's wifi.  If unimplemented,
+#                                  it is assumed that a system does not have
+#                                  wifi.  Defaults are ssid="ANY",
+#                                  mode="managed", and channel=6.
 #
 # start_ipv4ll() -- starts system's ipv4 link-local address process
 #
@@ -72,6 +85,9 @@ class subject_base:
 		return
 
 	def __del__( self ):
+		return
+
+	def set_wifi( self, ssid="ANY", mode="managed", channel=6 ):
 		return
 
 	def start_ipv4ll( self ):
