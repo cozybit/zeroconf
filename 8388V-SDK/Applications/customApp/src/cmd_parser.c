@@ -37,6 +37,8 @@ extern int cmd_in_progress;
 /* Borrowed from treck congifuration handler */
 extern treck_conf_t *stTreckConf;
 
+extern int GetMACAddr(void *, char *);
+
 int tcp_ready = 0;
 
 int string_pos = 0;
@@ -70,7 +72,8 @@ void print_usage(void)
 	DBG_P(( DBG_L0 "	iwconfig ap <bssid>\r\n")); 
 	DBG_P(( DBG_L0 "	iwconfig mode ad-hoc/managed\r\n")); 
 	DBG_P(( DBG_L0 "	econfig <clientip> <netmask> <gateway>\r\n")); 
-	DBG_P(( DBG_L0 "	printconf -- returns ip, netmask, and gateway\r\n"));
+	DBG_P(( DBG_L0 "	printip -- prints ip, netmask, and gateway\r\n"));
+	DBG_P(( DBG_L0 "	printmac -- prints mac address\r\n"));
 	DBG_P(( DBG_L0 "	ping <ip address>\r\n")); 
 	DBG_P(( DBG_L0 "	ping stop\r\n")); 
 	DBG_P(( DBG_L0 "	linklocal start\r\n")); 
@@ -246,7 +249,7 @@ void cmd_parser(void)
 #endif     
 	 }
 
-     else if(!memcmp(user_string, "printconf", 9)){
+     else if(!memcmp(user_string, "printip", 7)){
 		 unsigned char ip[4] = {0, 0, 0, 0};
 		 unsigned char nm[4] = {0, 0, 0, 0};
 		 unsigned char gw[4] = {0, 0, 0, 0};
@@ -260,6 +263,13 @@ void cmd_parser(void)
 		 DBG_P(( DBG_L0 "%d.%d.%d.%d,", ip[0], ip[1], ip[2], ip[3]));
 		 DBG_P(( DBG_L0 "%d.%d.%d.%d,", nm[0], nm[1], nm[2], nm[3]));
 		 DBG_P(( DBG_L0 "%d.%d.%d.%d\r\n", gw[0], gw[1], gw[2], gw[3]));
+	 }
+
+     else if(!memcmp(user_string, "printmac", 8)){
+		 char mac[6];
+		 GetMACAddr(NULL, mac);
+		 DBG_P(( DBG_L0 "%02x:%02x:%02x:%02x:%02x:%02x\r\n", \
+				 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]));
 	 }
 
      else if(!memcmp(user_string,"ping",4)){

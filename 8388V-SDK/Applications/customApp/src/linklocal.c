@@ -43,21 +43,22 @@ static char ll_mac[6];
 
 /* Task information for the User Interface task*/
 static sys_thread ll_main_thread;
+static int ll_running = 0;
 static unsigned char ll_stack[2048];
 
 /* ARP packet definitions.  Consider moving to its own file */
 
-#define ARP_TYPE 0x0608
+#define ARP_TYPE 0x0806
 
-PACKED_STRUCT_BEGIN struct arp_hdr {
+PACKED_STRUCT_BEGIN struct arp_pkt {
 	unsigned short hard_type;
 	unsigned short prot_type;
 	unsigned char hard_size;
 	unsigned char prot_size;
 	unsigned short op;
-	unsigned char sender_eth[6];
+	unsigned char sender_mac[6];
 	unsigned char sender_ip[4]; /* network byte order */
-	unsigned char target_eth[6];
+	unsigned char target_mac[6];
 	unsigned char target_ip[4]; /* network byte order */
 } PACKET_STRUCT_END;
 
@@ -85,7 +86,7 @@ unsigned int ll_random_ip()
 }
 
 /* Determine if an arp packet conflicts with the supplied mac and ip address */
-int ll_arp_conflict(struct arp_hdr *arp, char mac[6], unsigned int ip)
+int ll_arp_conflict(struct arp_pkt *arp, char mac[6], unsigned int ip)
 {
 	unsigned int sender_ip, target_ip;
 
@@ -109,8 +110,21 @@ int ll_arp_conflict(struct arp_hdr *arp, char mac[6], unsigned int ip)
 /* Send an arp probe with the specified mac and ip */
 sys_status ll_send_probe(char mac[6], unsigned int ip)
 {
-	/* Implement me */
-	return SYS_SUCCESS;
+	struct arp_pkt arp;
+	char bcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	/* Construct arp packet. */
+	arp.hard_type = htons(0x0001); /* ethernet is type 1 */
+	arp.prot_type = htons(0x0800); /* IP addr is type 0x0800 */
+	arp.hard_size = 6;
+	arp.prot_size = 4;
+	arp.op = ARP_OP_REQUEST;
+	memcpy((void *)arp.sender_mac, mac, sizeof(mac));
+	memset((void *)arp.sender_ip, 0, 4);
+	memset((void *)arp.target_mac, 0, 6);
+	memcpy((void *)arp.target_ip, &ip, 4);
+
+	return sys_link_sendto(bcast, ARP_TYPE, (char *)&arp,
+						   sizeof(struct arp_pkt));
 }
 
 /* Send an arp announcement with the specified mac and ip */
@@ -128,11 +142,11 @@ sys_pkt_status ll_handle_arp(sys_pkt *pkt)
 
 	unsigned char *link_header = (unsigned char *)pkt + L2_HEADER_OFFSET;
 	unsigned short type = *(unsigned short *)(link_header + L2_TYPE_OFFSET);
-	struct arp_hdr *arp;
+	struct arp_pkt *arp;
 
-	arp = (struct arp_hdr *)((unsigned char *)pkt + ARP_HEADER_OFFSET);
+	arp = (struct arp_pkt *)((unsigned char *)pkt + ARP_HEADER_OFFSET);
 
-	if (type == ARP_TYPE) {
+	if (type == htons(ARP_TYPE)) {
 		/* This is an ARP packet.  Check if it conflicts. */
 		
 		if(ll_arp_conflict(arp, ll_mac, ll_candidate_ip)) {
@@ -285,6 +299,9 @@ sys_status ll_init(void)
 {
 	sys_status ret;
 
+	if(ll_running != 0)
+		return SYS_FAIL;
+
 	ll_state = LL_NO_ADDRESS;
 
 	ret = sys_link_get_mac(ll_mac);
@@ -307,6 +324,7 @@ sys_status ll_init(void)
  done1:
 	sys_remove_rx_pkt_handler(ll_handle_arp);
  done0:
+	ll_running = 1;
 	return ret;
 }
 
@@ -319,5 +337,6 @@ sys_status ll_shutdown(void)
 	sys_thread_delete(&ll_main_thread);
 	sys_remove_rx_pkt_handler(ll_handle_arp);
 	sys_tcpip_halt();
+	ll_running = 0;
 	return SYS_SUCCESS;
 }

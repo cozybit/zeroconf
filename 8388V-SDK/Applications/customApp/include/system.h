@@ -303,12 +303,43 @@ unsigned short sys_random(unsigned short floor, unsigned short ceiling);
  */
 sys_status sys_link_get_mac(char mac[6]);
 
+/**
+ * sys_link_sendto: Send a packet to mac_dest
+ *
+ * mac_dest: destination mac address
+ * type: type of link packet (i.e., arp, etc.)
+ * payload: payoad of packet to be sent
+ * len: length of payload to be sent
+ *
+ * Returns: SYS_SUCCESS
+ *          Other: system defined
+ *
+ * Note: payload should not contain link layer header.
+ */
+sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
+						   unsigned int len);
+
 /******************************************************************************
  * TCP/IP-Layer Network Interface
  ******************************************************************************/
 
+/**
+ * sys_tcpip_init: Initialize TCP/IP stack
+ *
+ * ip: ip address
+ * netmask: netmask
+ *
+ * Returns: SYS_SUCCESS
+ *          Other: system defined
+ */
 sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask);
 
+/**
+ * sys_tcpip_halt: Halt TCP/IP stack
+ *
+ * Returns: SYS_SUCCESS
+ *          Other: system defined
+ */
 sys_status sys_tcpip_halt(void);
 
 #endif
