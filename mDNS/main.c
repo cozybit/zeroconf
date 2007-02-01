@@ -101,7 +101,6 @@ int main( void )
 	service_srv.port = 80;
 	service_srv.target = SERVICE_TARGET;
 
-	//service_ptr.name = "\6andrey\5_http\4_tcp\5local";
 	service_ptr.name = SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN;
 	
 	service_txt.data = "\xF""path=index.html";

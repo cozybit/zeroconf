@@ -250,19 +250,3 @@ void mdns_add_answer( struct mdns_message *m, char *name, UINT16 type,
 
 	m->header->ancount += htons(1);
 }
-
-void mdns_add_ns( struct mdns_message *m, char *name, UINT16 type, 
-	UINT16 class, UINT32 ttl, struct mdns_rr *rr )
-{
-	UINT16 d_len = mdns_name_length( name );
-
-	memcpy( m->cur, name, d_len );
-	m->cur += d_len;
-	mdns_write_n16( m, type );
-	mdns_write_n16( m, class );
-	mdns_write_n32( m, ttl );
-	mdns_write_n16( m, rr->length( rr->data ) );
-	rr->transfer( m, rr->data );
-
-	m->header->nscount += htons(1);
-}

@@ -6,7 +6,7 @@
 enum mdns_status_t {
 	FIRST_PROBE,	/* wait a random amount of time and probe */
 	SECOND_PROBE,	/* wait 250ms and probe */
-	THIRD_PROVE,	/* wait 250ms and probe */
+	THIRD_PROBE,	/* wait 250ms and probe */
 	ANNOUNCE,		/* send announcement message to claim name */
 	STARTED			/* we have claimed our name */
 };
@@ -39,7 +39,5 @@ void mdns_transmit_init( struct mdns_message *m, char *b );
 void mdns_add_question( struct mdns_message *m, char* qname, 
 	UINT16 qtype, UINT16 qclass );
 void mdns_add_answer( struct mdns_message *m, char *name, UINT16 type,
-	UINT16 class, UINT32 ttl, struct mdns_rr *rr );
-void mdns_add_ns( struct mdns_message *m, char *name, UINT16 type,
 	UINT16 class, UINT32 ttl, struct mdns_rr *rr );
 #endif

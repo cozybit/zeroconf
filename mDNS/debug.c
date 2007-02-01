@@ -8,14 +8,19 @@ void debug_print_txt( char *txt, UINT16 len )
 }
 
 /* print a RFC-1035 format domain name */
-void debug_print_name( char *name )
+void debug_print_name( struct mdns_message *m, char *name )
 {
 	char *s = name;
+	UINT8 ptr = 0;
 
 	while( *s ) {
 		if( *s & 0xC0 ) { /* pointer */
-			DB_PRINT( "[PTR=0x%02X]", (UINT16)(((*s & ~(0xC0))<<8) | *(s+1)) );
-			return;
+			if( ptr != 0 ) 
+				break;
+			/* go print at start of message+offset */
+			s = (char *)m->header+((UINT8)(((*s & ~(0xC0))<<8) | *(s+1)));
+			ptr = 1;
+			continue;
 		}
 		else { /* label */
 			putchar( '.' );
@@ -27,22 +32,22 @@ void debug_print_name( char *name )
 }
 
 /* print question (query) data */
-void debug_print_question( struct mdns_question *q )
+void debug_print_question( struct mdns_message *m, struct mdns_question *q )
 {
 	DB_PRINT( "--------------------------------------------------------\n"
 			  "question: \"" );
-	debug_print_name( q->qname );
+	debug_print_name( m, q->qname );
 	DB_PRINT( "\"\n(type %u, class %u)\n", q->qtype, q->qclass);
 }
 
 /* print resource (answer) and associated RR */
-void debug_print_resource( struct mdns_resource *r )
+void debug_print_resource( struct mdns_message *m, struct mdns_resource *r )
 {
 	struct rr_srv *srv;
 
 	DB_PRINT( "--------------------------------------------------------\n"
 			"resource \"" );
-	debug_print_name( r->name );
+	debug_print_name( m, r->name );
 	DB_PRINT( "\" (type %u, class %u%s)\n\tttl=%u, rdlength=%u\n",
 			r->type,
 			r->class & 0x8000 ? r->class & ~(0x8000) : r->class,
@@ -53,12 +58,12 @@ void debug_print_resource( struct mdns_resource *r )
 		break;
 		case T_NS:
 		DB_PRINT( "\tNS type, name=\"" );
-		debug_print_name( (char *)r->rdata );
+		debug_print_name( m, (char *)r->rdata );
 		DB_PRINT( "\"\n" );
 		break;
 		case T_CNAME:
 		DB_PRINT( "\tCNAME type, name=\"" );
-		debug_print_name( (char *)r->rdata );
+		debug_print_name( m, (char *)r->rdata );
 		DB_PRINT( "\"\n" );
 		break;
 		case T_SRV:
@@ -66,12 +71,12 @@ void debug_print_resource( struct mdns_resource *r )
 		srv = (struct rr_srv*)r->rdata;
 		printf( "priority: %u, weight: %u, port: %u, target: \"",
 			ntohs(srv->priority), ntohs(srv->weight), ntohs(srv->port) );
-		debug_print_name( (char *)(r->rdata+3*sizeof(UINT16)) );
+		debug_print_name( m, (char *)(r->rdata+3*sizeof(UINT16)) );
 		DB_PRINT( "\"\n" );
 		break;
 		case T_PTR:
 		DB_PRINT( "\tPTR type, name=\"" );
-		debug_print_name( (char *)r->rdata );
+		debug_print_name( m, (char *)r->rdata );
 		DB_PRINT( "\"\n" );
 		break;
 		case T_TXT:
@@ -107,8 +112,8 @@ void debug_print_message( struct mdns_message *m )
 	debug_print_header( m->header );
 
 	for( i = 0; i < m->num_questions; i++ ) 
-		debug_print_question( &m->questions[i] );
+		debug_print_question( m, &m->questions[i] );
 
 	for( i = 0; i < m->num_answers; i++ )
-		debug_print_resource( &m->answers[i] );
+		debug_print_resource( m, &m->answers[i] );
 }
