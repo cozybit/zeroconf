@@ -173,9 +173,15 @@ int cmd_parser_read_line(void)
 			 return 1;		 
 		 }
 #ifdef UART_DRV
-	DBG_P(( DBG_L0 "%c",user_string[string_pos])); 
+		 /* Echo character back to user */
+		 DBG_P(( DBG_L0 "%c",user_string[string_pos])); 
 #endif
 		 string_pos++;
+		 if(string_pos == STRING_SIZE) {
+			 string_pos = 0;
+			 return 1;
+		 }
+			
 	 }
 	 return 0;
 }
@@ -183,6 +189,10 @@ int cmd_parser_read_line(void)
 /**
  * Parses commands and executes them
  */
+
+/* Temporary test! */
+extern int ll_send_probe(char mac[6], unsigned int ip);
+
 void cmd_parser(void)
 {
    char * curr_pos = &user_string[0];
@@ -322,6 +332,14 @@ void cmd_parser(void)
 
 	 else if(!memcmp(user_string, "help", 4)) {
 		 print_usage();
+	 }
+
+	 /* Temp command! */
+	 else if(!memcmp(user_string, "arp", 3)) {
+		 char mac[6];
+		 GetMACAddr(NULL, mac);
+		 ret = ll_send_probe(mac, 0x01020304);
+		 DBG_P(( DBG_L0 "Send arp: %d.\r\n", ret));
 	 }
 
 	 else {

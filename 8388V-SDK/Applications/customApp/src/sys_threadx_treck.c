@@ -225,33 +225,25 @@ sys_status sys_link_get_mac(char mac[6])
 	return GetMACAddr(NULL, mac);
 }
 
-
-static char tx_buffer[1024];
-
-/* Handler function for packet transmission complete */
-void sys_link_tx_complete(struct wcb_t *pkt)
-{
-	pkt->TxDestAddrHigh = 0;
-}
-
-extern int use_peer_sta_api;
 #define RAW_SOCKET_DATA 0x07
 #define RAW_DATA 0x08
+
+void done(wcb_t *buffer)
+{
+	DEBUG("HERE!!");
+}
 
 sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
 						   unsigned int len)
 {
-
-#if 0
-	/* Code not ready for prime time! */
-	wcb_t *buffer = (wcb_t *)tx_buffer;
+	wcb_t *buffer;
 	char *wp;
 	char mac[6];
 
-	/* Check if buffer is in use */
-	if(buffer->TxDestAddrHigh != 0)
+	buffer = (wcb_t *)mli_GetTxFreeBuffer(); /* How big is it?? */
+	if(buffer == 0)
 		return SYS_FAIL;
-
+	
 	/* Create packet */
 	memset((void*)buffer, 0x00, sizeof(wcb_t));	
 	buffer->TxPacketType = RAW_DATA;
@@ -259,27 +251,25 @@ sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
 	wp = (char *)buffer + sizeof(wcb_t);
 
 	/* Create mac header */
-	memcpy((void *)(&buffer->TxDestAddrHigh), mac_dest, sizeof(mac_dest));
-	memcpy(wp, mac_dest, sizeof(mac_dest));
-	wp += sizeof(mac_dest);
+	memcpy((void *)(&buffer->TxDestAddrHigh), mac_dest, 6);
+	memcpy(wp, mac_dest, 6);
+	wp += 6;
 	if(sys_link_get_mac(mac) != SYS_SUCCESS) {
 		/* Should free buffer here, but don't know how! */
 		return SYS_FAIL;
 	}
-	memcpy(wp, mac, sizeof(mac));
-	wp += sizeof(mac);
+	memcpy(wp, mac, 6);
+	wp += 6;
 	*(short *)wp = htons(type);
 	wp += sizeof(short);
-	buffer->TxPacketLength = sizeof(mac_dest) + sizeof(mac) + sizeof(short);
+	buffer->TxPacketLength = 6 + 6 + sizeof(short);
 	
 	/* Copy payload */
 	memcpy(wp, payload, len);
 	buffer->TxPacketLength += len;
 
 	/* Send packet */
-	mli_TxDataEnqueue(buffer, sys_link_tx_complete); /* error code? */
-#endif
-
+	mli_SendTxBuffer((uint8*)buffer); /* error code? */
 	return SYS_SUCCESS;
 }
 

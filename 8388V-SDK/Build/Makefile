@@ -42,6 +42,8 @@ endif
 %.o: $(SDK_WLAN_CUSTOM_APP_SRC_DIR)/%.c
 	$(CC) -c -o $*.o $(CFLAGS) $(EXTRACFLAGS) $<
 
+LDFLAGS += -map
+
 # build target rule
 wlansdk8388: $(OBJS)
 	$(LD) $(LDFLAGS) -o $(EXE_NAME) $(OBJS)  $(SDK_OBJS) $(SDK_LIBS)

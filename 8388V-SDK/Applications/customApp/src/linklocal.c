@@ -90,7 +90,8 @@ int ll_arp_conflict(struct arp_pkt *arp, char mac[6], unsigned int ip)
 {
 	unsigned int sender_ip, target_ip;
 
-	if( (arp->op != ARP_OP_REPLY) && (arp->op != ARP_OP_REQUEST) ) {
+	if( (arp->op != htons(ARP_OP_REPLY)) &&
+		(arp->op != htons(ARP_OP_REQUEST)) ) {
 		return 0;
 	}
 	
@@ -117,8 +118,8 @@ sys_status ll_send_probe(char mac[6], unsigned int ip)
 	arp.prot_type = htons(0x0800); /* IP addr is type 0x0800 */
 	arp.hard_size = 6;
 	arp.prot_size = 4;
-	arp.op = ARP_OP_REQUEST;
-	memcpy((void *)arp.sender_mac, mac, sizeof(mac));
+	arp.op = htons(ARP_OP_REQUEST);
+	memcpy((void *)arp.sender_mac, mac, 6);
 	memset((void *)arp.sender_ip, 0, 4);
 	memset((void *)arp.target_mac, 0, 6);
 	memcpy((void *)arp.target_ip, &ip, 4);

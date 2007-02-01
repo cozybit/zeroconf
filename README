@@ -72,4 +72,5 @@ sd-simple [unimplemented]: This test requires two nodes, A (the host) and B (the
 TODO
 ----
 
-Implement!
+-- Migrate ll state machine to use events
+-- Introduce notion of "interface" in system abstraction
