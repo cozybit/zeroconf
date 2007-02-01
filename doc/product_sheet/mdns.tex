@@ -1,0 +1,83 @@
+\documentclass[11pt,titlepage]{article}
+
+\input{art/cozydefs.tex}
+
+\usepackage{listings}
+\usepackage{import}
+\usepackage{epsfig}
+\usepackage{verbatim}
+
+\newcommand{\function}[1]{\lstinline{#1}()}
+\newcommand{\datatype}[1]{\lstinline{#1}}
+% TODO fix this
+%\newcommand{\function}[1]{\verb+$#1$+}
+%\newcommand{\function}[1]{\verb+#1()+}
+\newcommand{\module}[1]{\texttt{#1}}
+
+
+\begin{document}
+\begin{titlepage}
+%\maketitle
+\lstset{language=c}
+\newcommand\HRule{\noindent\rule{\linewidth}{1.5pt}}
+\vspace*{\stretch{1}}
+\HRule
+\begin{center}
+	\LARGE Embedded mDNS/Zeroconf Responder
+\end{center}
+\HRule
+\vspace*{\stretch{2}}
+\vspace{1in}
+\begin{center}
+	\Large
+% nothing here
+{\small January $21^{st}$, 2007}\\
+%{\small \date}\\
+\rule{0pt}{20ex}\\
+\includegraphics*{art/cozybit-logo.eps}\\
+\vspace{3ex}
+{\scriptsize 
+\begin{tabular}{l l}
+Tel: +1 415 974 6770 	& 165 Jessie St. \\
+Fax: +1 415 974 6771    & San Francisco, CA 94105 \\
+http://www.cozybit.com  & USA \\
+\end{tabular}}
+\end{center}
+\end{titlepage}
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{mDNS/Zeroconf module}
+
+The mDNS/Zeroconf module allows embedded devices to advertize their services 
+and announce themselves to users without extensive network configuation. 
+Suggested applications for mDNS in embedded systems include:
+
+\begin{itemize}
+	\item Pointing users to your device's web-based configuration.
+	\item Announcing your wireless VOIP handset on the network.
+	\item Enabling the user to browse for services such as printers, media
+		  devices, and network-attached storage.
+\end{itemize}
+
+\subsection{Features}
+
+The mDNS/Zeroconf module implements:
+
+\begin{itemize}
+	\item Multicast DNS (mDNS) for automatic name resolution without the
+		  presense of a DNS server.
+	\item mDNS Responder, enabling your device to advertise its services on
+		  to mDNS-SD (Service Discovery) browsers on the network.
+	\item mDNS Responder API, allowing the developer to configure their device
+		  to advertize a desired name and service.
+\end{itemize}
+
+\subsection{Specifications}
+
+The mDNS/Zeroconf module is designed for small embedded systems.  It therefore
+runs in a single thread and does not make use of dynamically allocated memory.
+The mDNS service, at multicast address 224.0.0.251, uses UDP port 5353.
+
+\end{document}
