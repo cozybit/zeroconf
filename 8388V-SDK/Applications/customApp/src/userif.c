@@ -885,7 +885,7 @@ Status_e  userif_init(void)
 	cmd_in_progress = 0;
 	bss_type = BSS_ANY;
 #ifdef EMBEDDED_TCPIP
-	mli_installTickFunction(frameICMPPacket);
+	//mli_installTickFunction(frameICMPPacket);
 #else
 	mli_installTickFunction(send_raw_pkt);
 #endif

@@ -112,9 +112,9 @@ MLI_CUSTOM_DATA_T customRxDataHandler(RxPD_t *io_pPkt)
 {
 #ifdef buildModes_HIF_NO_HOST
 	// Call Eping Receive if non Null packet
-    if ( (io_pPkt != NULL) && (!use_peer_sta_api)) {
-		eping_process_pkt((uint8*)io_pPkt + sizeof(RxPD_t));
-	}
+    //if ( (io_pPkt != NULL) && (!use_peer_sta_api)) {
+	//	eping_process_pkt((uint8*)io_pPkt + sizeof(RxPD_t));
+	//}
 #endif
  	return MLI_CUSTOM_DATA_NOT_MY_PKT;
 }

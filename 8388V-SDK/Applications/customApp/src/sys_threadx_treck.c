@@ -40,7 +40,7 @@ sys_status sys_thread_create(sys_thread *t, sys_thread_entry entry,
 							 unsigned int stack_size)
 {
 	return tx_thread_create(t,"cozybit thread", entry, data, stack,
-							stack_size, 9, 9, 29, TX_AUTO_START);
+							stack_size, 20, 20, 2, TX_AUTO_START);
 	
 }
 
@@ -241,6 +241,9 @@ extern int use_peer_sta_api;
 sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
 						   unsigned int len)
 {
+
+#if 0
+	/* Code not ready for prime time! */
 	wcb_t *buffer = (wcb_t *)tx_buffer;
 	char *wp;
 	char mac[6];
@@ -275,6 +278,7 @@ sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
 
 	/* Send packet */
 	mli_TxDataEnqueue(buffer, sys_link_tx_complete); /* error code? */
+#endif
 
 	return SYS_SUCCESS;
 }
