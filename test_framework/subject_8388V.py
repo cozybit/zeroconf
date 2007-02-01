@@ -111,7 +111,7 @@ class subject_8388V(subject_base):
 		return self.send("printip").split(",")
 		
 	def get_mac(self):
-		return self.send("printmac")
+		return self.send("printmac").rstrip("\r\n")
 	
 def run_cmd(cmd):
 	tokens = cmd.split(" ")
