@@ -11,12 +11,16 @@ class test_ping(test_base):
 		return
 
 	def run(self, challenger, subject, conf):
-		challenger.set_wifi(ssid=conf.MANAGED_SSID, mode="managed")
-		challenger.set_ip()
-		subject.set_wifi(ssid=conf.MANAGED_SSID, mode="managed")
-		subject.set_ip()
-		if challenger.ping(conf.MANAGED_SUBJECT_IP) == False:
-			return "Failed to ping " + conf.MANAGED_GW
+		challenger.set_wifi(ssid=conf.ADHOC_SSID, mode="ad-hoc")
+		ip = conf.ADHOC_CHALLENGER_IP
+		nm = conf.ADHOC_NETMASK
+		gw = conf.ADHOC_GW
+		challenger.set_ip(ip, nm, gw)		
+		subject.set_wifi(ssid=conf.ADHOC_SSID, mode="ad-hoc")
+		ip = conf.ADHOC_SUBJECT_IP
+		subject.set_ip(ip, nm, gw)		
+		if challenger.ping(conf.ADHOC_SUBJECT_IP) == False:
+			return "Failed to ping " + conf.ADHOC_SUBJECT_IP
 		else:
 			return ""
 

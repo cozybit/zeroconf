@@ -13,7 +13,7 @@ import serial
 import time
 import re
 import config
-from zc_base import subject_base
+from zc_base import subject_base, zc_test_exception
 
 #extract SSID from scan result line
 re_ssid = re.compile( r'\s+\d+\.\s+BSSID\s+\w+\:\w+\:\w+\:\w+\:\w+\:\w+\s+RSSI\s+\d+\s+SSID\s+(\S+)\t' )
@@ -53,8 +53,6 @@ class subject_8388V(subject_base):
 		# throw away the stuff echoed by the 8388V
 		echo = self.ser.readline()
 		
-	# recv a response over the serial port
-	def recv( self ):
 		output = ""
 		resp = self.ser.readline()
 		while resp != "> ":
@@ -65,8 +63,7 @@ class subject_8388V(subject_base):
 	# runs 'iwlist scan', returns a list of SSIDs found
 	def scan( self ):
 		results = []
-		self.send( "iwlist scan" )
-		response = self.recv()
+		response = self.send( "iwlist scan" )
 		responses = response.split("\r\n")
 		for l in responses:
 			m = re_ssid.match( l ) 
@@ -103,14 +100,19 @@ class subject_8388V(subject_base):
 		# For some reason, we have to wait for config to take affect.
 		time.sleep(2)
 	def start_ipv4ll( self ):
-		self.send("linklocal start")
-		self.recv()
+		response = self.send("linklocal start")
+		if response != "":
+			raise zc_test_exception, response
+		
+	def stop_ipv4ll( self ):
+		self.send("linklocal stop")
 		
 	def get_ip(self):
-		self.send("printconf")
-		stuff = self.recv()
-		return stuff.split(",")
+		return self.send("printip").split(",")
 		
+	def get_mac(self):
+		return self.send("printmac")
+	
 def run_cmd(cmd):
 	tokens = cmd.split(" ")
 	if len(tokens) == 0:
@@ -163,8 +165,7 @@ if __name__ == '__main__':
 			while(1):
 				cmd = raw_input("> ")
 				if cmd != '':
-					v.send(cmd)
-					print v.recv()
+					print v.send(cmd)
 		else:
 			print "Welcome to the python console"
 			while(1):

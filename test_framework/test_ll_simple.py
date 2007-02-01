@@ -21,7 +21,9 @@ class test_ll_simple(test_base):
 		time.sleep(2) # let the link-local take its course
 		[ip, nm, gw] = subject.get_ip()
 		if challenger.ping(ip) == False:
-			return "Failed to ping " + ip
+			str = "Failed to ping " + ip
 		else:
-			return ""
+			str = ""
 
+		subject.stop_ipv4ll()
+		return str

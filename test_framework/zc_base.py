@@ -37,6 +37,17 @@ class zc_test_exception(Exception):
 #
 # ping(ip) -- Briefly ping ip.  ip is in decimal-dotted notation.  Return True
 #             if a response was heard, False otherwise.
+#
+# start_arp_listener() -- Start queing up arp packets.
+#
+# stop_arp_listener() -- Stop queing up arp packets.
+#
+# recv_arp(timeout) -- returns next arp packet which is of the dpkt class
+#                      arp.ARP.  This call will block for up to timout seconds
+#                      wating for arp packets.  If none arrives, it returns 0
+#
+# send_arp(arp) -- send supplied arp packet.  arp should be created using
+#                  arp.ARP() from the dpkt package.
 
 class challenger_base:
 	def __init__( self, conf ):
@@ -54,6 +65,18 @@ class challenger_base:
 	def ping( self, ip ):
 		return False
 		
+	def start_arp_listener( self ):
+		raise zc_test_exception, "start_arp_listener function unimplemented."
+
+	def stop_arp_listener( self ):
+		raise zc_test_exception, "stop_arp_listener function unimplemented."
+
+	def recv_arp( self, timeout=0 ):
+		raise zc_test_exception, "recv_arp function unimplemented."
+	
+	def send_arp( self, arp):
+		raise zc_test_exception, "send_arp function unimplemented."
+
 	def __del__( self ):
 		return
 
@@ -64,6 +87,8 @@ class challenger_base:
 #                                  it is assumed that a system does not have
 #                                  wifi.  Defaults are ssid="ANY",
 #                                  mode="managed", and channel=6.
+#
+# get_mac() -- returns a : delimited string representing the mac address
 #
 # start_ipv4ll() -- starts system's ipv4 link-local address process
 #
@@ -90,6 +115,9 @@ class subject_base:
 	def set_wifi( self, ssid="ANY", mode="managed", channel=6 ):
 		return
 
+	def get_mac( self ):
+		raise zc_test_exception, "get_mac function unimplemented."
+	
 	def start_ipv4ll( self ):
 		raise zc_test_exception, "start_ipv4ll function unimplemented."
 

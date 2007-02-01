@@ -68,7 +68,8 @@ challenger = create_challenger(conf.CHALLENGER_NAME)
 subject = create_subject(conf.SUBJECT_NAME)
 
 for test_name in test_names:
-	print "Running " + test_name + ": ",
+	print test_name + ": ",
+	sys.stdout.flush()
 	test = import_test(test_name)
 	error = test.run(challenger, subject, conf)
 	if(error == ""):

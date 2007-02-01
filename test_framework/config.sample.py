@@ -36,6 +36,7 @@ MANAGED_GW = "192.168.1.1"
 # create and/or join.
 ADHOC_SSID = "brian-test"
 ADHOC_CHALLENGER_IP = "169.254.1.1"
+ADHOC_SUBJECT_IP = "169.254.1.2"
 ADHOC_NETMASK = "255.255.0.0"
 ADHOC_GW = "0.0.0.0"
 

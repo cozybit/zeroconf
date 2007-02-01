@@ -72,3 +72,8 @@ object that is passed in.
 Hopefully, this test framework will eventually stabilize and we can easily
 implement new tests, new challengers, and new subjects without altering the
 interfaces.
+
+Dependencies
+------------
+
+dpkt: http://code.google.com/p/dpkt/
