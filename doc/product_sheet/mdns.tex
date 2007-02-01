@@ -50,14 +50,14 @@ http://www.cozybit.com  & USA \\
 
 \section{mDNS/Zeroconf module}
 
-The mDNS/Zeroconf module allows embedded devices to advertize their services 
-and announce themselves to users without extensive network configuation. 
-Suggested applications for mDNS in embedded systems include:
+The mDNS/Zeroconf module allows devices to advertise services and announce 
+themselves to users without requiring extensive network configuration.  With 
+mDNS/Zeroconf support, your embedded system can:
 
 \begin{itemize}
-	\item Pointing users to your device's web-based configuration.
-	\item Announcing your wireless VOIP handset on the network.
-	\item Enabling the user to browse for services such as printers, media
+	\item Quickly point users to your its web-based configuration page.
+	\item Announce your wireless VOIP handset on the network.
+	\item Enable users to browse for services such as printers, media
 		  devices, and network-attached storage.
 \end{itemize}
 
@@ -67,17 +67,18 @@ The mDNS/Zeroconf module implements:
 
 \begin{itemize}
 	\item Multicast DNS (mDNS) for automatic name resolution without the
-		  presense of a DNS server.
+		  presence of a DNS server.
 	\item mDNS Responder, enabling your device to advertise its services on
-		  to mDNS-SD (Service Discovery) browsers on the network.
-	\item mDNS Responder API, allowing the developer to configure their device
-		  to advertize a desired name and service.
+		  to mDNS/SD (Service Discovery) browsers on the network.
+	\item mDNS Responder API, allowing the developer to configure the device
+		  to advertise a desired name and service or services.
 \end{itemize}
 
 \subsection{Specifications}
 
 The mDNS/Zeroconf module is designed for small embedded systems.  It therefore
-runs in a single thread and does not make use of dynamically allocated memory.
-The mDNS service, at multicast address 224.0.0.251, uses UDP port 5353.
+runs in a single thread and does not require the use of dynamically allocated 
+memory.  Buffer sizes and other settings can be specified at compile time. The 
+mDNS service, at multicast address 224.0.0.251, uses UDP port 5353.
 
 \end{document}
