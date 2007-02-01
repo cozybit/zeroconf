@@ -48,11 +48,11 @@ http://www.cozybit.com  & USA \\
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\section{mDNS/Zeroconf module}
+\section{cozybit Zeroconf module}
 
-The mDNS/Zeroconf module allows devices to advertise services and announce 
+The cozybit Zeroconf module allows devices to advertise services and announce 
 themselves to users without requiring extensive network configuration.  With 
-mDNS/Zeroconf support, your embedded system can:
+Zeroconf, your embedded system can:
 
 \begin{itemize}
 	\item Quickly point users to your its web-based configuration page.
@@ -63,7 +63,7 @@ mDNS/Zeroconf support, your embedded system can:
 
 \subsection{Features}
 
-The mDNS/Zeroconf module implements and provides:
+The cozybit Zeroconf module provides:
 
 \begin{itemize}
 	\item Multicast DNS (mDNS) for automatic name resolution without the
@@ -72,17 +72,24 @@ The mDNS/Zeroconf module implements and provides:
 		  to mDNS/SD (Service Discovery) browsers on the network.
 	\item mDNS Responder API, allowing the developer to configure the device
 		  to advertise a desired name and service or services.
+	\item IP4LL (Link Local) address self-assignment when it is needed.
 	\item Adherence to current Zeroconf and mDNS draft standards and 
 		  compatibility with Zeroconf implementations on Apple, Windows, and
 		  Linux PCs.
 	\item OS and TCP/IP stack independence.
 \end{itemize}
 
-\subsection{Specifications}
+\subsection{Details}
 
-The mDNS/Zeroconf module is designed for small embedded systems.  It therefore
-runs in a single thread and does not require the use of dynamically allocated 
-memory.  Buffer sizes and other settings can be specified at compile time. The 
-mDNS service, at multicast address 224.0.0.251, uses UDP port 5353.
+The cozybit Zeroconf module is designed for small embedded systems.  The mDNS 
+Responder runs in a single thread and does not require the use of dynamically 
+allocated memory.  The mDNS service, at multicast address 224.0.0.251, uses 
+UDP port 5353.
+
+IP4LL allows devices to self-assign IP addresses in the 169.254/16 prefix. 
+This allows devices to communicate on networks without DHCP or user 
+configuration and is especially useful in ad-hock wireless networks.  The mDNS
+Responder is capable of using an assigned IP or an IP4LL-provided address when
+needed.
 
 \end{document}
