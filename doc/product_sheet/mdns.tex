@@ -23,7 +23,7 @@
 \vspace*{\stretch{1}}
 \HRule
 \begin{center}
-	\LARGE Embedded mDNS/Zeroconf Responder
+	\LARGE cozybit Embedded Zeroconf Module
 \end{center}
 \HRule
 \vspace*{\stretch{2}}
@@ -52,11 +52,11 @@ http://www.cozybit.com  & USA \\
 
 The cozybit Zeroconf module allows devices to advertise services and announce 
 themselves to users without requiring extensive network configuration.  With 
-Zeroconf, your embedded system can:
+Zeroconf, an embedded system can:
 
 \begin{itemize}
-	\item Quickly point users to your its web-based configuration page.
-	\item Announce your wireless VOIP handset on the network.
+	\item Quickly point users to its web-based configuration page.
+	\item Announce a wireless VOIP handset on the network.
 	\item Enable users to browse for services such as printers, media
 		  devices, and network-attached storage.
 \end{itemize}
@@ -68,8 +68,8 @@ The cozybit Zeroconf module provides:
 \begin{itemize}
 	\item Multicast DNS (mDNS) for automatic name resolution without the
 		  presence of a DNS server.
-	\item mDNS Responder, enabling your device to advertise its services on
-		  to mDNS/SD (Service Discovery) browsers on the network.
+	\item mDNS Responder, enabling the device to advertise its services on
+		  to DNS-SD (Service Discovery) browsers on the network.
 	\item mDNS Responder API, allowing the developer to configure the device
 		  to advertise a desired name and service or services.
 	\item IP4LL (Link Local) address self-assignment when it is needed.
@@ -91,5 +91,34 @@ This allows devices to communicate on networks without DHCP or user
 configuration and is especially useful in ad-hock wireless networks.  The mDNS
 Responder is capable of using an assigned IP or an IP4LL-provided address when
 needed.
+
+The module consists of an mDNS Responder thread and an optional IP4LL thread 
+for Link Local address self-assignment.  An OS abstraction layer allows the 
+module to be easily ported to many platforms.
+
+\begin{center}
+\psfig{figure=./figures/arch.eps,angle=0,width=40ex}
+\end{center}
+
+At this time, the cozybit Zeroconf module has been ported to Linux and the 
+Marvell 8388V standalone SDK.
+
+\subsection{Standards}
+
+Please refer to the following draft standards and RFCs for details about the
+Zeroconf draft standard:
+
+\vspace{1ex}
+\begin{tabular}{|l|l|}
+\hline
+mDNS & http://files.multicastdns.org/draft-cheshire-dnsext-multicastdns.txt \\
+\hline
+DNS-SD & http://files.dns-sd.org/draft-cheshire-dnsext-dns-sd.txt \\
+\hline
+DNS SRV & http://www.faqs.org/rfcs/rfc2782.html \\
+\hline
+IPV4LL & http://files.zeroconf.org/rfc3927.txt \\
+\hline
+\end{tabular}
 
 \end{document}

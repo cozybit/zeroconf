@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://web.resource.org/cc/"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="744.09448819"
+   height="1052.3622047"
+   id="svg2"
+   sodipodi:version="0.32"
+   inkscape:version="0.44"
+   sodipodi:docbase="/home/andrey/dev/zeroconf/trunk/doc/product_sheet/figures"
+   sodipodi:docname="arch.svg">
+  <defs
+     id="defs4" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     gridtolerance="10000"
+     guidetolerance="10"
+     objecttolerance="10"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.9823529"
+     inkscape:cx="370.63036"
+     inkscape:cy="529.73228"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     inkscape:window-width="914"
+     inkscape:window-height="892"
+     inkscape:window-x="0"
+     inkscape:window-y="25" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       y="544.22467"
+       x="225.54323"
+       height="25.132254"
+       width="284.62781"
+       id="rect3669"
+       style="fill:#e7e7e7;fill-opacity:1;stroke:black;stroke-width:1.99830329;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+    <text
+       id="text3671"
+       y="561.59528"
+       x="309.31778"
+       style="font-size:15.91589737px;font-style:normal;font-weight:normal;fill:black;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Bitstream Vera Sans"
+       xml:space="preserve"><tspan
+         y="561.59528"
+         x="309.31778"
+         id="tspan3673"
+         sodipodi:role="line">OS abstraction</tspan></text>
+    <rect
+       style="fill:white;fill-opacity:1;stroke:black;stroke-width:2.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect1872"
+       width="284.28571"
+       height="66.428574"
+       x="225.71428"
+       y="412.64792" />
+    <text
+       xml:space="preserve"
+       style="font-size:20.64336967px;font-style:normal;font-weight:normal;fill:black;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Bitstream Vera Sans"
+       x="305.90945"
+       y="451.35767"
+       id="text2760"><tspan
+         sodipodi:role="line"
+         id="tspan2762"
+         x="305.90945"
+         y="451.35767">Application</tspan></text>
+    <rect
+       y="478.64792"
+       x="225.71428"
+       height="66.428574"
+       width="284.28571"
+       id="rect2764"
+       style="fill:#80d48b;fill-opacity:1;stroke:black;stroke-width:2.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+    <path
+       style="fill:none;fill-rule:evenodd;stroke:black;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 365,478.79075 L 365,544.50504"
+       id="path2768" />
+    <text
+       id="text3657"
+       y="518.78625"
+       x="245.19516"
+       style="font-size:20.64336967px;font-style:normal;font-weight:normal;fill:black;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Bitstream Vera Sans"
+       xml:space="preserve"><tspan
+         y="518.78625"
+         x="245.19516"
+         id="tspan3659"
+         sodipodi:role="line">Link Local</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:20.64336967px;font-style:normal;font-weight:normal;fill:black;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Bitstream Vera Sans"
+       x="399.19516"
+       y="518.78625"
+       id="text3665"><tspan
+         sodipodi:role="line"
+         id="tspan3667"
+         x="399.19516"
+         y="518.78625">mDNS</tspan></text>
+    <rect
+       y="568.64795"
+       x="225.71428"
+       height="66.428574"
+       width="284.28571"
+       id="rect3675"
+       style="fill:white;fill-opacity:1;stroke:black;stroke-width:2.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+    <text
+       id="text3677"
+       y="607.35767"
+       x="265.90945"
+       style="font-size:20.64336967px;font-style:normal;font-weight:normal;fill:black;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-family:Bitstream Vera Sans"
+       xml:space="preserve"><tspan
+         y="607.35767"
+         x="265.90945"
+         id="tspan3679"
+         sodipodi:role="line">OS and TCP/IP stack</tspan></text>
+  </g>
+</svg>
