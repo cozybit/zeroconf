@@ -5,6 +5,12 @@
 #endif
 #include "mdns.h"
 
+UINT16 mdns_name_length( char *name );
+UINT16 mdns_read_n16( struct mdns_message *m );
+UINT32 mdns_read_n32( struct mdns_message *m );
+void mdns_write_n16( struct mdns_message *m, UINT16 n );
+void mdns_write_n32( struct mdns_message *m, UINT32 n );
+
 UINT16 mdns_read_n16( struct mdns_message *m )
 {
 	UINT16 n = ntohs(*((UINT16*)m->cur));
@@ -36,19 +42,6 @@ void mdns_write_name( struct mdns_message *m, char *name )
 	UINT16 len = mdns_name_length( name );
 	memcpy( m->cur, name, len );
 	m->cur += len;
-}
-
-void mdns_mark_response( struct mdns_message *m )
-{
-	m->header->flags.fields.qr = 1; /* response */
-	m->header->flags.fields.aa = 1; /* authoritative */
-	m->header->flags.fields.rcode = 0;
-	m->header->flags.num = htons(m->header->flags.num);
-}
-
-void mdns_mark_question( struct mdns_message *m )
-{
-	m->header->flags.fields.qr = 0; /* query */
 }
 
 /* a name may be one of:
@@ -216,11 +209,18 @@ UINT16 rr_length_srv( union rr_p r )
 	return 3*sizeof(UINT16)+mdns_name_length( r.srv->target );
 }
 
-void mdns_transmit_init( struct mdns_message *m, char *b )
+void mdns_transmit_init( struct mdns_message *m, char *b, msg_type mtype )
 {
 	m->header = (struct mdns_header *)b;
 	m->cur = b + sizeof(struct mdns_header);
 	memset( m->header, 0x00, sizeof(struct mdns_header) );
+
+	if( mtype == RESPONSE ) {
+		m->header->flags.fields.qr = 1; /* response */
+		m->header->flags.fields.aa = 1; /* authoritative */
+		m->header->flags.fields.rcode = 0;
+		m->header->flags.num = htons(m->header->flags.num);
+	}
 }
 
 void mdns_add_question( struct mdns_message *m, char* qname, 

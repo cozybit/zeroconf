@@ -12,38 +12,59 @@
 int m_socket( void )
 {
 	int sock;
-	int one = 1;
-	int i_ttl = 255;
-	unsigned char c_ttl = 255;
+	int yes = 1;
+	int no = 0;
+	unsigned char ttl = 255;
 	struct sockaddr_in in_addr;
 	struct ip_mreq mc;
 
-	memset( &in_addr, 0x00, sizeof(in_addr) );
+	/* set up bind address (any, port 5353) */
+	memset( &in_addr, 0, sizeof(in_addr) );
 	in_addr.sin_family = AF_INET;
 	in_addr.sin_port = htons(5353);
-	in_addr.sin_addr.s_addr = 0;
+	in_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	sock = socket( AF_INET, SOCK_DGRAM, 0 );
-	if( sock < 0 )
+	if( sock < 0 ) {
+		DB_PRINT( "error: could not open multicast socket\n" );
 		return sock;
+	}
 
 	#ifdef SO_REUSEPORT
-	setsockopt( sock, SOL_SOCKET, SO_REUSEPORT, (char*)&one, sizeof(one) );
+	if( setsockopt( sock, SOL_SOCKET, SO_REUSEPORT, (char*)&yes, 
+		sizeof(yes) ) < 0 ) {
+		DB_PRINT( "error: failed to set SO_REUSEPORT option\n" );
+		return -1;
+	}
 	#endif
-	setsockopt( sock, SOL_SOCKET, SO_REUSEADDR, (char*)&one, sizeof(one) );
+	setsockopt( sock, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes) );
 
 	if( bind( sock, (struct sockaddr*)&in_addr, sizeof(in_addr) ) ) {
 		socket_close( sock );
-		return 0;
+		return -1;
 	}
 
-	/* set up multicast address */
-	mc.imr_multiaddr.s_addr = inet_addr("224.0.0.251"); /* TODO: set directly*/
+	/* join multicast group */
+	mc.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
 	mc.imr_interface.s_addr = htonl(INADDR_ANY);
-	setsockopt( sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mc, sizeof(mc) );
-	setsockopt( sock, IPPROTO_IP, IP_MULTICAST_TTL, &c_ttl, sizeof(c_ttl) );
-	setsockopt( sock, IPPROTO_IP, IP_MULTICAST_TTL, (char*)&i_ttl,
-		sizeof(i_ttl) );
+	if( setsockopt( sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mc, 
+		sizeof(mc) ) < 0 ) {
+		DB_PRINT( "error: failed to join multicast group\n" );
+		return -1;
+	}
+	/* set other IP-level options */
+	if( setsockopt( sock, IPPROTO_IP, IP_MULTICAST_TTL, (unsigned char *)&ttl, 
+		sizeof(ttl) ) < 0 ) {
+		DB_PRINT( "error: failed to set multicast TTL\n" );
+		return -1;
+	}
+	#if defined(IP_MULTICAST_LOOP) && !defined(LOOPBACK)
+	if( setsockopt( sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *)&no, 
+		sizeof(no) ) < 0 ) {
+		DB_PRINT( "error: failed to unset IP_MULTICAST_LOOP option\n" );
+		return -1;
+	}
+	#endif
 
 	socket_blocking_off( sock );
 	return sock;
@@ -68,6 +89,8 @@ int send_message( struct mdns_message *m, int sock )
 		DB_PRINT( "error: failed to send message\n" );
 		return 0;
 	}
+
+	DB_PRINT( "sent %u-byte message\n", size );
 	return 1;
 }
 
@@ -128,8 +151,7 @@ int main( void )
 	}
 
 	/* set up probe to claim name */
-	mdns_transmit_init( &tx_message, tx_buffer );
-	mdns_mark_question( &tx_message );
+	mdns_transmit_init( &tx_message, tx_buffer, QUERY );
 	mdns_add_question( &tx_message, "\6andrey\5_http\4_tcp\5local",
 		T_ANY, C_IN );
 
@@ -162,8 +184,7 @@ int main( void )
 		}
 		else if( status < STARTED ) {
 			if( status == ANNOUNCE ) {
-				mdns_transmit_init( &tx_message, tx_buffer );
-				mdns_mark_response( &tx_message );
+				mdns_transmit_init( &tx_message, tx_buffer, RESPONSE );
 				/* A */
 				mdns_add_answer( &tx_message, SERVICE_TARGET, 
 					T_A, C_FLUSH, 225, &my_a );
@@ -180,7 +201,6 @@ int main( void )
 					SERVICE_TYPE SERVICE_DOMAIN,
 					T_PTR, C_IN, 255, &my_ptr );
 			}
-			DB_PRINT( "sending message...\n" );
 			send_message( &tx_message, mc_sock );
 			status++;
 		}

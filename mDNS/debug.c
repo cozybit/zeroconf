@@ -1,5 +1,15 @@
 #include "debug.h"
 
+void debug_print_ip( UINT32 ip )
+{
+	printf( "%u.%u.%u.%u",
+		ip>>24,
+		((ip & 0x00FF0000)>>16),
+		((ip & 0x0000FF00)>>8),
+		ip & 0x000000FF
+	);
+}
+
 void debug_print_txt( char *txt, UINT16 len )
 {
 	UINT16 i;
@@ -54,7 +64,9 @@ void debug_print_resource( struct mdns_message *m, struct mdns_resource *r )
 			r->class & 0x8000 ? " FLUSH" : "", r->ttl, r->rdlength );
 	switch( r->type ) {
 		case T_A:
-		DB_PRINT( "\tA type, IP=0x%X\n", *((UINT32*)r->rdata) );
+		DB_PRINT( "\tA type, IP=" );
+		debug_print_ip( ntohl(*((UINT32*)r->rdata)) );
+		DB_PRINT( "\n" );
 		break;
 		case T_NS:
 		DB_PRINT( "\tNS type, name=\"" );
