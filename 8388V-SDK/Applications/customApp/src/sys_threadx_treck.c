@@ -206,8 +206,10 @@ unsigned short sys_random(unsigned short floor, unsigned short ceiling)
 	rand >>= 16;
 	
 	/* map the range 0-2^16-1 to floor-ceiling */
-	rand = (ceiling - floor) * rand + floor;
+	rand = (ceiling - floor) * rand;
+	rand += 0x8000;
 	rand /= 65535;
+	rand += floor;
 	rand &= 0xffff;
 
 	return (unsigned short)rand;

@@ -212,7 +212,7 @@ sys_thread_return ll_main(sys_thread_data data)
 				/* Too many conflicts.  Time to go rate-limited */
 				ll_state = LL_RATE_LIMITED_PROBE;
 				ll_candidate_ip = 0;
-				timeout = RATE_LIMIT_INTERVAL;
+				timeout = RATE_LIMIT_INTERVAL*1000;
 
 			} else if(conflict) {
 				/* Rats.  Somebody has our address. Try again. */
@@ -223,7 +223,7 @@ sys_thread_return ll_main(sys_thread_data data)
 				/* send final probe then wait ANNOUNCE_WAIT */
 				ll_send_probe(ll_mac, ll_candidate_ip);
 				ll_state = LL_ANNOUNCE;
-				timeout = ANNOUNCE_WAIT;
+				timeout = ANNOUNCE_WAIT*1000;
 				announce = 0;
 
 			} else if(probe < (PROBE_NUM - 1)) {
@@ -239,7 +239,7 @@ sys_thread_return ll_main(sys_thread_data data)
 				/* Too many conflicts.  Time to go rate-limited */
 				ll_state = LL_RATE_LIMITED_PROBE;
 				ll_candidate_ip = 0;
-				timeout = RATE_LIMIT_INTERVAL;
+				timeout = RATE_LIMIT_INTERVAL*1000;
 
 			} else if(conflict) {
 				/* Rats.  Somebody has our address. Try again. */
@@ -250,13 +250,13 @@ sys_thread_return ll_main(sys_thread_data data)
 				/* send final announcement then wait ANNOUNCE_INTERVAL */
 				ll_send_announce(ll_mac, ll_candidate_ip);
 				ll_state = LL_STABLE;
-				timeout = ANNOUNCE_INTERVAL;
+				timeout = ANNOUNCE_INTERVAL*1000;
 
 			} else if(announce < (ANNOUNCE_NUM - 1)) {
 				/* our address is still good.  Send next announce then wait. */
 				ll_send_announce(ll_mac, ll_candidate_ip);
 				announce++;
-				timeout = ANNOUNCE_INTERVAL;
+				timeout = ANNOUNCE_INTERVAL*1000;
 			}
 			break;
 
@@ -264,7 +264,7 @@ sys_thread_return ll_main(sys_thread_data data)
 			/* We're getting lots of conflicts so we've slowed down */
 			if(conflict) {
 				ll_candidate_ip = 0;
-				timeout = RATE_LIMIT_INTERVAL;
+				timeout = RATE_LIMIT_INTERVAL*1000;
 
 			} else {
 				/* We've waited RATE_LIMIT_INTERVAL.  Try another address. */

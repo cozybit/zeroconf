@@ -175,7 +175,8 @@ void cmd_handle_serial(void)
 				/* buffer is full.  Drop character. */
 				return;
 			} else {
-				from_serial[write_ptr++] = c;
+				from_serial[write_ptr] = c;
+				write_ptr = tmp_ptr;
 			}
 		} else {
 			return;
@@ -202,13 +203,16 @@ int cmd_parser_read_line(void)
 
 		if(index == STRING_SIZE-1) {
 			/* no more room in buffer.  Just return what we can. */
+			user_string[index] = '\0';
 			return 1;
 		}
 
-		if(from_serial[read_ptr] == '\b') {
+		if( (from_serial[read_ptr] == '\b') && 
+			(index > 0) ) {
 			/* handle backspace */
 			index--;
-			read_ptr++;
+			read_ptr++;	
+			read_ptr &= SERIAL_BUFFER_SIZE - 1;
 			continue;
 		}
 
@@ -216,10 +220,12 @@ int cmd_parser_read_line(void)
 			/* We found the end of a line.  Return. */
 			user_string[index] = '\0';
 			read_ptr++;
+			read_ptr &= SERIAL_BUFFER_SIZE - 1;
 			return 1;
 		}
 
 		user_string[index++] = from_serial[read_ptr++];
+		read_ptr &= SERIAL_BUFFER_SIZE - 1;
 	}
 
 	return 0;
@@ -235,7 +241,7 @@ void cmd_parser(unsigned long data)
    int ret;
 
    while(1) {
-	   DBG_P(( DBG_L0 "> "));
+	   DBG_P(( DBG_L0 "\r\n> "));
 	   cmd_parser_read_line();
 	   
 	   if(strlen(user_string) == 0) {
