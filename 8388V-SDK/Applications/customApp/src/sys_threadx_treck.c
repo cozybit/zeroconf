@@ -228,11 +228,6 @@ sys_status sys_link_get_mac(char mac[6])
 #define RAW_SOCKET_DATA 0x07
 #define RAW_DATA 0x08
 
-void done(wcb_t *buffer)
-{
-	DEBUG("HERE!!");
-}
-
 sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
 						   unsigned int len)
 {

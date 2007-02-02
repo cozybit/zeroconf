@@ -101,8 +101,9 @@ int cmd_in_progress;
 IEEEtypes_MacAddr_t specificBSSID;
 extern int use_peer_sta_api;
 
-extern void cmd_parser(void);
-extern void print_usage(void);
+extern void cmd_init(void);
+extern void cmd_handle_serial(void);
+
 void parse_scan_result(w81cbProcQ_ScanRsp_t *res);
 
 /**
@@ -779,10 +780,6 @@ void UserIF_Main(ULONG data)
 	UINT32	 Events;
     /* Main Loop*/
 
-#ifdef UART_DRV
-	DBG_P(( DBG_L0 "\r\n> ")); 
-#endif
-
     while(1) {
 		  /* First time also Wait till FW is ready*/
         Events = os_EventWait(sysinfo_NO_HOST_EVENT,
@@ -889,7 +886,8 @@ Status_e  userif_init(void)
 #else
 	mli_installTickFunction(send_raw_pkt);
 #endif
-	mli_installTickFunction(cmd_parser); 	
+	mli_installTickFunction(cmd_handle_serial);
+	cmd_init();
     return SUCCESS;
 }
 

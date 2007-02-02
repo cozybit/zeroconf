@@ -131,8 +131,21 @@ sys_status ll_send_probe(char mac[6], unsigned int ip)
 /* Send an arp announcement with the specified mac and ip */
 sys_status ll_send_announce(char mac[6], unsigned int ip)
 {
-	/* Implement me */
-	return SYS_SUCCESS;
+	struct arp_pkt arp;
+	char bcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	/* Construct arp packet. */
+	arp.hard_type = htons(0x0001); /* ethernet is type 1 */
+	arp.prot_type = htons(0x0800); /* IP addr is type 0x0800 */
+	arp.hard_size = 6;
+	arp.prot_size = 4;
+	arp.op = htons(ARP_OP_REQUEST);
+	memcpy((void *)arp.sender_mac, mac, 6);
+	memcpy((void *)arp.sender_ip, &ip, 4);
+	memset((void *)arp.target_mac, 0, 6);
+	memcpy((void *)arp.target_ip, &ip, 4);
+
+	return sys_link_sendto(bcast, ARP_TYPE, (char *)&arp,
+						   sizeof(struct arp_pkt));
 }
 
 /* This is a handler that monitors the ARP traffic.  It should have an
@@ -153,7 +166,6 @@ sys_pkt_status ll_handle_arp(sys_pkt *pkt)
 		if(ll_arp_conflict(arp, ll_mac, ll_candidate_ip)) {
 			sys_thread_wake(&ll_main_thread);
 		}
-		//DEBUG("ARP PACKET!\r\n");		
 	}
 
 	return SYS_PKT_PASS;
@@ -209,6 +221,7 @@ sys_thread_return ll_main(sys_thread_data data)
 
 			} else if(probe == PROBE_NUM - 1) {
 				/* send final probe then wait ANNOUNCE_WAIT */
+				ll_send_probe(ll_mac, ll_candidate_ip);
 				ll_state = LL_ANNOUNCE;
 				timeout = ANNOUNCE_WAIT;
 				announce = 0;
@@ -235,6 +248,7 @@ sys_thread_return ll_main(sys_thread_data data)
 
 			} else if(announce == ANNOUNCE_NUM - 1) {
 				/* send final announcement then wait ANNOUNCE_INTERVAL */
+				ll_send_announce(ll_mac, ll_candidate_ip);
 				ll_state = LL_STABLE;
 				timeout = ANNOUNCE_INTERVAL;
 

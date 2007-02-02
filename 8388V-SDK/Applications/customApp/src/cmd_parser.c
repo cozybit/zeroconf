@@ -152,6 +152,37 @@ int get_next_word(char *s)
     return i;
 }
 
+/* This function is called every tick.  It pushes any output to the serial port,
+ * and reads any input to the user_string. 
+ */
+#define SERIAL_BUFFER_SIZE 256 /* Must be power of 2 */
+static char from_serial[SERIAL_BUFFER_SIZE];
+static int read_ptr = 0;
+static int write_ptr = 0;
+
+void cmd_handle_serial(void)
+{
+	unsigned char c;
+	int tmp_ptr;
+
+	dbg_FlushingOut();
+
+	while(1) {
+		if(dbg_GetChar(&c) == 1) {
+			tmp_ptr = write_ptr + 1;
+			tmp_ptr &= SERIAL_BUFFER_SIZE - 1;
+			if(tmp_ptr == read_ptr) {
+				/* buffer is full.  Drop character. */
+				return;
+			} else {
+				from_serial[write_ptr++] = c;
+			}
+		} else {
+			return;
+		}
+	}	
+}
+
 /**
  * Asynchronously reads a line ending with ';'
  * 
@@ -159,201 +190,205 @@ int get_next_word(char *s)
  */
 int cmd_parser_read_line(void)
 {
-	dbg_FlushingOut();
+	int index = 0;
 
-     while(dbg_GetChar((uint8 *)&user_string[string_pos]) == 1)
-	 {
-		 if (user_string[string_pos] == CMD_END_CHAR) {
-			 user_string[string_pos] = '\0'; 
-#ifdef UART_DRV
-			 DBG_P(( DBG_L0 "\r\n")); 
-			 dbg_FlushingOut();
-#endif
-             string_pos = 0;
-			 return 1;		 
-		 }
-#ifdef UART_DRV
-		 /* Echo character back to user */
-		 DBG_P(( DBG_L0 "%c",user_string[string_pos])); 
-#endif
-		 string_pos++;
-		 if(string_pos == STRING_SIZE) {
-			 string_pos = 0;
-			 return 1;
-		 }
-			
-	 }
-	 return 0;
+	while(1) {
+
+		if(read_ptr == write_ptr) {
+			/* buffer is empty.  Block. */
+			os_TaskDelay(2);
+			continue;
+		}
+
+		if(index == STRING_SIZE-1) {
+			/* no more room in buffer.  Just return what we can. */
+			return 1;
+		}
+
+		if(from_serial[read_ptr] == '\b') {
+			/* handle backspace */
+			index--;
+			read_ptr++;
+			continue;
+		}
+
+		if(from_serial[read_ptr] == '\r') {
+			/* We found the end of a line.  Return. */
+			user_string[index] = '\0';
+			read_ptr++;
+			return 1;
+		}
+
+		user_string[index++] = from_serial[read_ptr++];
+	}
+
+	return 0;
 }
 
 /**
  * Parses commands and executes them
  */
 
-/* Temporary test! */
-extern int ll_send_probe(char mac[6], unsigned int ip);
-
-void cmd_parser(void)
+void cmd_parser(unsigned long data)
 {
-   char * curr_pos = &user_string[0];
+   char *curr_pos = &user_string[0];
    int ret;
 
-   dbg_FlushingOut();
-   if(!cmd_in_progress && cmd_parser_read_line()) {   
-     if(strlen(user_string) == 0) {
-		 /* Do Nothing. */
-	 }
-
-     else if(!memcmp(user_string,"iwlist",6)){
-		userif_prepare_scan_cmd(0);
-	 }     
-     else if(!memcmp(user_string,"iwconf",6)){
-        curr_pos = &user_string[get_next_word(user_string)];
-		if(!memcmp(curr_pos,"essid",5)) {
-			curr_pos = &curr_pos[get_next_word(curr_pos)];
-			specificSSID.Len  = strlen(curr_pos);
-			memcpy((void *)specificSSID.SsId, curr_pos, strlen(curr_pos));
-			if(link_present) {
-				if(currbss_type != BSS_INDEPENDENT)
-					userif_prepare_deauth_cmd();
-				else
-                    userif_prepare_adhoc_stop_cmd();
-			} else {
-				    userif_prepare_scan_cmd(1);
-			}
-			link_present = 0;				
-		} else if (!memcmp(curr_pos,"mode",4)) {
-			curr_pos = &curr_pos[get_next_word(curr_pos)];
-            if(!memcmp(curr_pos,"ad-hoc",6)) {
-				bss_type = BSS_INDEPENDENT;
-			} else if(!memcmp(curr_pos,"manage",6)) {
-				bss_type = BSS_INFRASTRUCTURE;
-			} else {
-				bss_type = BSS_ANY;
-			}
-		} else if (!memcmp(curr_pos,"ap",2)) {
-			curr_pos = &curr_pos[get_next_word(curr_pos)];
-            get_macaddr(curr_pos,(char *)specificBSSID);
-			if (FindBSSIDinList()) {
-				userif_prepare_auth_cmd();			
-			} else {
-				if(link_present) {
-					link_present = 0;
-					userif_prepare_deauth_cmd();
-				} else {
-				    userif_prepare_scan_cmd(2);
-				}
-			}
-		}
-     }
-     else if(!memcmp(user_string,"econfi",6)){
-		curr_pos = &user_string[get_next_word(user_string)];
-		get_ipaddr(curr_pos, ip_addr);
-		curr_pos = &curr_pos[get_next_word(curr_pos)];
-		get_ipaddr(curr_pos, net_mask);	    
-		curr_pos = &curr_pos[get_next_word(curr_pos)];
-		get_ipaddr(curr_pos, def_gtwy);	    		
+   while(1) {
+	   DBG_P(( DBG_L0 "> "));
+	   cmd_parser_read_line();
+	   
+	   if(strlen(user_string) == 0) {
+		   /* Do Nothing. */
+	   }
+	   
+	   else if(!memcmp(user_string,"iwlist",6)){
+		   userif_prepare_scan_cmd(0);
+	   }     
+	   else if(!memcmp(user_string,"iwconf",6)){
+		   curr_pos = &user_string[get_next_word(user_string)];
+		   if(!memcmp(curr_pos,"essid",5)) {
+			   curr_pos = &curr_pos[get_next_word(curr_pos)];
+			   specificSSID.Len  = strlen(curr_pos);
+			   memcpy((void *)specificSSID.SsId, curr_pos, strlen(curr_pos));
+			   if(link_present) {
+				   if(currbss_type != BSS_INDEPENDENT)
+					   userif_prepare_deauth_cmd();
+				   else
+					   userif_prepare_adhoc_stop_cmd();
+			   } else {
+				   userif_prepare_scan_cmd(1);
+			   }
+			   link_present = 0;				
+		   } else if (!memcmp(curr_pos,"mode",4)) {
+			   curr_pos = &curr_pos[get_next_word(curr_pos)];
+			   if(!memcmp(curr_pos,"ad-hoc",6)) {
+				   bss_type = BSS_INDEPENDENT;
+			   } else if(!memcmp(curr_pos,"manage",6)) {
+				   bss_type = BSS_INFRASTRUCTURE;
+			   } else {
+				   bss_type = BSS_ANY;
+			   }
+		   } else if (!memcmp(curr_pos,"ap",2)) {
+			   curr_pos = &curr_pos[get_next_word(curr_pos)];
+			   get_macaddr(curr_pos,(char *)specificBSSID);
+			   if (FindBSSIDinList()) {
+				   userif_prepare_auth_cmd();			
+			   } else {
+				   if(link_present) {
+					   link_present = 0;
+					   userif_prepare_deauth_cmd();
+				   } else {
+					   userif_prepare_scan_cmd(2);
+				   }
+			   }
+		   }
+	   }
+	   else if(!memcmp(user_string,"econfi",6)){
+		   curr_pos = &user_string[get_next_word(user_string)];
+		   get_ipaddr(curr_pos, ip_addr);
+		   curr_pos = &curr_pos[get_next_word(curr_pos)];
+		   get_ipaddr(curr_pos, net_mask);	    
+		   curr_pos = &curr_pos[get_next_word(curr_pos)];
+		   get_ipaddr(curr_pos, def_gtwy);	    		
 #ifdef EMBEDDED_TCPIP		
-		userif_prepare_config_etcp();
-		tcp_ready = 1; /* XXX */
+		   userif_prepare_config_etcp();
+		   tcp_ready = 1; /* XXX */
 #endif     
-	 }
-
-     else if(!memcmp(user_string, "printip", 7)){
-		 unsigned char ip[4] = {0, 0, 0, 0};
-		 unsigned char nm[4] = {0, 0, 0, 0};
-		 unsigned char gw[4] = {0, 0, 0, 0};
-
-		 if(treck_init != 0) {
-			 memcpy((void *)ip, ip_addr, 4);
-			 memcpy((void *)nm, net_mask, 4);
-			 memcpy((void *)gw, def_gtwy, 4);
-		 }
-
-		 DBG_P(( DBG_L0 "%d.%d.%d.%d,", ip[0], ip[1], ip[2], ip[3]));
-		 DBG_P(( DBG_L0 "%d.%d.%d.%d,", nm[0], nm[1], nm[2], nm[3]));
-		 DBG_P(( DBG_L0 "%d.%d.%d.%d\r\n", gw[0], gw[1], gw[2], gw[3]));
-	 }
-
-     else if(!memcmp(user_string, "printmac", 8)){
-		 char mac[6];
-		 GetMACAddr(NULL, mac);
-		 DBG_P(( DBG_L0 "%02x:%02x:%02x:%02x:%02x:%02x\r\n", \
-				 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]));
-	 }
-
-     else if(!memcmp(user_string,"ping",4)){
-		curr_pos = &user_string[get_next_word(user_string)];
-        if(!memcmp(curr_pos,"stop",4)) {
-		  send_ping = 0;
-		} else {
-		  get_ipaddr(curr_pos, ping_ipaddr);
+	   }
+	   
+	   else if(!memcmp(user_string, "printip", 7)){
+		   unsigned char ip[4] = {0, 0, 0, 0};
+		   unsigned char nm[4] = {0, 0, 0, 0};
+		   unsigned char gw[4] = {0, 0, 0, 0};
+		   
+		   if(treck_init != 0) {
+			   memcpy((void *)ip, ip_addr, 4);
+			   memcpy((void *)nm, net_mask, 4);
+			   memcpy((void *)gw, def_gtwy, 4);
+		   }
+		   
+		   DBG_P(( DBG_L0 "%d.%d.%d.%d,", ip[0], ip[1], ip[2], ip[3]));
+		   DBG_P(( DBG_L0 "%d.%d.%d.%d,", nm[0], nm[1], nm[2], nm[3]));
+		   DBG_P(( DBG_L0 "%d.%d.%d.%d\r\n", gw[0], gw[1], gw[2], gw[3]));
+	   }
+	   
+	   else if(!memcmp(user_string, "printmac", 8)){
+		   char mac[6];
+		   GetMACAddr(NULL, mac);
+		   DBG_P(( DBG_L0 "%02x:%02x:%02x:%02x:%02x:%02x\r\n", \
+				   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]));
+	   }
+	   
+	   else if(!memcmp(user_string,"ping",4)){
+		   curr_pos = &user_string[get_next_word(user_string)];
+		   if(!memcmp(curr_pos,"stop",4)) {
+			   send_ping = 0;
+		   } else {
+			   get_ipaddr(curr_pos, ping_ipaddr);
 #ifdef EMBEDDED_TCPIP
-		  userif_prepare_open_raw_socket();
+			   userif_prepare_open_raw_socket();
 #else
-          userif_prepare_macaddr_get_cmd();
+			   userif_prepare_macaddr_get_cmd();
 #endif
-          send_ping = 1;
-		}
-     }
-
-	 /* Link-local address manager. */
-	 else if(!memcmp(user_string, "linklocal", 9)) {
-		 curr_pos = &user_string[get_next_word(user_string)];
-		 if(!memcmp(curr_pos, "start", 5)) {
-			 /* Launch the link local manager */
-			 ret = ll_init();
-			 if(ret)
-				 DBG_P(( DBG_L0 "Error launching link local: %d.\r\n", ret));
-		 } else if(!memcmp(curr_pos, "stop", 4)) {
-			 /* Kill the link local manager. */
-			 ret = ll_shutdown();
-			 if(ret)
-				 DBG_P(( DBG_L0 "Error killing link local: %d.\r\n", ret));
-		 }
-	 }
-
-	 /* mDNS responder */
-	 else if(!memcmp(user_string, "mdns", 4)) {
-	 	curr_pos = &user_string[get_next_word(user_string)];
-		if(!memcmp(curr_pos, "start", 5)) {
-			/* launch the mDNS responder */
-			ret = mdns_responder_init();
-			if(ret)
-				DBG_P(( DBG_L0 "Error launching mDNS responder: %d.\r\n",ret));
-		}
-		else if(!memcmp(curr_pos, "stop", 4)) {
-			/* stop the mDNS responder */
-			ret = mdns_responder_shutdown();
-			if(ret)
-				DBG_P(( DBG_L0 "Error stopping mDNS responder: %d.\r\n", ret));
-		}
-	 }
-
-	 else if(!memcmp(user_string, "help", 4)) {
-		 print_usage();
-	 }
-
-	 /* Temp command! */
-	 else if(!memcmp(user_string, "arp", 3)) {
-		 char mac[6];
-		 GetMACAddr(NULL, mac);
-		 ret = ll_send_probe(mac, 0x01020304);
-		 DBG_P(( DBG_L0 "Send arp: %d.\r\n", ret));
-	 }
-
-	 else {
+			   send_ping = 1;
+		   }
+	   }
+	   
+	   /* Link-local address manager. */
+	   else if(!memcmp(user_string, "linklocal", 9)) {
+		   curr_pos = &user_string[get_next_word(user_string)];
+		   if(!memcmp(curr_pos, "start", 5)) {
+			   /* Launch the link local manager */
+			   ret = ll_init();
+			   if(ret)
+				   DBG_P(( DBG_L0 "Error launching link local: %d.\r\n", ret));
+		   } else if(!memcmp(curr_pos, "stop", 4)) {
+			   /* Kill the link local manager. */
+			   ret = ll_shutdown();
+			   if(ret)
+				   DBG_P(( DBG_L0 "Error killing link local: %d.\r\n", ret));
+		   }
+	   }
+	   
+	   /* mDNS responder */
+	   else if(!memcmp(user_string, "mdns", 4)) {
+		   curr_pos = &user_string[get_next_word(user_string)];
+		   if(!memcmp(curr_pos, "start", 5)) {
+			   /* launch the mDNS responder */
+			   ret = mdns_responder_init();
+			   if(ret)
+				   DBG_P(( DBG_L0 "Error launching mDNS responder: %d.\r\n",ret));
+		   }
+		   else if(!memcmp(curr_pos, "stop", 4)) {
+			   /* stop the mDNS responder */
+			   ret = mdns_responder_shutdown();
+			   if(ret)
+				   DBG_P(( DBG_L0 "Error stopping mDNS responder: %d.\r\n", ret));
+		   }
+	   }
+	   
+	   else if(!memcmp(user_string, "help", 4)) {
+		   print_usage();
+	   }
+	   
+	   else {
 #ifdef UART_DRV
-		 DBG_P(( DBG_L0 "Unknown command.\r\n")); 
+		   DBG_P(( DBG_L0 "Unknown command.\r\n")); 
 #endif		 
-	 }
-
-	 while(cmd_in_progress)
-		 os_TaskDelay(10);
-
-#ifdef UART_DRV
-	 DBG_P(( DBG_L0 "> ")); 
-#endif
-
+	   }
+	   
+	   while(cmd_in_progress)
+		   os_TaskDelay(10);
    }
+}
+
+TX_THREAD cmd_thread;
+static unsigned int cmd_stack[2048];
+
+void cmd_init(void)
+{
+	tx_thread_create(&cmd_thread, "cmd_thread", cmd_parser, 0,
+					 (void *)&cmd_stack[0], sizeof(cmd_stack), 21, 21, 2, 
+					 TX_AUTO_START);
 }
