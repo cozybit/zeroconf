@@ -12,7 +12,10 @@ from zc_base import zc_test_exception
 import os
 import time
 import socket
-from dpkt import ethernet,arp
+from dpkt import ethernet
+import myarp
+import myeth
+from myarp import myarp
 
 class challenger_linux(challenger_base):
 	def __init__( self, conf ):
@@ -49,6 +52,12 @@ class challenger_linux(challenger_base):
 			raise zc_test_exception, r
 		return
 
+	def get_mac(self):
+		iface = self.conf.CHALLENGER_INTERFACE
+		cmd = "ifconfig " + iface + " | grep HWaddr | awk '{print $5}'"
+		r = os.popen(cmd).read()
+		return r
+
 	def ping( self, ip ):
 		cmd = "ping -c 1 -I " + self.conf.CHALLENGER_INTERFACE + " " + ip
 		if self.conf.DEBUG == 0:
@@ -61,24 +70,26 @@ class challenger_linux(challenger_base):
 		else:
 			return False
 
-	def start_arp_listener( self ):
-		raise zc_test_exception, "start_arp_listener function unimplemented."
-
-	def stop_arp_listener( self ):
-		raise zc_test_exception, "stop_arp_listener function unimplemented."
-
 	def recv_arp( self, timeout ):
 		s = socket.socket(socket.PF_PACKET, socket.SOCK_RAW)
 		iface = self.conf.CHALLENGER_INTERFACE
 		s.bind((iface, ethernet.ETH_TYPE_ARP))
 		s.settimeout(timeout)
-		try:
-			data = s.recv(1024)
-			answer = ethernet.Ethernet(data)
-			arp_p = answer.data
-			return arp_p
-		except socket.timeout:
-		   	return ""
+		data = s.recv(1024)
+		answer = ethernet.Ethernet(data)
+		arp_p = answer.data
+		return myarp(arp_p)
 	
-	def send_arp( self, arp):
-		raise zc_test_exception, "send_arp function unimplemented."
+	def send_arp( self, arp_p, eth):
+		mac = self.get_mac()
+
+		packet = ethernet.Ethernet()
+		packet.src = myeth.eth_aton(mac)
+		packet.dst = eth
+		packet.data = arp_p
+		packet.type = ethernet.ETH_TYPE_ARP
+
+		s = socket.socket(socket.PF_PACKET, socket.SOCK_RAW)
+		iface = self.conf.CHALLENGER_INTERFACE
+		s.bind((iface, ethernet.ETH_TYPE_ARP))
+		s.send(str(packet))

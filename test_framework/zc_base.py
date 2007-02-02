@@ -27,6 +27,8 @@ class zc_test_exception(Exception):
 #                                  wifi.  Defaults are ssid="ANY",
 #                                  mode="managed", and channel=6.
 #
+# get_mac() -- returns a : delimited string representing the mac address
+#
 # set_ip(ip, netmask, gateway) -- sets up system's TCP/IP stack.  If any
 #                                 arguments are empty strings, function should
 #                                 use the MANAGED_* values from config.py
@@ -56,6 +58,9 @@ class challenger_base:
 	def set_wifi( self, ssid="ANY", mode="managed", channel=6 ):
 		return
 
+	def get_mac( self ):
+		raise zc_test_exception, "get_mac function unimplemented."
+	
 	def set_ip( self, ip="", netmask="", gateway="" ):
 		raise zc_test_exception, "set_ip function unimplemented."
 

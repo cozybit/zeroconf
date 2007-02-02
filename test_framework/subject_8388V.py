@@ -14,9 +14,12 @@ import time
 import re
 import config
 from zc_base import subject_base, zc_test_exception
+import thread
 
 #extract SSID from scan result line
 re_ssid = re.compile( r'\s+\d+\.\s+BSSID\s+\w+\:\w+\:\w+\:\w+\:\w+\:\w+\s+RSSI\s+\d+\s+SSID\s+(\S+)\t' )
+
+mutex = thread.allocate_lock()
 
 class subject_8388V(subject_base):
 	def __init__( self, conf ):
@@ -31,7 +34,12 @@ class subject_8388V(subject_base):
 				parity=serial.PARITY_NONE,\
 				stopbits=serial.STOPBITS_ONE,\
 				timeout=1 )
-				
+			# clear the buffer
+			c = ' '
+			while c != '':
+				c = self.ser.read(1)
+
+
 		except serial.SerialException:
 			print "error: unable to open serial port",port
 			sys.exit(1)
@@ -49,15 +57,21 @@ class subject_8388V(subject_base):
 
 	# send a command over the serial port
 	def send( self, cmd ):
+		
+		mutex.acquire()
 		self.ser.write( cmd + "\r")
 		# throw away the stuff echoed by the 8388V
-		echo = self.ser.readline()
-		
 		output = ""
 		resp = self.ser.readline()
+		timeout = 0
 		while resp != "> ":
 			output += resp
 			resp = self.ser.readline()
+			timeout = timeout + 1
+			if timeout == 5:
+				print "Too long reading serial.  Read \"" + output + "\""
+		output = output.rstrip("\r\n")
+		mutex.release()
 		return output
 	
 	# runs 'iwlist scan', returns a list of SSIDs found
@@ -124,6 +138,9 @@ def run_cmd(cmd):
 			print "No SSIDs found"
 		for id in r:
 			print id
+
+	elif tokens[0] == "set_wifi":
+		v.set_wifi(tokens[1], tokens[2])
 
 	elif tokens[0] == "set_ssid":
 		v.set_ssid(tokens[1])

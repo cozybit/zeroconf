@@ -77,3 +77,8 @@ Dependencies
 ------------
 
 dpkt: http://code.google.com/p/dpkt/
+
+TODO
+----
+
+-- Consider using a new type of exception to detect test failure.

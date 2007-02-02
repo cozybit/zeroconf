@@ -1,7 +1,6 @@
-# link local addressing conflict test.  The challenger brings up an ad-hoc
-# network.  Next, the subject to joins the network and tries to get a link-local
-# address.  But when the challenger sees the probe from the subject, it
-# responds.  The subject should choose another link-local address.
+# link local normal operation test.  This test watches for the proper probes and
+# announcements without interfering.  In the unlikely event that the subject
+# chooses conf.ADHOC_CHALLENGER_IP as its IP address, this test will fail.
 
 import time
 import signal
@@ -9,17 +8,18 @@ import os
 from zc_base import test_base
 from threading import Timer
 import socket
-import struct
-import myarp
-import myeth
+
 import dpkt
 from dpkt import arp
+import myarp
+from myarp import myarp
+from myarp import format
 
-class test_ll_conflict(test_base):
+class test_ll_normal(test_base):
 
 	def __init__(self):
 		return
-
+	
 	def run(self, challenger, subject, conf):
 		self.conf = conf
 		self.subject = subject
@@ -42,19 +42,19 @@ class test_ll_conflict(test_base):
 		t.start()
 
 		try:
-			mac = challenger.get_mac()
-			probe = challenger.recv_arp(3)
-			ip = probe.target_ip
-			subject.stop_ipv4ll()
-		
-			arp_p = arp.ARP()
-			arp_p.sha = myeth.eth_aton(mac)          # sender hardware addr
-			arp_p.spa = socket.inet_aton(ip) # sender ip addr
-			arp_p.tha = myeth.ETH_ADDR_UNSPEC  # dest hardware addr 
-			arp_p.tpa = socket.inet_aton(ip) # ip addr of request
-			arp_p.op = arp.ARP_OP_REPLY
-			challenger.send_arp(arp_p, myeth.ETH_ADDR_BROADCAST)
-
+			probe1 = challenger.recv_arp(3)
+			probe2 = challenger.recv_arp(3)
+			probe3 = challenger.recv_arp(3)
+			announce1 = challenger.recv_arp(3)
+			announce2 = challenger.recv_arp(3)
+			
+			mac = self.subject.get_mac()
+			probe1.is_probe(mac)
+			probe2.is_probe(mac)
+			probe3.is_probe(mac)
+			announce1.is_announce(mac)
+			announce2.is_announce(mac)
+			
 			subject.stop_ipv4ll()
 			return ""
 
@@ -62,3 +62,6 @@ class test_ll_conflict(test_base):
 			subject.stop_ipv4ll()
 			return "Challenger failed to collect all arp traffic."
 
+		except format, e:
+			subject.stop_ipv4ll()
+			return e.value
