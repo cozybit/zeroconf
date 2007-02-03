@@ -18,6 +18,14 @@
 #include "tlv.h"  /* MrvlIETsfArray_t */
 #include "ecl_hostcmd.h"
 
+/* CMD_MAC_MULTICAST_ADR */
+typedef PACK_START struct host_multicast_adr_t
+{
+	UINT16 Action;	/* 0 = ACT_GET, 1 = ACT_SET */
+	UINT16 NumOfAdrs;
+	UINT8 MACList[host_MAX_MCAST_ADRS*host_SIZE_MAC_ADR];
+} PACK_END host_multicast_adr_t;
+
 /*Define data structure for CMD_802_11_AUTHENTICATE*/
 typedef PACK_START struct host_802_11Authenticate_t
 {

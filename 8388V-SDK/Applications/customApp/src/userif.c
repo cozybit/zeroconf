@@ -298,6 +298,35 @@ void userif_prepare_auth_cmd(void)
 
 }
 
+/* XXX Prepares the get Multicast MAC filter command */
+void userif_prepare_mcast_cmd(void)
+{
+	host_multicast_adr_t	*mcast_p;
+	cmd_in_progress = 1;
+
+    ((host_MsgHdr_t*)cmd_buffer)->Msg = host_CMD_MAC_MULTICAST_ADR;
+    ((host_MsgHdr_t*)cmd_buffer)->Size = sizeof(host_MsgHdr_t) + sizeof(host_multicast_adr_t);
+	mcast_p = (host_multicast_adr_t *)((uint32)cmd_buffer + sizeof(host_MsgHdr_t));
+	mcast_p->Action = 0; /* XXX: 0 is GET, 1 is SET */
+	os_EventTrigger(sysinfo_CB_PROC_Q_EVENT, CBP_EV_HOST_OPC_RECEIVED);
+}
+
+/* XXX prepare to add a Multicast MAC to the Multicast MAC filter */
+void userif_prepare_mcast_add_cmd( void )
+{
+	host_multicast_adr_t    *mcast_p;
+	UINT8 mac[6] = {0x01,0x00,0x5E,0x00,0x00,0xFB};
+    cmd_in_progress = 1;
+
+	((host_MsgHdr_t*)cmd_buffer)->Msg = host_CMD_MAC_MULTICAST_ADR;
+    ((host_MsgHdr_t*)cmd_buffer)->Size = sizeof(host_MsgHdr_t) + sizeof(host_multicast_adr_t);
+    mcast_p = (host_multicast_adr_t *)((uint32)cmd_buffer + sizeof(host_MsgHdr_t));
+    mcast_p->Action = 1; /* XXX: 0 is GET, 1 is SET */
+	mcast_p->NumOfAdrs = 1;
+	memcpy( (void *)&(mcast_p->MACList), &mac[0], 6 );
+    os_EventTrigger(sysinfo_CB_PROC_Q_EVENT, CBP_EV_HOST_OPC_RECEIVED);
+}
+
 /**
  * Prepares the deauth command
  */
@@ -681,13 +710,36 @@ void userif_prepare_macaddr_get_cmd(void)
 
 void process_cbproc_response(void) {
     w81cbProcQ_ScanRsp_t * scan_rsp;
+	host_multicast_adr_t *mcast_rsp;
 	uint8 * macaddr;
 	uint16 assoc_resp;
     int MsgType;
+	int i;
 
 	MsgType = ((host_MsgHdr_t *)cmd_res_buffer)->Msg;
 
 	switch (MsgType) {
+
+	/* XXX get/set Multicast MAC filter */
+	case host_RET_MAC_MULTICAST_ADR:
+	mcast_rsp = (host_multicast_adr_t *)((UINT32)cmd_res_buffer+sizeof(host_MsgHdr_t));
+	DBG_P(( DBG_L0 "host_RET_MAC_MULTICAST_ADR: action=%u,num=%u\r\n",
+		mcast_rsp->Action, mcast_rsp->NumOfAdrs ));
+	if( mcast_rsp->Action == 0 ) { /* GET */
+		for( i = 0; i < mcast_rsp->NumOfAdrs; i++ ) {
+			DBG_P(( DBG_L0 "\t%u: 0x%02X:%02X:%02X:%02X:%02X:%02X\r\n", i, 
+				*((UINT8*)(mcast_rsp->MACList+0+i*6)),
+				*((UINT8*)(mcast_rsp->MACList+1+i*6)),
+				*((UINT8*)(mcast_rsp->MACList+2+i*6)),
+				*((UINT8*)(mcast_rsp->MACList+3+i*6)),
+				*((UINT8*)(mcast_rsp->MACList+4+i*6)), 
+				*((UINT8*)(mcast_rsp->MACList+5+i*6)) 
+			));
+		}
+	}
+	cmd_in_progress = 0;
+	break;
+
 	case host_RET_802_11_SCAN:
 	 scan_rsp = (w81cbProcQ_ScanRsp_t *)((uint32)cmd_res_buffer + sizeof(host_MsgHdr_t));
 	 if (scan_rsp->NumSets) {

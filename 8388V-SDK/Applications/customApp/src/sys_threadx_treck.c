@@ -39,6 +39,7 @@ sys_status sys_thread_create(sys_thread *t, sys_thread_entry entry,
 							 sys_thread_data data, void *stack,
 							 unsigned int stack_size)
 {
+	memset( stack, 0xFF, stack_size );
 	return tx_thread_create(t,"cozybit thread", entry, data, stack,
 							stack_size, 20, 20, 2, TX_AUTO_START);
 	
@@ -313,7 +314,11 @@ extern char ip_addr[4];
 extern char net_mask[4];
 extern char def_gtwy[4];
 extern int tcp_ready;
-extern 
+
+UINT32 sys_get_ip( void )
+{
+	return ntohl((*((UINT32 *)ip_addr)));
+}
 
 sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask)
 {

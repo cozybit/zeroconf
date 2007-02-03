@@ -29,6 +29,13 @@
  /** private data **/
  
  /** public functions **/
+
+/* XXX prepares the get multicast MAC filter command */
+void userif_prepare_mcast_cmd(void);
+
+/* XXX prepares to add a MAC to the filter */
+void userif_prepare_mcast_add_cmd( void );
+
 /**
  * Prepares the scan command
  */

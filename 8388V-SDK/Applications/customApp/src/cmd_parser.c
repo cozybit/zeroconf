@@ -19,6 +19,7 @@
 #include "trsocket.h"
 #include "tcpip_socki.h"
 #include "linklocal.h"
+#include "mdns_responder.h"
 
 extern IEEEtypes_Bss_e  bss_type;
 extern IEEEtypes_Bss_e  currbss_type;
@@ -337,6 +338,66 @@ void cmd_parser(unsigned long data)
 #else
 			   userif_prepare_macaddr_get_cmd();
 #endif
+          send_ping = 1;
+		}
+     }
+
+	 /* Link-local address manager. */
+	 else if(!memcmp(user_string, "linklocal", 9)) {
+		 curr_pos = &user_string[get_next_word(user_string)];
+		 if(!memcmp(curr_pos, "start", 5)) {
+			 /* Launch the link local manager */
+			 ret = ll_init();
+			 if(ret)
+				 DBG_P(( DBG_L0 "Error launching link local: %d.\r\n", ret));
+		 } else if(!memcmp(curr_pos, "stop", 4)) {
+			 /* Kill the link local manager. */
+			 ret = ll_shutdown();
+			 if(ret)
+				 DBG_P(( DBG_L0 "Error killing link local: %d.\r\n", ret));
+		 }
+	 }
+
+	 /* mDNS responder */
+	 else if(!memcmp(user_string, "mdns", 4)) {
+	 	curr_pos = &user_string[get_next_word(user_string)];
+		if(!memcmp(curr_pos, "start", 5)) {
+			/* launch the mDNS responder */
+			ret = mdns_responder_init();
+			if(ret)
+				DBG_P(( DBG_L0 "Error launching mDNS responder: %d.\r\n",ret));
+		}
+		else if(!memcmp(curr_pos, "stop", 4)) {
+			/* stop the mDNS responder */
+			ret = mdns_responder_shutdown();
+			if(ret)
+				DBG_P(( DBG_L0 "Error stopping mDNS responder: %d.\r\n", ret));
+		}
+	 }
+
+	 else if(!memcmp(user_string, "mcast", 5 )){
+		curr_pos = &user_string[get_next_word(user_string)];
+		if(!memcmp(curr_pos, "get", 3 )) {
+			userif_prepare_mcast_cmd();
+		}
+		else if(!memcmp(curr_pos, "set", 3 )) {
+			userif_prepare_mcast_add_cmd();
+		}
+	 }
+
+	 else if(!memcmp(user_string, "help", 4)) {
+		 print_usage();
+	 }
+
+	 /* Temp command! */
+	 else if(!memcmp(user_string, "arp", 3)) {
+		 char mac[6];
+		 GetMACAddr(NULL, mac);
+		 ret = ll_send_probe(mac, 0x01020304);
+		 DBG_P(( DBG_L0 "Send arp: %d.\r\n", ret));
+	 }
+
+	 else {
 			   send_ping = 1;
 		   }
 	   }

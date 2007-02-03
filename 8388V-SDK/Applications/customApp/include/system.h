@@ -378,6 +378,8 @@ sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
  * TCP/IP-Layer Network Interface
  ******************************************************************************/
 
+UINT32 sys_get_ip( void );
+
 /**
  * sys_tcpip_init: Initialize TCP/IP stack
  *
@@ -396,5 +398,8 @@ sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask);
  *          Other: system defined
  */
 sys_status sys_tcpip_halt(void);
+
+#define socket_close(s) tfClose(s)
+#define socket_blocking_off(s) tfBlockingState(s,TM_BLOCKING_OFF) 
 
 #endif
