@@ -31,6 +31,7 @@
 #define	SYS_SUCCESS TX_SUCCESS
 #define SYS_FAIL TX_START_ERROR
 #define SYS_THREAD_AWOKEN TX_WAIT_ABORTED
+#define SYS_NO_EVENTS TX_NO_EVENTS
 #define SYS_QUEUE_EMPTY TX_QUEUE_EMPTY
 #define SYS_QUEUE_FULL TX_QUEUE_FULL
 #define SYS_MUTEX_IN_USE
@@ -58,6 +59,9 @@ typedef TX_THREAD sys_thread;
 typedef unsigned long sys_thread_data;
 typedef void sys_thread_return;
 typedef sys_thread_return (*sys_thread_entry)(sys_thread_data data);
+
+/* Event Flag Types */
+typedef TX_EVENT_FLAGS_GROUP sys_eflags;
 
 /* Queue Types */
 typedef TX_QUEUE sys_queue;
@@ -171,6 +175,57 @@ sys_status sys_thread_sleep(sys_time ms, sys_thread *t);
  *          Other: system defined
  */
 sys_status sys_thread_wake(sys_thread *t);
+
+
+/******************************************************************************
+ * Event Flag Interface
+ ******************************************************************************/
+
+/**
+ * sys_eflags_create: Create a set of event flags.
+ *
+ * e: pointer to sys_eflags to create
+ *
+ * Returns: SYS_SUCCESS
+ *          Other: system defined
+ */
+sys_status sys_eflags_create(sys_eflags *e);
+
+/**
+ * sys_eflags_delete: Delete set of eflags
+ *
+ * e: pointer to eflags to be deleted
+ *
+ * Returns: SYS_SUCCESS
+ *          Other: system defined
+ */
+sys_status sys_eflags_delete(sys_eflags *e);
+
+/**
+ * sys_eflags_wait: Wait for event(s)
+ *
+ * e: set of eflags to wait for.
+ * flags: specfic flags within eflags set to wait for.
+ * actual: pointer to place to put actual flag values upon return.
+ * ms: Number of milliseconds to wait.  Use SYS_FOREVER to wait forever.
+ *
+ * Returns: SYS_SUCCESS: eflags slept for entire duration of ms
+ *          SYS_NO_EVENTS: no events occured before timeout
+ *          Other: system defined
+ */
+sys_status sys_eflags_wait(sys_eflags *e, unsigned int flags,
+						   unsigned int *actual, sys_time ms);
+
+/**
+ * sys_eflags_set: Set flags
+ *
+ * e: set of eflags to set
+ * flags: actual flags to set
+ *
+ * Returns: SYS_SUCCESS
+ *          Other: system defined
+ */
+sys_status sys_eflags_set(sys_eflags *e, unsigned int flags);
 
 /******************************************************************************
  * Queue Interface

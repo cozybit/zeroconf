@@ -72,6 +72,33 @@ sys_status sys_thread_wake(sys_thread *t)
 	return tx_thread_resume(t);
 }
 
+
+
+/******************************************************************************
+ * Event Flag Interface
+ ******************************************************************************/
+sys_status sys_eflags_create(sys_eflags *e)
+{
+	return SYS_SUCCESS;
+}
+
+sys_status sys_eflags_delete(sys_eflags *e)
+{
+	return SYS_SUCCESS;
+}
+
+sys_status sys_eflags_wait(sys_eflags *e, unsigned int flags,
+						   unsigned int *actual, sys_time ms)
+{
+	return SYS_SUCCESS;
+}
+
+sys_status sys_eflags_set(sys_eflags *e, unsigned int flags)
+{
+	return SYS_SUCCESS;
+}
+
+
 /******************************************************************************
  * Queue Interface
  ******************************************************************************/
@@ -207,7 +234,7 @@ unsigned short sys_random(unsigned short floor, unsigned short ceiling)
 	
 	/* map the range 0-2^16-1 to floor-ceiling */
 	rand = (ceiling - floor) * rand;
-	rand += 0x8000
+	rand += 0x8000;
 	rand /= 65535;
 	rand += floor;
 	rand &= 0xffff;
