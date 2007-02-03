@@ -315,10 +315,14 @@ extern char net_mask[4];
 extern char def_gtwy[4];
 extern int tcp_ready;
 
+
 UINT32 sys_get_ip( void )
 {
 	return ntohl((*((UINT32 *)ip_addr)));
 }
+
+extern int cmd_in_progress;
+extern sys_pkt_status eTCPRxDataHandler(sys_pkt *pkt);
 
 sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask)
 {
@@ -331,7 +335,9 @@ sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask)
 	userif_prepare_config_etcp();
 	tcp_ready = 1;
 
-	/* Eventually, command thread will config stack. */
+	/* Marvell code does not unregister cmd handlers!  This is a work-around */
+	mli_removeCustomRxDataHandler(eTCPRxDataHandler);
+	mli_installCustomRxDataHandler(eTCPRxDataHandler);
 
 	return SYS_SUCCESS;
 }
@@ -342,6 +348,7 @@ sys_status sys_tcpip_halt(void)
 	memset(ip_addr, 0, 4);
 	memset(net_mask, 0, 4);
 	memset(def_gtwy, 0, 4);
+	mli_removeCustomRxDataHandler(eTCPRxDataHandler);
 	tcp_ready = 0;
 	return SYS_SUCCESS;
 }

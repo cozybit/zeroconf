@@ -158,6 +158,9 @@ sys_pkt_status ll_handle_arp(sys_pkt *pkt)
 	unsigned short type = *(unsigned short *)(link_header + L2_TYPE_OFFSET);
 	struct arp_pkt *arp;
 
+	if(ll_running == 0)
+		return SYS_PKT_PASS;
+
 	arp = (struct arp_pkt *)(link_header + ARP_OFFSET);
 
 	if (type == htons(ARP_TYPE)) {
@@ -320,6 +323,9 @@ sys_status ll_init(void)
 
 	if(ll_running != 0)
 		return SYS_FAIL;
+
+	/* Shut down the tcpip stack, just in case somebody else turned it on. */
+	sys_tcpip_halt();
 
 	ll_state = LL_NO_ADDRESS;
 

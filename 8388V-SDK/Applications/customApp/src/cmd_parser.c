@@ -242,6 +242,9 @@ void cmd_parser(unsigned long data)
    int ret;
 
    while(1) {
+
+	   while(cmd_in_progress)
+		   os_TaskDelay(10);
 	   DBG_P(( DBG_L0 "\r\n> "));
 	   cmd_parser_read_line();
 	   
@@ -292,16 +295,16 @@ void cmd_parser(unsigned long data)
 		   }
 	   }
 	   else if(!memcmp(user_string,"econfi",6)){
+		   unsigned int ip;
+		   unsigned int nm;
+		   unsigned int gw;
 		   curr_pos = &user_string[get_next_word(user_string)];
-		   get_ipaddr(curr_pos, ip_addr);
+		   get_ipaddr(curr_pos, (char *)&ip);
 		   curr_pos = &curr_pos[get_next_word(curr_pos)];
-		   get_ipaddr(curr_pos, net_mask);	    
+		   get_ipaddr(curr_pos, (char *)&nm);
 		   curr_pos = &curr_pos[get_next_word(curr_pos)];
-		   get_ipaddr(curr_pos, def_gtwy);	    		
-#ifdef EMBEDDED_TCPIP		
-		   userif_prepare_config_etcp();
-		   tcp_ready = 1; /* XXX */
-#endif     
+		   get_ipaddr(curr_pos, (char *)&gw);
+		   sys_tcpip_init(ip, nm);
 	   }
 	   
 	   else if(!memcmp(user_string, "printip", 7)){
@@ -443,10 +446,7 @@ void cmd_parser(unsigned long data)
 #ifdef UART_DRV
 		   DBG_P(( DBG_L0 "Unknown command.\r\n")); 
 #endif		 
-	   }
-	   
-	   while(cmd_in_progress)
-		   os_TaskDelay(10);
+	   }	   
    }
 }
 
