@@ -43,6 +43,8 @@ static char ll_mac[6];
 
 /* Task information for the User Interface task*/
 static sys_thread ll_main_thread;
+static sys_eflags ll_eflags;
+#define LL_CONFLICT_EVENT 0x1
 static int ll_running = 0;
 static unsigned char ll_stack[2048];
 
@@ -162,7 +164,7 @@ sys_pkt_status ll_handle_arp(sys_pkt *pkt)
 		/* This is an ARP packet.  Check if it conflicts. */
 		
 		if(ll_arp_conflict(arp, ll_mac, ll_candidate_ip)) {
-			sys_thread_wake(&ll_main_thread);
+			sys_eflags_set(&ll_eflags, LL_CONFLICT_EVENT);
 		}
 	}
 
@@ -178,16 +180,20 @@ sys_thread_return ll_main(sys_thread_data data)
 	sys_status status = SYS_SUCCESS;
 	unsigned int probe = 0, announce = 0;
 	unsigned int conflict, num_conflicts;
+	unsigned int flags;
 
 	while(1) {
 
-		status = sys_thread_sleep(timeout, &ll_main_thread);
-		if( (status != SYS_SUCCESS) && (status != SYS_THREAD_AWOKEN) ) {
+		flags = 0;
+		status = sys_eflags_wait(&ll_eflags, LL_CONFLICT_EVENT, &flags,
+								 timeout);
+
+		if( (status != SYS_SUCCESS) && (status != SYS_NO_EVENTS) ) {
 			/* This should never happen! */
 			return;
 		}
 
-		if( status == SYS_THREAD_AWOKEN ) {
+		if( flags & LL_CONFLICT_EVENT ) {
 			conflict = 1;
 			num_conflicts++;
 		} else {
@@ -326,14 +332,21 @@ sys_status ll_init(void)
 	if(ret != SYS_SUCCESS)
 		return ret;
 
+	/* Create eflags for conflict events. */
+	ret = sys_eflags_create(&ll_eflags);
+	if(ret != SYS_SUCCESS)
+		goto done1;	
+
 	/* Launch the link-local main thread. */
 	ret = sys_thread_create(&ll_main_thread, ll_main, 0, (void *)&ll_stack[0],
 							sizeof(ll_stack));
 	if(ret != SYS_SUCCESS)
-		goto done1;
+		goto done2;
 
 	goto done0;
 
+ done2:
+	sys_eflags_delete(&ll_eflags);
  done1:
 	sys_remove_rx_pkt_handler(ll_handle_arp);
  done0:
@@ -348,6 +361,7 @@ sys_status ll_shutdown(void)
 {
 	sys_thread_halt(&ll_main_thread);
 	sys_thread_delete(&ll_main_thread);
+	sys_eflags_delete(&ll_eflags);
 	sys_remove_rx_pkt_handler(ll_handle_arp);
 	sys_tcpip_halt();
 	ll_running = 0;

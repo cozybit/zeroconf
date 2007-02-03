@@ -79,23 +79,31 @@ sys_status sys_thread_wake(sys_thread *t)
  ******************************************************************************/
 sys_status sys_eflags_create(sys_eflags *e)
 {
-	return SYS_SUCCESS;
+	return tx_event_flags_create(e, "cozybit event flags");
 }
 
 sys_status sys_eflags_delete(sys_eflags *e)
 {
-	return SYS_SUCCESS;
+	return tx_event_flags_delete(e);
 }
 
 sys_status sys_eflags_wait(sys_eflags *e, unsigned int flags,
 						   unsigned int *actual, sys_time ms)
 {
-	return SYS_SUCCESS;
+	unsigned int ticks;
+
+	if(ms == SYS_FOREVER)
+		ticks = TX_WAIT_FOREVER;
+	else
+		ticks = ms / SYS_MSEC_PER_TICK;
+
+	return tx_event_flags_get(e, flags, TX_OR_CLEAR, (unsigned long *)actual,
+							  ticks);
 }
 
 sys_status sys_eflags_set(sys_eflags *e, unsigned int flags)
 {
-	return SYS_SUCCESS;
+	return tx_event_flags_set(e, flags, TX_OR);
 }
 
 
