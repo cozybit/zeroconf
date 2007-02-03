@@ -51,7 +51,7 @@ typedef sys_pkt_status (*sys_pkt_handler)(sys_pkt *pkt);
 
 #define L2_HEADER_OFFSET (sizeof(RxPD_t)) /* native packet to L2 header */
 #define L2_TYPE_OFFSET 20 /* Offset from L2 packet to SNAP type */
-#define ARP_HEADER_OFFSET 22 /* Offset from L2 packet to ARP header */
+#define ARP_OFFSET 22 /* Offset from L2 packet to ARP */
 
 /* Thread Types */
 typedef TX_THREAD sys_thread;

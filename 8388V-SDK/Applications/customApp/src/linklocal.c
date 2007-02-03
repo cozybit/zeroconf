@@ -67,9 +67,6 @@ PACKED_STRUCT_BEGIN struct arp_pkt {
 #define RARP_OP_REQUEST 3
 #define RARP_OP_REPLY 4
 
-/* Array for storing ARP packet headers for later processing. */
-static 
-
 /******************************************************************************
  * Private Functions
  ******************************************************************************/
@@ -85,7 +82,8 @@ unsigned int ll_random_ip()
 	return ip_addr;
 }
 
-/* Determine if an arp packet conflicts with the supplied mac and ip address */
+/* Determine if an arp packet conflicts with the supplied mac and ip address.
+ * The ip address should be in network byte order. */
 int ll_arp_conflict(struct arp_pkt *arp, char mac[6], unsigned int ip)
 {
 	unsigned int sender_ip, target_ip;
@@ -96,12 +94,12 @@ int ll_arp_conflict(struct arp_pkt *arp, char mac[6], unsigned int ip)
 	}
 	
 	memcpy(&sender_ip, (void *)arp->sender_ip, 4);
-	if(ntohl(sender_ip) == ip)
+	if(sender_ip == ip)
 		/* somebody owns this address */
 		return 1;
 
 	memcpy(&target_ip, (void *)arp->target_ip, 4);
-	if( (sender_ip == 0) && (ntohl(target_ip) == ip) )
+	if( (sender_ip == 0) && (target_ip == ip) )
 		/* somebody is probing this address */
 		return 1;
 
@@ -158,7 +156,7 @@ sys_pkt_status ll_handle_arp(sys_pkt *pkt)
 	unsigned short type = *(unsigned short *)(link_header + L2_TYPE_OFFSET);
 	struct arp_pkt *arp;
 
-	arp = (struct arp_pkt *)((unsigned char *)pkt + ARP_HEADER_OFFSET);
+	arp = (struct arp_pkt *)(link_header + ARP_OFFSET);
 
 	if (type == htons(ARP_TYPE)) {
 		/* This is an ARP packet.  Check if it conflicts. */
