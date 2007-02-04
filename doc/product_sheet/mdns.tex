@@ -1,55 +1,26 @@
-\documentclass[11pt,titlepage]{article}
+\documentclass[12pt,landscape,twocolumn]{article}
 
-\input{art/cozydefs.tex}
+%\input{art/cozydefs.tex}
+\usepackage{productnote}
 
-\usepackage{listings}
-\usepackage{import}
 \usepackage{epsfig}
-\usepackage{verbatim}
+\usepackage{bookman}
 
-\newcommand{\function}[1]{\lstinline{#1}()}
-\newcommand{\datatype}[1]{\lstinline{#1}}
-% TODO fix this
-%\newcommand{\function}[1]{\verb+$#1$+}
-%\newcommand{\function}[1]{\verb+#1()+}
-\newcommand{\module}[1]{\texttt{#1}}
+\setlength{\oddsidemargin}{0in}		% default=0in
+\setlength{\textwidth}{10in}		% default=9in
 
+\setlength{\columnsep}{0.5in}		% default=10pt
+\setlength{\columnseprule}{0pt}		% default=0pt (no line)
+
+\setlength{\textheight}{6.5in}		% default=5.15in
+\setlength{\topmargin}{-0.45in}		% default=0.20in
+\setlength{\headsep}{0in}		% default=0.35in
+
+\pagestyle{empty}	%no page numbers
 
 \begin{document}
-\begin{titlepage}
-%\maketitle
-\lstset{language=c}
-\newcommand\HRule{\noindent\rule{\linewidth}{1.5pt}}
-\vspace*{\stretch{1}}
-\HRule
-\begin{center}
-	\LARGE cozybit Embedded Zeroconf Module
-\end{center}
-\HRule
-\vspace*{\stretch{2}}
-\vspace{1in}
-\begin{center}
-	\Large
-% nothing here
-{\small January $21^{st}$, 2007}\\
-%{\small \date}\\
-\rule{0pt}{20ex}\\
-\includegraphics*{art/cozybit-logo.eps}\\
-\vspace{3ex}
-{\scriptsize 
-\begin{tabular}{l l}
-Tel: +1 415 974 6770 	& 165 Jessie St. \\
-Fax: +1 415 974 6771    & San Francisco, CA 94105 \\
-http://www.cozybit.com  & USA \\
-\end{tabular}}
-\end{center}
-\end{titlepage}
-\clearpage
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\section{cozybit Zeroconf module}
-
+\section*{cozybit Zeroconf module}
 The cozybit Zeroconf module allows devices to advertise services and announce 
 themselves to users without requiring extensive network configuration.  With 
 Zeroconf, an embedded system can:
@@ -61,7 +32,11 @@ Zeroconf, an embedded system can:
 		  devices, and network-attached storage.
 \end{itemize}
 
-\subsection{Features}
+\vspace{0.5in}
+\includegraphics[width=4.5in]{zeroconf.png}
+\vspace{0.5in}
+
+\subsection*{Features}
 
 The cozybit Zeroconf module provides:
 
@@ -79,7 +54,8 @@ The cozybit Zeroconf module provides:
 	\item OS and TCP/IP stack independence.
 \end{itemize}
 
-\subsection{Details}
+
+\subsection*{Details}
 
 The cozybit Zeroconf module is designed for small embedded systems.  The mDNS 
 Responder runs in a single thread and does not require the use of dynamically 
@@ -97,14 +73,16 @@ for Link Local address self-assignment.  An OS abstraction layer allows the
 module to be easily ported to many platforms.
 
 \begin{center}
-\psfig{figure=./figures/arch.eps,angle=0,width=40ex}
+%\psfig{figure=./figures/arch.eps,angle=0,width=40ex}
+\includegraphics[width=40ex]{./figures/arch.png}
 \end{center}
 
 At this time, the cozybit Zeroconf module has been ported to Linux and the 
 Marvell 8388V standalone SDK.  The module's footprint when compiled with the
 ARM ADS toolchain is approximately 2KB.
 
-\subsection{Standards}
+\pagebreak
+\subsection*{Standards}
 
 Please refer to the following draft standards and RFCs for details about the
 Zeroconf draft standard:
@@ -112,14 +90,26 @@ Zeroconf draft standard:
 \vspace{1ex}
 \begin{tabular}{|l|l|}
 \hline
-mDNS & http://files.multicastdns.org/draft-cheshire-dnsext-multicastdns.txt \\
+mDNS & draft-cheshire-dnsext-multicastdns \\
 \hline
-DNS-SD & http://files.dns-sd.org/draft-cheshire-dnsext-dns-sd.txt \\
+DNS-SD & draft-cheshire-dnsext-dns-sd \\
 \hline
-DNS SRV & http://www.faqs.org/rfcs/rfc2782.html \\
+DNS SRV & rfc2782 \\
 \hline
-IPV4LL & http://files.zeroconf.org/rfc3927.txt \\
+IPV4LL & rfc3927 \\
 \hline
 \end{tabular}
+
+\strut{\vspace{2.5in}}
+\begin{center}
+\includegraphics*{art/cozybit-logo.pdf}\\
+\vspace{3ex}
+{\scriptsize 
+\begin{tabular}{l l}
+Tel: +1 415 974 6770   & 165 Jessie St. \\
+Fax: +1 415 974 6771    & San Francisco, CA 94105 \\
+http://www.cozybit.com  & USA \\
+\end{tabular}}
+\end{center}
 
 \end{document}

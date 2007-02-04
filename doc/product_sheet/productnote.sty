@@ -1,0 +1,15 @@
+
+% color for latex or pdflatex
+\ifx\pdfoutput\@undefined\usepackage[usenames,dvips]{color}
+\else\usepackage[usenames,dvipsnames]{color}
+% and fix pdf colour problems
+\IfFileExists{pdfcolmk.sty}{\usepackage{pdfcolmk}}{} 
+\fi
+
+\definecolor{cozygreen}{cmyk}{0.317,0,1,0.282} 
+\definecolor{cozyblue}{cmyk}{0.7,0.7,0,0.737} 
+
+\let\LaTeX@startsection\@startsection 
+\renewcommand{\@startsection}[6]{\LaTeX@startsection%
+{#1}{#2}{#3}{#4}{#5}{\color{cozyblue}\raggedright #6}} 
+

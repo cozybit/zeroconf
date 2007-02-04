@@ -15,10 +15,10 @@ all_txt: $(patsubst %.tex,%.txt,$(tex_sources))
 
 all_figures: $(patsubst %.svg,%.eps,$(figures))
 
+%.pdf: %.tex $(sub_docs)
+
 %.ps: %.tex $(sub_docs)
-	latex $*.tex
-	latex $*.tex
-	dvips -o $*.ps $*.dvi
+	pdflatex $*.tex
 
 %.eps: %.svg
 	# Remove yFiles watermark (super long path d element)
