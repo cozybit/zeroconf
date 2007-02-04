@@ -7,7 +7,7 @@
 \usepackage{bookman}
 
 \setlength{\oddsidemargin}{0in}		% default=0in
-\setlength{\textwidth}{10in}		% default=9in
+\setlength{\textwidth}{9in}		% default=9in
 
 \setlength{\columnsep}{0.5in}		% default=10pt
 \setlength{\columnseprule}{0pt}		% default=0pt (no line)
@@ -20,7 +20,7 @@
 
 \begin{document}
 
-\section*{cozybit Zeroconf module}
+\section*{{\tt cozybit} Zeroconf module}
 The cozybit Zeroconf module allows devices to advertise services and announce 
 themselves to users without requiring extensive network configuration.  With 
 Zeroconf, an embedded system can:
@@ -77,9 +77,11 @@ module to be easily ported to many platforms.
 \includegraphics[width=40ex]{./figures/arch.png}
 \end{center}
 
-At this time, the cozybit Zeroconf module has been ported to Linux and the 
-Marvell 8388V standalone SDK.  The module's footprint when compiled with the
-ARM ADS toolchain is approximately 2KB.
+\subsection*{Supported Platforms}
+
+At this time, the cozybit Zeroconf module has been ported to Linux and
+Marvell 8388V ({\tt nohost SDK}).  The module's footprint when compiled with
+the ARM ADS toolchain is approximately 2KB.
 
 \pagebreak
 \subsection*{Standards}
@@ -100,7 +102,11 @@ IPV4LL & rfc3927 \\
 \hline
 \end{tabular}
 
-\strut{\vspace{2.5in}}
+\subsection*{Contact}
+For additional product information please contact Javier Cardona at the numbers
+printed below.
+
+\strut{\vspace{1in}}
 \begin{center}
 \includegraphics*{art/cozybit-logo.pdf}\\
 \vspace{3ex}
