@@ -18,6 +18,12 @@
 #include "tlv.h"  /* MrvlIETsfArray_t */
 #include "ecl_hostcmd.h"
 
+typedef PACK_START struct host_mac_control_t
+{
+	UINT16 Action;
+	UINT16 Reserved;
+} PACK_END host_mac_control_t;
+
 /* CMD_MAC_MULTICAST_ADR */
 typedef PACK_START struct host_multicast_adr_t
 {

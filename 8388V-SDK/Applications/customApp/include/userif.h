@@ -30,6 +30,9 @@
  
  /** public functions **/
 
+/* XXX prepares MAC config command */
+void userif_prepare_mac_control_cmd( UINT16 action );
+
 /* XXX prepares the get multicast MAC filter command */
 void userif_prepare_mcast_cmd(void);
 
