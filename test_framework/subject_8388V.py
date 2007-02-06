@@ -126,6 +126,28 @@ class subject_8388V(subject_base):
 		
 	def get_mac(self):
 		return self.send("printmac").rstrip("\r\n")
+
+	# add the MAC address for 224.0.0.251 to multicast filter
+	def set_mcast(self):
+		response = self.send("mcast set")
+		if response != "":
+			raise zc_test_exception, response
+
+	# read the multicast filter
+	def get_mcast(self):
+		return self.send("mcast get").rstrip("\r\n")
+
+	# start mDNS responder
+	def start_mdns(self):
+		response = self.send("mdns start")
+		if response != "":
+			raise zc_test_exception, response
+
+	# stop mDNS responder
+	def stop_mdns(self):
+		response = self.send("mdns stop")
+		if response != "":
+			raise zc_test_exception, response
 	
 def run_cmd(cmd):
 	tokens = cmd.split(" ")
