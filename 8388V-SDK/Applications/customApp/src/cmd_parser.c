@@ -20,6 +20,7 @@
 #include "tcpip_socki.h"
 #include "linklocal.h"
 #include "mdns_responder.h"
+#include "log.h"
 
 extern IEEEtypes_Bss_e  bss_type;
 extern IEEEtypes_Bss_e  currbss_type;
@@ -81,6 +82,7 @@ void print_usage(void)
 	DBG_P(( DBG_L0 "	linklocal stop\r\n")); 
 	DBG_P(( DBG_L0 "	mdns start\r\n")); 
 	DBG_P(( DBG_L0 "	mdns stop\r\n")); 
+	DBG_P(( DBG_L0 "	log [init|shutdown|dump|purge|write]\r\n")); 
 }
 
 /**
@@ -391,37 +393,38 @@ void cmd_parser(unsigned long data)
 		else if(!memcmp(user_string, "help", 4)) {
 			print_usage();
 		}
-
-		/* Link-local address manager. */
-		else if(!memcmp(user_string, "linklocal", 9)) {
-			curr_pos = &user_string[get_next_word(user_string)];
-			if(!memcmp(curr_pos, "start", 5)) {
-				/* Launch the link local manager */
-				ret = ll_init();
-				if(ret)
-					DBG_P(( DBG_L0 "Error launching link local: %d.\r\n", ret));
-			} else if(!memcmp(curr_pos, "stop", 4)) {
-				/* Kill the link local manager. */
-				ret = ll_shutdown();
-				if(ret)
-					DBG_P(( DBG_L0 "Error killing link local: %d.\r\n", ret));
-			}
-		}
 	   
-		/* mDNS responder */
-		else if(!memcmp(user_string, "mdns", 4)) {
+		/* log interface */
+		else if(!memcmp(user_string, "log", 3)) {
 			curr_pos = &user_string[get_next_word(user_string)];
-			if(!memcmp(curr_pos, "start", 5)) {
-				/* launch the mDNS responder */
-				ret = mdns_responder_init();
+			if(!memcmp(curr_pos, "init", 5)) {
+				ret = log_init();
 				if(ret)
-					DBG_P(( DBG_L0 "Error launching mDNS responder: %d.\r\n",ret));
+					DBG_P(( DBG_L0 "Error launching logger: %d.\r\n",ret));
 			}
-			else if(!memcmp(curr_pos, "stop", 4)) {
-				/* stop the mDNS responder */
-				ret = mdns_responder_shutdown();
+			else if(!memcmp(curr_pos, "shutdown", 8)) {
+				ret = log_shutdown();
 				if(ret)
-					DBG_P(( DBG_L0 "Error stopping mDNS responder: %d.\r\n", ret));
+					DBG_P(( DBG_L0 "Error stopping logger: %d.\r\n", ret));
+			}
+			else if(!memcmp(curr_pos, "dump", 4)) {
+				ret = log_dump();
+				if(ret)
+					DBG_P(( DBG_L0 "Error dumping log: %d.\r\n", ret));
+			}
+			else if(!memcmp(curr_pos, "purge", 5)) {
+				ret = log_purge();
+				if(ret)
+					DBG_P(( DBG_L0 "Error purging log: %d.\r\n", ret));
+			}
+			else if(!memcmp(curr_pos, "write", 5)) {
+				curr_pos = &curr_pos[get_next_word(curr_pos)];
+				ret = log(curr_pos);
+				if(ret)
+					DBG_P(( DBG_L0 "Failed to write log: %d.\r\n", ret));
+			}
+			else {
+				DBG_P(( DBG_L0 "No such log command: %s.\r\n", curr_pos));
 			}
 		}
 	   
@@ -442,6 +445,8 @@ static unsigned int cmd_stack[2048];
 
 void cmd_init(void)
 {
+	/* Turn on logging by default */
+	log_init();
 	tx_thread_create(&cmd_thread, "cmd_thread", cmd_parser, 0,
 					 (void *)&cmd_stack[0], sizeof(cmd_stack), 21, 21, 2, 
 					 TX_AUTO_START);

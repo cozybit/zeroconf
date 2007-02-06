@@ -69,6 +69,15 @@ PACKED_STRUCT_BEGIN struct arp_pkt {
 #define RARP_OP_REQUEST 3
 #define RARP_OP_REPLY 4
 
+/* Debugging and logging */
+#define LL_DEBUG
+#ifdef LL_DEBUG
+#include "log.h"
+#define LOG(...) log(__VA_ARGS__)
+#else
+#define LOG(...) {}
+#endif
+
 /******************************************************************************
  * Private Functions
  ******************************************************************************/
@@ -209,6 +218,7 @@ sys_thread_return ll_main(sys_thread_data data)
 			/* Wait for random interval, then probe candidate ip */
 			ll_candidate_ip = ll_random_ip();
 			timeout = sys_random(0, PROBE_WAIT*1000);
+			LOG("LL: Sending first probe in %d ms.\r\n", timeout);
 			probe = 0;
 			ll_state = LL_PROBE;
 			break;
@@ -217,27 +227,33 @@ sys_thread_return ll_main(sys_thread_data data)
 
 			if( (conflict) && (num_conflicts >= MAX_CONFLICTS) ) {
 				/* Too many conflicts.  Time to go rate-limited */
+				LOG("LL: Many conflicts.  Going into rate-limited mode.\r\n");
 				ll_state = LL_RATE_LIMITED_PROBE;
 				ll_candidate_ip = 0;
 				timeout = RATE_LIMIT_INTERVAL*1000;
 
 			} else if(conflict) {
 				/* Rats.  Somebody has our address. Try again. */
+				LOG("LL: Somebody has our address.  Trying again.\r\n");
 				ll_state = LL_NO_ADDRESS;
 				timeout = 0;
 
 			} else if(probe == PROBE_NUM - 1) {
 				/* send final probe then wait ANNOUNCE_WAIT */
+				LOG("LL: Sending final probe.\r\n");
 				ll_send_probe(ll_mac, ll_candidate_ip);
 				ll_state = LL_ANNOUNCE;
 				timeout = ANNOUNCE_WAIT*1000;
+				LOG("LL: Sending first announcement in %d ms.\r\n", timeout);
 				announce = 0;
 
 			} else if(probe < (PROBE_NUM - 1)) {
 				/* our address is still good.  Send next probe then wait. */
+				LOG("LL: Sending probe.\r\n");
 				ll_send_probe(ll_mac, ll_candidate_ip);
 				probe++;
 				timeout = sys_random(PROBE_MIN*1000, PROBE_MAX*1000);
+				LOG("LL: Next probe in %d ms.\r\n", timeout);
 			}
 			break;
 
@@ -250,20 +266,24 @@ sys_thread_return ll_main(sys_thread_data data)
 
 			} else if(conflict) {
 				/* Rats.  Somebody has our address. Try again. */
+				LOG("LL: Received claim after announce.  Trying again.\r\n");
 				ll_state = LL_NO_ADDRESS;
 				timeout = 0;
 
 			} else if(announce == ANNOUNCE_NUM - 1) {
 				/* send final announcement then wait ANNOUNCE_INTERVAL */
+				LOG("LL: Sending final announcement.\r\n");
 				ll_send_announce(ll_mac, ll_candidate_ip);
 				ll_state = LL_STABLE;
 				timeout = ANNOUNCE_INTERVAL*1000;
 
 			} else if(announce < (ANNOUNCE_NUM - 1)) {
 				/* our address is still good.  Send next announce then wait. */
+				LOG("LL: Sending announcement.\r\n");
 				ll_send_announce(ll_mac, ll_candidate_ip);
 				announce++;
 				timeout = ANNOUNCE_INTERVAL*1000;
+				LOG("LL: Sending next announcement in %d ms.\r\n", timeout);
 			}
 			break;
 
@@ -293,6 +313,7 @@ sys_thread_return ll_main(sys_thread_data data)
 				 * and go to sleep forever. */
 				num_conflicts = 0;
 				timeout = SYS_FOREVER;
+				LOG("LL: Got address.  Setting up tcpip.\r\n");
 				if(sys_tcpip_init(ll_candidate_ip, LL_NETMASK) != SYS_SUCCESS) {
 					/* Ultimately this case should be left up to the system, not
 					 * us.  But for now, we'll just sleep and try
@@ -321,6 +342,7 @@ sys_status ll_init(void)
 {
 	sys_status ret;
 
+	LOG("LL: Initializing\r\n");
 	if(ll_running != 0)
 		return SYS_FAIL;
 
@@ -365,6 +387,7 @@ sys_status ll_init(void)
  */
 sys_status ll_shutdown(void)
 {
+	LOG("LL: Shutting down.\r\n");
 	sys_thread_halt(&ll_main_thread);
 	sys_thread_delete(&ll_main_thread);
 	sys_eflags_delete(&ll_eflags);
