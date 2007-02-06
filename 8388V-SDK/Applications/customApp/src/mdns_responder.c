@@ -9,6 +9,14 @@
 #include "mdns.h"
 #include "mdns_config.h" /* service name, etc */
 
+/* Debugging and logging */
+#ifdef MDNS_DEBUG
+#include "log.h"
+#define LOG(...) log(__VA_ARGS__)
+#else
+#define LOG(...) {}
+#endif
+
 static sys_thread mdns_main_thread;
 static unsigned char mdns_stack[2048];
 int mc_sock;
@@ -45,7 +53,7 @@ int m_socket( void )
     setsockopt( sock, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(yes) );
 
     if( bind( sock, (struct sockaddr*)&in_addr, sizeof(in_addr) ) ) {
-        DEBUG( "failed to bind multicast socket: %d\r\n", 
+        LOG( "failed to bind multicast socket: %d\r\n", 
 			tfGetSocketError(sock) );
 		socket_close( sock );
         return -1;
@@ -56,14 +64,14 @@ int m_socket( void )
     mc.imr_interface.s_addr = sys_get_ip(); //htonl(INADDR_ANY);
     if( setsockopt( sock, IP_PROTOIP, IPO_ADD_MEMBERSHIP, (void *)&mc, 
 		sizeof(mc) ) < 0 ) {
-		DEBUG( "failed to add multicast membership: %d\r\n", 
+		LOG( "failed to add multicast membership: %d\r\n", 
 			tfGetSocketError( sock ) );
 		socket_close( sock );
 		return -1;
 	}
 
     if( setsockopt( sock, IP_PROTOIP, IPO_MULTICAST_TTL, (void*)&ttl, sizeof(ttl)) < 0 ) {
-		DEBUG( "failed to set multicast TTL: %d\r\n", tfGetSocketError(sock) );
+		LOG( "failed to set multicast TTL: %d\r\n", tfGetSocketError(sock) );
 		socket_close( sock );
 		return -1;
 	}
@@ -129,7 +137,7 @@ sys_thread_return mdns_main( sys_thread_data data )
         return;
     }
 
-	DEBUG( "mDNS: responder is ready\n\r" );
+	LOG( "mDNS: responder is ready\n\r" );
 
     /* set up probe to claim name */
     mdns_transmit_init( &tx_message, tx_buffer );
@@ -151,7 +159,7 @@ sys_thread_return mdns_main( sys_thread_data data )
 		}
 	
 		if( FD_ISSET( mc_sock, &fds ) ) {
-			DEBUG( "mDNS: received message\r\n" );
+			LOG( "mDNS: received message\r\n" );
             while( ( len = recvfrom( mc_sock, rx_buffer, MDNS_BUFFER_LEN, 0,
                      (struct sockaddr*)&from, (int *)&in_size ) ) > 0 ) {
                 if( mdns_parse_message( &rx_message, rx_buffer ) &&
@@ -161,17 +169,17 @@ sys_thread_return mdns_main( sys_thread_data data )
 					/* TODO: if status < STARTED, check message for probe
 							 response, see if we have a conflict */
                     /* XXX just respond to anyone that isn't myself */
-                    DEBUG( "mDNS: responding to query...\r\n" );
+                    LOG( "mDNS: responding to query...\r\n" );
                     if( !mdns_send_message( &tx_message, mc_sock ) )
 						DEBUG( "mDNS: error, failed to send message\r\n" );
                 }
 				else
-					DEBUG( "mDNS: ignoring this message\r\n" );
+					LOG( "mDNS: ignoring this message\r\n" );
             }
         }
 		else if( mdns_status < STARTED ) {
             if( mdns_status == ANNOUNCE ) {
-				DEBUG( "mDNS: announcing!\r\n" );
+				LOG( "mDNS: announcing!\r\n" );
                 mdns_transmit_init( &tx_message, tx_buffer );
                 mdns_mark_response( &tx_message );
                 /* A */
@@ -190,11 +198,11 @@ sys_thread_return mdns_main( sys_thread_data data )
                     SERVICE_TYPE SERVICE_DOMAIN,
                     T_PTR, C_IN, 255, &my_ptr );
             }
-            DEBUG( "mDNS: sending message...\r\n" ); 
+            LOG( "mDNS: sending message...\r\n" ); 
             if( mdns_send_message( &tx_message, mc_sock ) )
             	mdns_status++;
 			else
-				DEBUG( "mDNS: error, failed to send message\r\n" );
+				LOG( "mDNS: error, failed to send message\r\n" );
 		}
 	}
 }

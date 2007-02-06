@@ -5,16 +5,16 @@ UINT16 mdns_name_length( char *name );
 
 UINT16 mdns_read_n16( struct mdns_message *m )
 {
-    UINT16 n = ntohs(*((UINT16*)m->cur)); /* FIXME */
+	PACKED UINT16 *p = (UINT16*)m->cur;
     m->cur += sizeof(UINT16);
-    return n;
+    return ntohs(*p);
 }
 
 UINT32 mdns_read_n32( struct mdns_message *m )
 {
-    UINT32 n = ntohl(*((UINT32*)m->cur)); /* FIXME */
+    PACKED UINT32 *p = (UINT32*)m->cur;
     m->cur += sizeof(UINT32);
-    return n;
+    return ntohl((*p));
 }
 
 void mdns_write_n16( struct mdns_message *m, UINT16 n )
