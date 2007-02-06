@@ -53,16 +53,18 @@ int m_socket( void )
 
     /* join multicast group */
     mc.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
-    mc.imr_interface.s_addr = htonl(INADDR_ANY);
+    mc.imr_interface.s_addr = sys_get_ip(); //htonl(INADDR_ANY);
     if( setsockopt( sock, IP_PROTOIP, IPO_ADD_MEMBERSHIP, (void *)&mc, 
 		sizeof(mc) ) < 0 ) {
 		DEBUG( "failed to add multicast membership: %d\r\n", 
-			tfGetSocketError(sock) );
+			tfGetSocketError( sock ) );
+		socket_close( sock );
 		return -1;
 	}
 
     if( setsockopt( sock, IP_PROTOIP, IPO_MULTICAST_TTL, (void*)&ttl, sizeof(ttl)) < 0 ) {
 		DEBUG( "failed to set multicast TTL: %d\r\n", tfGetSocketError(sock) );
+		socket_close( sock );
 		return -1;
 	}
 
@@ -81,7 +83,7 @@ sys_thread_return mdns_main( sys_thread_data data )
 	struct mdns_message rx_message, tx_message;
 	struct sockaddr_in from;
 	socklen_t in_size = sizeof(struct sockaddr_in);
-	UINT32 ip = 0xC0A80159; /*sys_get_ip();*/
+	UINT32 ip = sys_get_ip();
 
 	/* BEGIN CONFIGURATUION DATA */
 
@@ -92,7 +94,7 @@ sys_thread_return mdns_main( sys_thread_data data )
     struct rr_ptr service_ptr;
     struct rr_txt service_txt;
 
-	service_a.ip = ip;
+	service_a.ip = ntohl(ip);
 
 	service_srv.priority = 0;
     service_srv.weight = 0;
@@ -154,7 +156,7 @@ sys_thread_return mdns_main( sys_thread_data data )
                      (struct sockaddr*)&from, (int *)&in_size ) ) > 0 ) {
                 if( mdns_parse_message( &rx_message, rx_buffer ) &&
 					mdns_status == STARTED &&
-                    from.sin_addr.s_addr != htonl(ip) &&
+                    from.sin_addr.s_addr != ip &&
                     MDNS_IS_QUERY( rx_message ) ) {
 					/* TODO: if status < STARTED, check message for probe
 							 response, see if we have a conflict */

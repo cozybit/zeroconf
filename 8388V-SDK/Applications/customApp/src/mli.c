@@ -29,6 +29,8 @@
 //#include "psmgr.h"
 //#include "w81TxMDS.h"
 
+#include <string.h> /* XXX */
+
 extern int IsRxAllowFromMAC(void);
 extern int psmgr_IsTxAllowed(void);
 extern int TxMacDataService_SendEvent(uint16 Event);
@@ -497,6 +499,19 @@ void mli_TxDataEnqueue(wcb_t *io_pPkt, MLI_RET_TX_BUFF retTxBuff)
    mli_tx_pkt_q_element_t *tmpelement;
    int bindex;
 
+/* XXX: 'fix multicast 224.0.0.251 hack */
+	void *test;
+	UINT32 addr = 0xFB0000E0;
+	UINT8 dest[6] = {0x01,0x00,0x5E,0x00,0x00,0xFB};
+
+	test = (void*)(io_pPkt);
+	(UINT8*)test += (io_pPkt->TxPacketOffset+30);
+	if( !memcmp( test, &addr, 4 ) ) {
+		io_pPkt->TxDestAddrHigh = 0x0001;
+		io_pPkt->TxDestAddrLow = 0xFB00005E;
+		memcpy( (UINT8 *)(io_pPkt)+io_pPkt->TxPacketOffset, &dest[0], 6 );
+	}
+/* XXX: end hack */
 
 	int_sta = os_if_save_EnterCriticalSection();
 

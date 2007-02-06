@@ -75,6 +75,7 @@ typedef TX_MUTEX sys_mutex;
 #define DEBUG(...) DBG_P(( DBG_L0 __VA_ARGS__));
 
 /* Compiler stuff */
+#define PACKED __packed
 #define PACKED_STRUCT_BEGIN __packed
 #define PACK_STRUCT_END
 

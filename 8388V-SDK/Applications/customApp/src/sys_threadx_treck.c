@@ -315,10 +315,12 @@ extern char net_mask[4];
 extern char def_gtwy[4];
 extern int tcp_ready;
 
-
+/* get the current IP address in network order */
 UINT32 sys_get_ip( void )
 {
-	return ntohl((*((UINT32 *)ip_addr)));
+	UINT32 ip;
+	memcpy( &ip, ip_addr, 4 );
+	return ip;
 }
 
 extern int cmd_in_progress;

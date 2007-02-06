@@ -50,12 +50,13 @@ PACKED_STRUCT_BEGIN struct mdns_header {
 } ;
 
 /* Resource Record (RR) representations */
-struct rr_a { UINT32 ip; };
-struct rr_cname { char *name; };
-struct rr_txt { char *data; };
-struct rr_ns { char *name; };
-struct rr_srv { UINT16 priority; UINT16 weight; UINT16 port; char *target; };
-struct rr_ptr { char *name; };
+PACKED_STRUCT_BEGIN struct rr_a { UINT32 ip; };
+PACKED_STRUCT_BEGIN struct rr_cname { char *name; };
+PACKED_STRUCT_BEGIN struct rr_txt { char *data; };
+PACKED_STRUCT_BEGIN struct rr_ns { char *name; };
+PACKED_STRUCT_BEGIN struct rr_srv { UINT16 priority; UINT16 weight; 
+									UINT16 port; char *target; };
+PACKED_STRUCT_BEGIN struct rr_ptr { char *name; };
 
 /* Resource Record (RR) pointer */
 PACKED_STRUCT_BEGIN union rr_p {

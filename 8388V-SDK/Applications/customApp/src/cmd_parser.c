@@ -310,19 +310,12 @@ void cmd_parser(unsigned long data)
 		}
 	   
 		else if(!memcmp(user_string, "printip", 7)){
-			unsigned char ip[4] = {0, 0, 0, 0};
-			unsigned char nm[4] = {0, 0, 0, 0};
-			unsigned char gw[4] = {0, 0, 0, 0};
-		   
-			if(treck_init != 0) {
-				memcpy((void *)ip, ip_addr, 4);
-				memcpy((void *)nm, net_mask, 4);
-				memcpy((void *)gw, def_gtwy, 4);
-			}
-		   
-			DBG_P(( DBG_L0 "%d.%d.%d.%d,", ip[0], ip[1], ip[2], ip[3]));
-			DBG_P(( DBG_L0 "%d.%d.%d.%d,", nm[0], nm[1], nm[2], nm[3]));
-			DBG_P(( DBG_L0 "%d.%d.%d.%d\r\n", gw[0], gw[1], gw[2], gw[3]));
+			DBG_P(( DBG_L0 "%d.%d.%d.%d,", ip_addr[0], ip_addr[1], ip_addr[2], 
+				ip_addr[3] ));
+			DBG_P(( DBG_L0 "%d.%d.%d.%d,", net_mask[0], net_mask[1], 
+				net_mask[2], net_mask[3] ));
+			DBG_P(( DBG_L0 "%d.%d.%d.%d\r\n", def_gtwy[0], def_gtwy[1], 
+				def_gtwy[2], def_gtwy[3] ));
 		}
 	   
 		else if(!memcmp(user_string, "printmac", 8)){
@@ -380,20 +373,16 @@ void cmd_parser(unsigned long data)
 			}
 		}
 
-		else if(!memcmp(user_string, "mcast", 5 )){
-			curr_pos = &user_string[get_next_word(user_string)];
-			if(!memcmp(curr_pos, "get", 3 )) {
-				userif_prepare_mcast_cmd();
-			}
-			else if(!memcmp(curr_pos, "set", 3 )) {
-				userif_prepare_mcast_add_cmd();
-			}
+	else if(!memcmp(user_string, "mcast", 5 )){
+		curr_pos = &user_string[get_next_word(user_string)];
+		if(!memcmp(curr_pos, "get", 3 )) {
+			userif_prepare_mcast_cmd();
 		}
+		else if(!memcmp(curr_pos, "set", 3 )) {
+			userif_prepare_mcast_add_cmd();
+		}
+	}
 
-		else if(!memcmp(user_string, "help", 4)) {
-			print_usage();
-		}
-	   
 		/* log interface */
 		else if(!memcmp(user_string, "log", 3)) {
 			curr_pos = &user_string[get_next_word(user_string)];
@@ -427,12 +416,20 @@ void cmd_parser(unsigned long data)
 				DBG_P(( DBG_L0 "No such log command: %s.\r\n", curr_pos));
 			}
 		}
-	   
-		else if(!memcmp(user_string, "help", 4)) {
-			print_usage();
-		}
-	   
-		else {
+
+	 else if(!memcmp(user_string, "help", 4)) {
+		 print_usage();
+	 }
+
+	 /* Temp command! */
+	 else if(!memcmp(user_string, "arp", 3)) {
+		 char mac[6];
+		 GetMACAddr(NULL, mac);
+		 ret = ll_send_probe(mac, 0x01020304);
+		 DBG_P(( DBG_L0 "Send arp: %d.\r\n", ret));
+	 }
+
+	else {
 #ifdef UART_DRV
 			DBG_P(( DBG_L0 "Unknown command.\r\n")); 
 #endif		 

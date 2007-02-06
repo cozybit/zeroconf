@@ -307,7 +307,7 @@ void userif_prepare_mcast_cmd(void)
     ((host_MsgHdr_t*)cmd_buffer)->Msg = host_CMD_MAC_MULTICAST_ADR;
     ((host_MsgHdr_t*)cmd_buffer)->Size = sizeof(host_MsgHdr_t) + sizeof(host_multicast_adr_t);
 	mcast_p = (host_multicast_adr_t *)((uint32)cmd_buffer + sizeof(host_MsgHdr_t));
-	mcast_p->Action = 0; /* XXX: 0 is GET, 1 is SET */
+	mcast_p->Action = 0; /* GET */
 	os_EventTrigger(sysinfo_CB_PROC_Q_EVENT, CBP_EV_HOST_OPC_RECEIVED);
 }
 
@@ -321,7 +321,7 @@ void userif_prepare_mcast_add_cmd( void )
 	((host_MsgHdr_t*)cmd_buffer)->Msg = host_CMD_MAC_MULTICAST_ADR;
     ((host_MsgHdr_t*)cmd_buffer)->Size = sizeof(host_MsgHdr_t) + sizeof(host_multicast_adr_t);
     mcast_p = (host_multicast_adr_t *)((uint32)cmd_buffer + sizeof(host_MsgHdr_t));
-    mcast_p->Action = 1; /* XXX: 0 is GET, 1 is SET */
+    mcast_p->Action = 1; /* SET */
 	mcast_p->NumOfAdrs = 1;
 	memcpy( (void *)&(mcast_p->MACList), &mac[0], 6 );
     os_EventTrigger(sysinfo_CB_PROC_Q_EVENT, CBP_EV_HOST_OPC_RECEIVED);
@@ -723,11 +723,9 @@ void process_cbproc_response(void) {
 	/* XXX get/set Multicast MAC filter */
 	case host_RET_MAC_MULTICAST_ADR:
 	mcast_rsp = (host_multicast_adr_t *)((UINT32)cmd_res_buffer+sizeof(host_MsgHdr_t));
-	DBG_P(( DBG_L0 "host_RET_MAC_MULTICAST_ADR: action=%u,num=%u\r\n",
-		mcast_rsp->Action, mcast_rsp->NumOfAdrs ));
 	if( mcast_rsp->Action == 0 ) { /* GET */
 		for( i = 0; i < mcast_rsp->NumOfAdrs; i++ ) {
-			DBG_P(( DBG_L0 "\t%u: 0x%02X:%02X:%02X:%02X:%02X:%02X\r\n", i, 
+			DBG_P(( DBG_L0 "addr #%u: %02X:%02X:%02X:%02X:%02X:%02X\r\n", i+1, 
 				*((UINT8*)(mcast_rsp->MACList+0+i*6)),
 				*((UINT8*)(mcast_rsp->MACList+1+i*6)),
 				*((UINT8*)(mcast_rsp->MACList+2+i*6)),
