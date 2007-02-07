@@ -400,6 +400,11 @@ sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask);
  */
 sys_status sys_tcpip_halt(void);
 
+
+/* YIKES!  platform-specific stuff belongs in platform specific part of this
+ * file!  If you need additional interfaces, please define them and document
+ * them here, then implement them in the sys_*.c file.
+ */
 #define socket_close(s) tfClose(s)
 #define socket_blocking_off(s) tfBlockingState(s,TM_BLOCKING_OFF) 
 

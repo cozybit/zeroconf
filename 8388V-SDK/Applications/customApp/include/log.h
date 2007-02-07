@@ -13,7 +13,7 @@
  * Parameters
  ******************************************************************************/
 
-#define LOG_SIZE 1024 /* Must be a power of 2! */
+#define LOG_SIZE 512 /* Must be a power of 2! */
 #define MAX_LOG_LINE 128 /* Maximum length of a single log line */
 
 /******************************************************************************
