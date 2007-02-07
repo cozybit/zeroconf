@@ -1,0 +1,6 @@
+109a110
+>     s.setsockopt( socket.SOL_SOCKET, socket.SO_REUSEADDR, 1 ) #XXX
+207a209
+>     s.setsockopt( socket.SOL_SOCKET, socket.SO_REUSEADDR, 1 ) #XXX
+301a304
+>     s.setsockopt( socket.SOL_SOCKET, socket.SO_REUSEADDR, 1 ) #XXX

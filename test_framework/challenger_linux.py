@@ -16,6 +16,7 @@ from dpkt import ethernet
 import myarp
 import myeth
 from myarp import myarp
+from mdns import mdns
 
 class challenger_linux(challenger_base):
 	def __init__( self, conf ):
@@ -93,3 +94,9 @@ class challenger_linux(challenger_base):
 		iface = self.conf.CHALLENGER_INTERFACE
 		s.bind((iface, ethernet.ETH_TYPE_ARP))
 		s.send(str(packet))
+
+	def send_mdns_query( self, name ):
+		m = mdns()
+		if m.query( name, self.conf.MANAGED_CHALLENGER_IP ):
+			return ''
+		return 'no response'

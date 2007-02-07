@@ -15,6 +15,17 @@ system.  The tests are defined in the files test_*.py.
 Using the framework
 -------------------
 
+0: Get some additional Python modules
+
+The 'dnspython' module is needed, it can be downloaded from 
+http://www.dnspython.org/ --  After unpacking the archive, apply the patch file
+'pythondns.patch' to the file dns/query.py inside the pythondns package.  After
+patching, install the module (typically 'sudo ./setup install').
+
+The 'dpkt' module is also required.  It can be downloaded from
+http://code.google.com/p/dpkt/downloads/list -- After unpacking the archive, 
+install the module (typically 'sudo ./setup install').
+
 1: Create a configuration file
 
 To run these tests, you should first create a configuration.py file.  The easy
