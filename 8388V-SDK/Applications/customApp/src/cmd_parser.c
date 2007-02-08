@@ -83,6 +83,7 @@ void print_usage(void)
 	DBG_P(( DBG_L0 "	mdns start\r\n")); 
 	DBG_P(( DBG_L0 "	mdns stop\r\n")); 
 	DBG_P(( DBG_L0 "	log [init|shutdown|dump|purge|write]\r\n")); 
+	DBG_P(( DBG_L0 "	httpd [start|stop]\r\n"));
 }
 
 /**
@@ -382,6 +383,24 @@ void cmd_parser(unsigned long data)
 			userif_prepare_mcast_add_cmd();
 		}
 	}
+
+		/* httpd interface */
+		else if(!memcmp(user_string, "httpd", 5)) {
+			curr_pos = &user_string[get_next_word(user_string)];
+			if(!memcmp(curr_pos, "start", 5)) {
+				ret = httpd_init();
+				if(ret)
+					DBG_P(( DBG_L0 "Error launching httpd: %d.\r\n",ret));
+			}
+			else if(!memcmp(curr_pos, "stop", 4)) {
+				ret = httpd_shutdown();
+				if(ret)
+					DBG_P(( DBG_L0 "Error stopping httpd: %d.\r\n", ret));
+			}
+			else {
+				DBG_P(( DBG_L0 "No such httpd command: %s.\r\n", curr_pos));
+			}
+		}
 
 		/* log interface */
 		else if(!memcmp(user_string, "log", 3)) {

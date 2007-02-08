@@ -31,7 +31,7 @@ ifeq (1, $(BUILT_NO_HOST))
 OBJS = \
 	customApp.o mli.o version_nohost.o eping.o userif.o hostsme_sm.o \
 	cmd_parser.o peersta_api.o linklocal.o mdns_responder.o sys_threadx_treck.o \
-	mdns.o log.o
+	mdns.o log.o httpd.o
 else
 OBJS = customApp.o mli.o version_sdk.o
 endif

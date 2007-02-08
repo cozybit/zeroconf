@@ -419,5 +419,17 @@ sys_status sys_tcpip_halt(void);
  * a socket, but some other function to close a socket is available. */
 void sys_socket_close( int s );
 void sys_socket_blocking_off(  int s );
+int sys_socket_error( int s );
+
+/******************************************************************************
+ * Time Interface
+ ******************************************************************************/
+
+/**
+ * sys_time_get: Get current system time in ms
+ *
+ * Returns: time in ms.
+ */
+sys_time sys_time_get(void);
 
 #endif

@@ -100,7 +100,7 @@ sys_status log(char *str, ...)
 	} else {
 		memcpy(&log_buffer[wp], final_str, LOG_SIZE - wp);
 		memcpy(&log_buffer[0], &final_str[LOG_SIZE - wp], len - (LOG_SIZE - wp));
-		wp = len - (LOG_SIZE - wp) + 1;
+		wp = len - (LOG_SIZE - wp);
 	}
 
 	/* Update read pointer */

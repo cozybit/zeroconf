@@ -368,6 +368,10 @@ sys_status sys_tcpip_halt(void)
 	return SYS_SUCCESS;
 }
 
+/*****************************************************************************
+ * Modified BSD socket interface
+ *****************************************************************************/
+
 /* the Treck TCP/IP stack does not have 'close' in case that name conflicts
  * with an OS function, so we call tfClose() instead */
 void sys_socket_close( int s )
@@ -379,4 +383,19 @@ void sys_socket_close( int s )
 void sys_socket_blocking_off( int s ) 
 {
 	tfBlockingState( s, TM_BLOCKING_OFF );
+}
+
+int sys_socket_error( int s )
+{
+	return tfGetSocketError(s);
+}
+
+/******************************************************************************
+ * Time Interface
+ ******************************************************************************/
+
+sys_time sys_time_get(void)
+{
+	unsigned long ticks = tx_time_get();
+	return SYS_MSEC_PER_TICK * ticks;
 }
