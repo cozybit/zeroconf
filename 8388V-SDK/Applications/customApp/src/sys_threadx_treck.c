@@ -307,6 +307,19 @@ sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
 }
 
 /******************************************************************************
+ * System Time Interface
+ ******************************************************************************/
+
+/* get the current time (in milliseconds) */
+UINT32 get_time( void )
+{
+	UINT32 ticks;
+    os_Time(&ticks); /* get OS time in 10ms/tick */
+    ticks *= 10; /* convert for 1ms/tick resolution */
+    return ticks;
+}
+
+/******************************************************************************
  * TCP/IP-Layer Network Interface
  ******************************************************************************/
 
@@ -353,4 +366,17 @@ sys_status sys_tcpip_halt(void)
 	mli_removeCustomRxDataHandler(eTCPRxDataHandler);
 	tcp_ready = 0;
 	return SYS_SUCCESS;
+}
+
+/* the Treck TCP/IP stack does not have 'close' in case that name conflicts
+ * with an OS function, so we call tfClose() instead */
+void sys_socket_close( int s )
+{
+	tfClose( s );
+}
+
+/* Treck has its own API function for changing the blocking state */
+void sys_socket_blocking_off( int s ) 
+{
+	tfBlockingState( s, TM_BLOCKING_OFF );
 }

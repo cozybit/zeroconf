@@ -375,10 +375,18 @@ sys_status sys_link_get_mac(char mac[6]);
 sys_status sys_link_sendto(char mac_dest[6], short type, char *payload,
 						   unsigned int len);
 
-/******************************************************************************
- * TCP/IP-Layer Network Interface
- ******************************************************************************/
+/*****************************************************************************
+ * System Time Interface
+ *****************************************************************************/
 
+/* get the current time (in milliseconds) */
+UINT32 get_time( void );
+
+/*****************************************************************************
+ * TCP/IP-Layer Network Interface
+ *****************************************************************************/
+
+/* get the current IP address in network order */
 UINT32 sys_get_ip( void );
 
 /**
@@ -401,11 +409,15 @@ sys_status sys_tcpip_init(unsigned int ip, unsigned int netmask);
 sys_status sys_tcpip_halt(void);
 
 
-/* YIKES!  platform-specific stuff belongs in platform specific part of this
- * file!  If you need additional interfaces, please define them and document
- * them here, then implement them in the sys_*.c file.
- */
-#define socket_close(s) tfClose(s)
-#define socket_blocking_off(s) tfBlockingState(s,TM_BLOCKING_OFF) 
+/*****************************************************************************
+ * Modified BSD socket interface
+ *****************************************************************************/
+
+/* These are wrappers for normal BSD socket functions that are named 
+ * differently on some systems.  For example, close() might not do the same 
+ * thing on some systems as it does on others and it might not be usable with
+ * a socket, but some other function to close a socket is available. */
+void sys_socket_close( int s );
+void sys_socket_blocking_off(  int s );
 
 #endif
