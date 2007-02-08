@@ -421,14 +421,6 @@ void cmd_parser(unsigned long data)
 		 print_usage();
 	 }
 
-	 /* Temp command! */
-	 else if(!memcmp(user_string, "arp", 3)) {
-		 char mac[6];
-		 GetMACAddr(NULL, mac);
-		 ret = ll_send_probe(mac, 0x01020304);
-		 DBG_P(( DBG_L0 "Send arp: %d.\r\n", ret));
-	 }
-
 	else {
 #ifdef UART_DRV
 			DBG_P(( DBG_L0 "Unknown command.\r\n")); 
