@@ -1,9 +1,8 @@
-/******************************************************************************
- * system.h
+/*! \file system.h 
+ * 	\brief System abstraction for cozybit components.  
  *
- * This file represents the system abstraction for cozybit components.  Porting
- * cozybit components between systems should be as simple as implementing the
- * functions in this header file.
+ * Porting cozybit components between systems should be as simple as 
+ * implementing the functions in this header file.
  *
  * (c) 2007 cozybit, inc.
  ******************************************************************************/

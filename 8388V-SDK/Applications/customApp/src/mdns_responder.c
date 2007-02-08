@@ -1,7 +1,5 @@
-/******************************************************************************
- * mdns_responder.c
- *
- * 
+/*! \file mdns_responder.c
+ *  \brief mDNS Responder implementation
  ******************************************************************************/
 
 #include "system.h"
@@ -12,24 +10,28 @@
 /* Debugging and logging */
 #ifdef MDNS_DEBUG
 #include "log.h"
-#define LOG(...) log(__VA_ARGS__)
+#define LOG(...) log(__VA_ARGS__) /**< built with logging suppoprt */
 #else
-#define LOG(...) {}
+#define LOG(...) {} /**< built without logging support */
 #endif
 
 static sys_thread mdns_main_thread;
 static unsigned char mdns_stack[2048];
-int mc_sock;
+int mc_sock; /**< multicast socket used for mDNS communication */
 
+/** mDNS responder state */
 enum mdns_status_t {
-	INITIALIZED,
-	FIRST_PROBE,	/* wait a random amount of time (0-250ms) and probe */
-	SECOND_PROBE,   /* wait 250ms and probe */
-	THIRD_PROBE,	/* wait 250ms and probe */
-	ANNOUNCE,	   /* send announcement message to claim name */
-	STARTED		 /* we have claimed our name */
+	INITIALIZED,    /**< initial state: no probes sent yet */
+	FIRST_PROBE,	/**< wait a random amount of time (0-250ms) and probe */
+	SECOND_PROBE,   /**< wait 250ms and probe */
+	THIRD_PROBE,	/**< wait 250ms and probe */
+	ANNOUNCE,	   	/**< send announcement message to claim name */
+	STARTED			/**< we have claimed our name */
 } mdns_status;
 
+/** create and bind the multicast socket used for mDNS communication
+ *
+ * \retval int multicast socket */
 int m_socket( void )
 {
 	int sock;
@@ -81,9 +83,18 @@ int m_socket( void )
 	return sock;
 }
 
-/* TODO: this function should take a list of mdns_rr types that can then be
+/** send an mDNS message to announce our service
+ *
+ *  This function adds all resource records to an mDNS message which, when
+ *  sent, will announce our device on the network.
+ *
+ *  TODO: this function should take a list of mdns_rr types that can then be
  * 		 added programatically, though this means that the domain name part
- * 		 would need to be specified in the list as well... */
+ * 		 would need to be specified in the list as well... 
+ *
+ *  \param[in] m The mDNS message to which the records will be added.
+ *  \param[in] buffer the transmit buffer where the records will be copied
+ *  \param[in] sock multicast socket on which to send the message. */
 void mdns_announce( struct mdns_message *m, char *buffer, int sock,
 					struct mdns_rr *a, struct mdns_rr *srv, 
 					struct mdns_rr *txt, struct mdns_rr *ptr )
@@ -106,6 +117,11 @@ void mdns_announce( struct mdns_message *m, char *buffer, int sock,
 		LOG( "mDNS: error, failed to send message\r\n" );
 }
 
+/** carry out the mDNS start sequence and then act as a responder
+ *
+ *  This is the main thread.  It first claims our name and then announces our
+ *  service on the network.  After that it acts as an mDNS responder, answering
+ *  questions that are relevant to our name and service. */
 sys_thread_return mdns_main( sys_thread_data data )
 {
 	int active_fds;
@@ -174,7 +190,7 @@ sys_thread_return mdns_main( sys_thread_data data )
 
 	start_time = get_time();
 	timeout.tv_sec = 0;
-	timeout.tv_usec = 250000;
+	timeout.tv_usec = sys_random( 0, 250 )*1000;
 	while( 1 ) {
 		FD_ZERO(&fds);
 		FD_SET( mc_sock, &fds);
@@ -237,7 +253,7 @@ sys_thread_return mdns_main( sys_thread_data data )
 	}
 }
 
-/* initialize mdns responder state and launch mdns main thread */
+/** initialize mdns responder state and launch mdns main thread */
 sys_status mdns_responder_init( void )
 {
 	mdns_status = INITIALIZED;
@@ -245,6 +261,7 @@ sys_status mdns_responder_init( void )
 			(void *)&mdns_stack[0], sizeof(mdns_stack) );
 }
 
+/** stop mdns responder thread */
 sys_status mdns_responder_shutdown( void )
 {
 	sys_socket_close(mc_sock);

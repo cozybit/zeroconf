@@ -1,3 +1,6 @@
+/*! \file mdns.c
+ *  \brief low-level mDNS functions */
+
 #include "system.h"
 #include "mdns.h"
 

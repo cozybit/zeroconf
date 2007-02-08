@@ -1,4 +1,5 @@
-/** \file mdns.h mDNS API and definitions */
+/*! \file mdns.h 
+ *  \brief mDNS API and definitions */
 
 #ifndef MDNS_H
 #define MDNS_H
@@ -6,45 +7,49 @@
 #include "system.h"
 
 /* settings */
-#define MDNS_BUFFER_LEN		1000 /* mDNS message buffers */
-#define MDNS_MAX_NAME_LEN	255	 /* defined by the standard */
-#define MDNS_MAX_LABEL_LEN	63	 /* defined by the standard */
-#define MDNS_MAX_QUESTIONS	32
-#define MDNS_MAX_ANSWERS	10
+
+#define MDNS_BUFFER_LEN		1000	/**< length of mDNS TX and RX buffers */
+#define MDNS_MAX_NAME_LEN	255		/**< max octets allowed in a domain name */
+#define MDNS_MAX_LABEL_LEN	63 		/**< max octets allowed in a label */
+#define MDNS_MAX_QUESTIONS	32 		/**< max Questions allowed in a message */
+#define MDNS_MAX_ANSWERS	10 		/**< max Answers allowed in a message */
 
 /* class */
-#define C_IN	0x0001	/* Internet */
-#define C_FLUSH	0x8001	/* FLUSH */
+
+#define C_IN	0x0001 /**< DNS and mDNS Internet class */
+#define C_FLUSH	0x8001 /**< mDNS Flush class (Internet with MSB set to 1) */
 
 /* types (that are used in mDNS) */
-#define T_A		1	/* host address */
-#define T_NS	2	/* authoritative name server */
-#define T_CNAME	5	/* canonical name for an alias */
-#define T_PTR	12	/* domain name pointer */
-#define T_TXT	16	/* text strings */
-#define T_SRV	33	/* service */
-#define T_ANY	255	/* all records */
 
-/* mDNS fixed-size message header */
+#define T_A		1	/**< host address */
+#define T_NS	2	/**< authoritative name server */
+#define T_CNAME	5 	/**< canonical name for an alias */
+#define T_PTR	12	/**<  domain name pointer */
+#define T_TXT	16	/**< text strings */
+#define T_SRV	33	/**< service record */
+#define T_ANY	255	/**< any records (wildcard) */
+
+/*! \struct mdns_header
+ *  \brief mDNS fixed-size message header */
 PACKED_STRUCT_BEGIN struct mdns_header {
-	UINT16 id;
+	UINT16 id; /**< transaction ID */
 	PACKED_STRUCT_BEGIN union {
 		PACKED_STRUCT_BEGIN struct { UINT16
-			rcode:4,	/* response code */
-			cd:1,		/* checking disabled  RFC-2535*/
-			ad:1,		/* authentic data RFC-2535 */
-			z:1,		/* zero */
-			ra:1,		/* recursion available */
-			rd:1,		/* recursion desired */
-			tc:1,		/* truncated */
-			aa:1,		/* authoritative answer */
-			opcode:4,	/* should be 0 for mDNS messages */
-			qr:1;		/* query/response */
+			rcode:4,	/**< response code */
+			cd:1,		/**< checking disabled  RFC-2535*/
+			ad:1,		/**< authentic data RFC-2535 */
+			z:1,		/**< zero */
+			ra:1,		/**< recursion available */
+			rd:1,		/**< recursion desired */
+			tc:1,		/**< truncated */
+			aa:1,		/**< authoritative answer */
+			opcode:4,	/**< should be 0 for mDNS messages */
+			qr:1;		/**< query/response */
 		} fields ;
 		UINT16 num;
 	} flags;
-	UINT16 qdcount; /* number of entries in questions section */
-	UINT16 ancount; /* number of resource records in answer section */
+	UINT16 qdcount; /**< number of entries in questions section */
+	UINT16 ancount; /**< number of resource records in answer section */
 	UINT16 nscount;
 	UINT16 arcount;
 } ;
@@ -58,7 +63,8 @@ PACKED_STRUCT_BEGIN struct rr_srv { UINT16 priority; UINT16 weight;
 									UINT16 port; char *target; };
 PACKED_STRUCT_BEGIN struct rr_ptr { char *name; };
 
-/* Resource Record (RR) pointer */
+/*! \union rr_p
+ *  \brief Resource Record (RR) pointer */
 PACKED_STRUCT_BEGIN union rr_p {
 	struct rr_a *a;
 	struct rr_cname *cname;
@@ -68,42 +74,53 @@ PACKED_STRUCT_BEGIN union rr_p {
 	struct rr_ptr *ptr;
 } ;
 
-/* mDNS question (query) representation */
+/*! \struct mdns_question
+ *  \brief mDNS question (query) representation */
 PACKED_STRUCT_BEGIN struct mdns_question {
-	char *qname;
-	UINT16 qtype; /* question type */
-	UINT16 qclass; /* question class */
+	char *qname; /**< question domain name */
+	UINT16 qtype; /**< question type */
+	UINT16 qclass; /**< question class */
 } ;
 
-/* mDNS resource record (RR) format */
+/*! \struct mdns_resource
+ *  \brief mDNS resource record (RR) format */
 PACKED_STRUCT_BEGIN struct mdns_resource {
-	char *name;
-	UINT16 type; /* resource type for the RDATA field */
-	UINT16 class; /* resource class for the RDATA field */
-	UINT32 ttl; /* how long the record may be cached */
-	UINT16 rdlength; /* length of RDATA field */
-	void *rdata;
+	char *name; /**< resource domain name */
+	UINT16 type; /**< resource type for the RDATA field */
+	UINT16 class; /**< resource class for the RDATA field */
+	UINT32 ttl; /**< how long the record may be cached */
+	UINT16 rdlength; /**< length of RDATA field */
+	void *rdata; /**< resource data (RDATA) */
 } ;
 
-/* mDNS message representation */
+/*! \struct mdns_message
+ *  \brief mDNS message representation */
 PACKED_STRUCT_BEGIN struct mdns_message {
 	struct mdns_header *header;
-	char *cur;
+	char *cur; /**< message data pointer */
 	/* pointers to (and representations of) questions and answers */
 	struct mdns_question questions[MDNS_MAX_QUESTIONS];
 	struct mdns_resource answers[MDNS_MAX_ANSWERS];
 	UINT16 num_questions, num_answers; /* for convenience */
 } ;
 
-/* mDNS resource record wrapper */
+/*! \struct mdns_rr
+ *  \brief mDNS resource record wrapper */
 PACKED_STRUCT_BEGIN struct mdns_rr {
-	void(*transfer)( struct mdns_message *m, union rr_p r );
-	UINT16(*length)( union rr_p r );
-	union rr_p data;
+	void(*transfer)( struct mdns_message *m, union rr_p r ); /**< move the 
+										resource record data into a message */
+	UINT16(*length)( union rr_p r ); /**< calculate the length of the resource 
+										  record data */
+	union rr_p data; /**< the resource record data */
 } ;
 
 /* helper macros */
+
+/*! \def MDNS_IS_QUERY(msg)
+ *  \brief is the message a query? */
 #define MDNS_IS_QUERY(msg)		(msg.header->flags.fields.qr == 0)
+/*! \def MDNS_IS_RESPONSE(msg)
+ *  \brief is the message a query response? */
 #define MDNS_IS_RESPONSE(msg)	(msg.header->flags.fields.qr == 1)
 
 /** Mark and set up a message for transmit.
@@ -194,7 +211,7 @@ void mdns_add_answer( struct mdns_message *m, char *name, UINT16 type,
  *
  * \param[in] m The message to use on the buffer.
  * \param[in] b The buffer to parse.
- * \retval init 1 on success, 0 on failure.
+ * \retval int 1 on success, 0 on failure.
  * */
 int mdns_parse_message( struct mdns_message *m, char *b );
 
