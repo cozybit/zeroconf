@@ -17,17 +17,19 @@
 
 static sys_thread mdns_main_thread;
 static unsigned char mdns_stack[2048];
+static int mdns_running = 0;
+
 int mc_sock = -1; /**< multicast socket used for mDNS communication */
 
 /** mDNS responder state */
-enum mdns_status_t {
+enum mdns_state {
 	INITIALIZED,    /**< initial state: no probes sent yet */
 	FIRST_PROBE,	/**< wait a random amount of time (0-250ms) and probe */
 	SECOND_PROBE,   /**< wait 250ms and probe */
 	THIRD_PROBE,	/**< wait 250ms and probe */
 	ANNOUNCE,	   	/**< send announcement message to claim name */
 	STARTED			/**< we have claimed our name */
-} mdns_status;
+};
 
 /** create and bind the multicast socket used for mDNS communication
  *
@@ -145,6 +147,7 @@ sys_thread_return mdns_main( sys_thread_data data )
 	struct sockaddr_in from;
 	socklen_t in_size = sizeof(struct sockaddr_in);
 	UINT32 ip = sys_get_ip(); /* XXX will not be needed with the final API*/
+	enum mdns_state mdns_status = INITIALIZED;
 
 	/* XXX BEGIN CONFIGURATUION DATA */
 
@@ -266,17 +269,26 @@ sys_thread_return mdns_main( sys_thread_data data )
 /** initialize mdns responder state and launch mdns main thread */
 sys_status mdns_responder_init( void )
 {
-	mdns_status = INITIALIZED;
-	return sys_thread_create( &mdns_main_thread, mdns_main, 0, 
-			(void *)&mdns_stack[0], sizeof(mdns_stack) );
+	sys_status ret;
+	if(mdns_running != 0)
+		return SYS_SUCCESS;
+	ret = sys_thread_create( &mdns_main_thread, mdns_main, 0, 
+							 (void *)&mdns_stack[0], sizeof(mdns_stack) );
+	if(ret == SYS_SUCCESS)
+		mdns_running = 1;
+	
+	return ret;
 }
 
 /** stop mdns responder thread */
 sys_status mdns_responder_shutdown( void )
 {
+	if(mdns_running == 0)
+		return SYS_SUCCESS;
 	if( mc_sock >= 0 )
 		sys_socket_close(mc_sock);
 	sys_thread_halt( &mdns_main_thread );
 	sys_thread_delete( &mdns_main_thread );
+	mdns_running = 0;
 	return SYS_SUCCESS;
 }
