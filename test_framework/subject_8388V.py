@@ -63,13 +63,9 @@ class subject_8388V(subject_base):
 		# throw away the stuff echoed by the 8388V
 		output = ""
 		resp = self.ser.readline()
-		timeout = 0
 		while resp != "> ":
 			output += resp
 			resp = self.ser.readline()
-			timeout = timeout + 1
-			if timeout == 5:
-				print "Too long reading serial.  Read \"" + output + "\""
 		output = output.rstrip("\r\n")
 		mutex.release()
 		return output

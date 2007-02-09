@@ -18,7 +18,7 @@ class test_ll_simple(test_base):
 		challenger.set_ip(ip, nm, gw)		
 		subject.set_wifi(ssid=conf.ADHOC_SSID, mode="ad-hoc")
 		subject.start_ipv4ll()
-		time.sleep(2) # let the link-local take its course
+		time.sleep(8) # let the link-local take its course
 		[ip, nm, gw] = subject.get_ip()
 		if challenger.ping(ip) == False:
 			str = "Failed to ping " + ip

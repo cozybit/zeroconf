@@ -42,11 +42,11 @@ class test_ll_normal(test_base):
 		t.start()
 
 		try:
-			probe1 = challenger.recv_arp(3)
-			probe2 = challenger.recv_arp(3)
-			probe3 = challenger.recv_arp(3)
-			announce1 = challenger.recv_arp(3)
-			announce2 = challenger.recv_arp(3)
+			probe1 = challenger.recv_arp(5)
+			probe2 = challenger.recv_arp(5)
+			probe3 = challenger.recv_arp(5)
+			announce1 = challenger.recv_arp(5)
+			announce2 = challenger.recv_arp(5)
 			
 			mac = self.subject.get_mac()
 			probe1.is_probe(mac)

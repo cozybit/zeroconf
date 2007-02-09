@@ -41,21 +41,29 @@ class test_ll_conflict(test_base):
 		t = Timer(1, subject.start_ipv4ll)
 		t.start()
 
+		mac = challenger.get_mac()
+		arp_p = arp.ARP()
+		arp_p.sha = myeth.eth_aton(mac)          # sender hardware addr
+		arp_p.tha = myeth.ETH_ADDR_UNSPEC  # dest hardware addr 
+		arp_p.op = arp.ARP_OP_REPLY
+		
 		try:
-			mac = challenger.get_mac()
 			probe = challenger.recv_arp(3)
 			ip = probe.target_ip
-			subject.stop_ipv4ll()
-		
-			arp_p = arp.ARP()
-			arp_p.sha = myeth.eth_aton(mac)          # sender hardware addr
-			arp_p.spa = socket.inet_aton(ip) # sender ip addr
-			arp_p.tha = myeth.ETH_ADDR_UNSPEC  # dest hardware addr 
 			arp_p.tpa = socket.inet_aton(ip) # ip addr of request
-			arp_p.op = arp.ARP_OP_REPLY
+			arp_p.spa = socket.inet_aton(ip) # sender ip addr
+		
+			# send response to arp probe.
 			challenger.send_arp(arp_p, myeth.ETH_ADDR_BROADCAST)
 
+			# now we should see a probe with a new address.
+			probe = challenger.recv_arp(3)
+			new_ip = probe.target_ip
 			subject.stop_ipv4ll()
+
+			if new_ip == ip:
+				return "Subject failed to choose new IP after probe response."
+			
 			return ""
 
 		except socket.timeout:
