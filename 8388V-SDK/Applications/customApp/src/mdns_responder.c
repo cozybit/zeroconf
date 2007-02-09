@@ -17,7 +17,7 @@
 
 static sys_thread mdns_main_thread;
 static unsigned char mdns_stack[2048];
-int mc_sock; /**< multicast socket used for mDNS communication */
+int mc_sock = -1; /**< multicast socket used for mDNS communication */
 
 /** mDNS responder state */
 enum mdns_status_t {
@@ -63,7 +63,7 @@ int m_socket( void )
 	}
 
 	/* join multicast group */
-	mc.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
+	mc.imr_multiaddr.s_addr = inet_addr("224.0.0.251"); /* FIXME use macro */
 	mc.imr_interface.s_addr = sys_get_ip();
 	if( setsockopt( sock, IP_PROTOIP, IPO_ADD_MEMBERSHIP, (void *)&mc, 
 		sizeof(mc) ) < 0 ) {
@@ -88,9 +88,9 @@ int m_socket( void )
  *  This function adds all resource records to an mDNS message which, when
  *  sent, will announce our device on the network.
  *
- *  TODO: this function should take a list of mdns_rr types that can then be
- * 		 added programatically, though this means that the domain name part
- * 		 would need to be specified in the list as well... 
+ *  TODO: this function should be rewritten to use the 'service' representation
+ *  of resource records from the developer-friendly API.  This will simplify
+ *  the interface and make it more general as well.
  *
  *  \param[in] m The mDNS message to which the records will be added.
  *  \param[in] buffer the transmit buffer where the records will be copied
@@ -121,7 +121,17 @@ void mdns_announce( struct mdns_message *m, char *buffer, int sock,
  *
  *  This is the main thread.  It first claims our name and then announces our
  *  service on the network.  After that it acts as an mDNS responder, answering
- *  questions that are relevant to our name and service. */
+ *  questions that are relevant to our name and service. 
+ *
+ *  TODO: modify to work with the new API, namely 'names' and 'services' and
+ *  remove all of the hard-coded junk and RR representations that are here for
+ *  testing.
+ *
+ *  TODO: check incomming responses during start sequence, see if they are a
+ *  name collision, deal with them.
+ *
+ *  TODO: respond to messages based on their questions (when relevant), as part
+ *  of implementing the spec correctly and moving to the final API */
 sys_thread_return mdns_main( sys_thread_data data )
 {
 	int active_fds;
@@ -134,9 +144,9 @@ sys_thread_return mdns_main( sys_thread_data data )
 	struct mdns_message rx_message, tx_message;
 	struct sockaddr_in from;
 	socklen_t in_size = sizeof(struct sockaddr_in);
-	UINT32 ip = sys_get_ip();
+	UINT32 ip = sys_get_ip(); /* XXX will not be needed with the final API*/
 
-	/* BEGIN CONFIGURATUION DATA */
+	/* XXX BEGIN CONFIGURATUION DATA */
 
 	/* device settings */
 	struct mdns_rr my_a, my_srv, my_txt, my_ptr;
@@ -172,7 +182,7 @@ sys_thread_return mdns_main( sys_thread_data data )
 	my_txt.length = rr_length_txt;
 	my_txt.transfer = rr_transfer_txt;
 
-	/* END CONFIGURATION DATA */
+	/* XXX END CONFIGURATION DATA */
 
 	mc_sock = m_socket();
 	if( mc_sock < 0 ) {
@@ -264,7 +274,8 @@ sys_status mdns_responder_init( void )
 /** stop mdns responder thread */
 sys_status mdns_responder_shutdown( void )
 {
-	sys_socket_close(mc_sock);
+	if( mc_sock >= 0 )
+		sys_socket_close(mc_sock);
 	sys_thread_halt( &mdns_main_thread );
 	sys_thread_delete( &mdns_main_thread );
 	return SYS_SUCCESS;

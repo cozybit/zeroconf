@@ -6,6 +6,7 @@
 
 UINT16 mdns_name_length( char *name );
 
+/** get a host-order UINT16 from a message and advance the message pointer */
 UINT16 mdns_read_n16( struct mdns_message *m )
 {
 	PACKED UINT16 *p = (UINT16*)m->cur;
@@ -13,6 +14,7 @@ UINT16 mdns_read_n16( struct mdns_message *m )
     return ntohs(*p);
 }
 
+/** get a host-order UINT32 from a message and advance the message pointer */
 UINT32 mdns_read_n32( struct mdns_message *m )
 {
     PACKED UINT32 *p = (UINT32*)m->cur;
@@ -20,6 +22,7 @@ UINT32 mdns_read_n32( struct mdns_message *m )
     return ntohl((*p));
 }
 
+/** write a UINT16 in network order to a message, advance message pointer */
 void mdns_write_n16( struct mdns_message *m, UINT16 n )
 {
     PACKED UINT16 *p = ((UINT16*)m->cur);
@@ -27,6 +30,7 @@ void mdns_write_n16( struct mdns_message *m, UINT16 n )
     m->cur += sizeof(UINT16);
 }
 
+/** write a UINT32 in network order to a message, advance message pointer */
 void mdns_write_n32( struct mdns_message *m, UINT32 n )
 {
     PACKED UINT32* p = ((UINT32*)m->cur);
@@ -34,6 +38,7 @@ void mdns_write_n32( struct mdns_message *m, UINT32 n )
     m->cur += sizeof(UINT32);
 }
 
+/** copy a domain name to a message, advance message pointer */
 void mdns_write_name( struct mdns_message *m, char *name )
 {
     UINT16 len = mdns_name_length( name );
@@ -54,10 +59,12 @@ void mdns_mark_question( struct mdns_message *m )
     m->header->flags.fields.qr = 0; /* query */
 }
 
-/* a name may be one of:
- *  *  - a series of labels terminated by a NULL byte
- *   *  - a series of labels terminated by a pointer
- *    *  - a pointer */
+/** traverse a domain name in a message and adjust the message pointer past it
+ *
+ *  \note a name may be one of:
+ *  - a series of labels terminated by a NULL byte
+ *  - a series of labels terminated by a pointer
+ *  - a pointer */
 int mdns_traverse_name( struct mdns_message *m )
 {
     while( *(m->cur) != 0x00 ) {
@@ -74,12 +81,13 @@ int mdns_traverse_name( struct mdns_message *m )
     return 1;
 }
 
+/** calculate the length (including termiation) of a domain name */
 UINT16 mdns_name_length( char *name )
 {
     char *start = name;
 
     while( *name != 0 ) {
-        if( *name & 0xC0 ) {
+        if( *name & 0xC0 ) { /* pointer */
             name++;
             break;
         }
@@ -89,6 +97,16 @@ UINT16 mdns_name_length( char *name )
     return (UINT32)name - (UINT32)start + 1;
 }
 
+/** traverse a received message, set up data representations for its contents 
+ *
+ *  \note This function will check that the message appears to be valid, as
+ *  defined in the mDNS specification for an incomming message.  It will return
+ *  failure if the message does not appear to be valid.
+ *
+ *  \param[in] m Message structure that will represent this message. 
+ *  \param[in] b Buffer containing the message data 
+ *
+ *  \retval int 1 on success, 0 on failure */
 int mdns_parse_message( struct mdns_message *m, char *b )
 {
     UINT16 i, t;
@@ -253,6 +271,9 @@ void mdns_add_answer( struct mdns_message *m, char *name, UINT16 type,
     m->header->ancount += htons(1);
 }
 
+/** send an outgoing mDNS message 
+ *  XXX this current assumes that sendto() will send the whole message in one
+ *  shot, which is probably not a valid assumption... */
 int mdns_send_message( struct mdns_message *m, int sock )
 {
     struct sockaddr_in to;
@@ -263,7 +284,7 @@ int mdns_send_message( struct mdns_message *m, int sock )
 
     to.sin_family = AF_INET;
     to.sin_port = htons(5353);
-    to.sin_addr.s_addr = inet_addr("224.0.0.251");
+    to.sin_addr.s_addr = inet_addr("224.0.0.251"); /* FIXME use macro */
 
     len = sendto( sock, (char *)m->header, size, 0, (struct sockaddr *)&to,
         sizeof(struct sockaddr_in) );
