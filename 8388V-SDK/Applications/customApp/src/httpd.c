@@ -30,6 +30,15 @@ static int sock;
  * Private Functions
  ******************************************************************************/
 
+sys_status httpd_process_request(char *request, char *response)
+{
+	/* Create http response */
+	strcpy(response,
+		   "HTTP/1.0 200 Not Found\r\nContent-Type: text/html\r\n\r\nHELLO WORLD\r\n");
+	return SYS_SUCCESS;
+
+}
+
 sys_thread_return httpd_main(sys_thread_data data)
 {
 	int error;
@@ -44,6 +53,7 @@ sys_thread_return httpd_main(sys_thread_data data)
 	int len;
 	int max_sock;
 	int one = 1;
+	sys_status ret;
 
 	/* create listening TCP socket */  
 	sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -119,10 +129,15 @@ sys_thread_return httpd_main(sys_thread_data data)
 				conn = -1;
 				continue;
 			}
-
-			/* Create http response */
-			strcpy(httpd_message_out, "HTTP/1.0 404 Not Found\r\nContent-Type: text/html\r\n\r\nERROR\r\n");
 			
+			/* Get page URL */
+			ret = httpd_process_request(httpd_message_in, httpd_message_out);
+			if(ret != SYS_SUCCESS) {
+				LOG("HTTPD %d: failed to process http request.\r\n",
+					sys_time_get());
+				continue;
+			}
+
 			/* Send http response */
 			send(conn, httpd_message_out, strlen(httpd_message_out), 0);
 			LOG("HTTPD %d: sent response to %x.\r\n", sys_time_get(),

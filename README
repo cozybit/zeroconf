@@ -72,5 +72,13 @@ sd-simple [unimplemented]: This test requires two nodes, A (the host) and B (the
 TODO
 ----
 
--- Migrate ll state machine to use events
 -- Introduce notion of "interface" in system abstraction
+-- Add DEFEND capability to link local
+-- Add option to "prime" link local with an IP address.
+-- Make tcpip configuration in link local use callback instead of tcpip system
+   interface.
+-- Document link local interface
+-- Document log interface
+-- Document httpd interface
+-- Create simple network manager?
+-- Consolidate cozybits into their own directory
