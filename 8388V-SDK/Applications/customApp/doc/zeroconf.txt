@@ -1,0 +1,48 @@
+/**
+\mainpage cozybit Zeroconf Module
+
+\section intro Introduction
+
+The cozybit Zeroconf Module provides IP4LL (Link-Local) IP address 
+self-assignment and mDNS (multicast DNS) capability.  The Link Local thread may
+be used to self-assign an IP address when other means are not available.  The
+mDNS Responder thread will announce your device on the network and respond to
+relevant requests from other devices, for example Zeroconf browsers on users'
+PCs.
+
+\section theory Theory of Operation
+
+The Zeroconf Module is designed to be used as a layer below your application:
+
+<table style="text-align:center;">
+	<tr><td colspan="2">appication</td></tr>
+	<tr>
+		<td style="width:50%;">Link Local (linklocal.h)</td>
+		<td style="width:50%;">mDNS Responder (mdns_responder.h)</td></tr>
+	<tr><td colspan="2">System Compatibility layer (system.h)</td></tr>
+	<tr><td colspan="2">OS and TCP/IP stack</td></tr>
+</table>
+
+\subsection linklocal Link Local
+
+The Link Local thread will self-assign an IP address in the 169.254* range and,
+having picked one that isn't taken, will proceed to defend it while the thread
+is running.
+
+\subsection mdns mDNS Responder
+
+The mDNS Responder thread, on startup, will claim its name on the network.  If
+it is able to do so, it will proceed to respond to any relevant questions from
+other devices while the thread is running.
+
+\subsection system System Compatibility Layer
+
+The System Compatibility Layer (system.h) is an OS and TCP/IP stack abstraction
+layer for the Link Local and mDNS implementations.
+
+\section API Documentation
+
+The mDNS API is found in mdns.h and provides functions and data structures to
+create mDNS messages.
+
+*/

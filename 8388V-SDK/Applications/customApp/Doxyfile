@@ -30,7 +30,7 @@ PROJECT_NUMBER         =
 # If a relative path is entered, it will be relative to the location 
 # where doxygen was started. If left blank the current directory will be used.
 
-OUTPUT_DIRECTORY       = 
+OUTPUT_DIRECTORY       = ./doc
 
 # If the CREATE_SUBDIRS tag is set to YES, then doxygen will create 
 # 4096 sub-directories (in 2 levels) under the output directory of each output 
@@ -459,7 +459,15 @@ WARN_LOGFILE           =
 # directories like "/usr/src/myproject". Separate the files or directories 
 # with spaces.
 
-INPUT = include/mdns.h  include/mdns_responder.h include/mdns_config.h include/system.h src/mdns_responder.c
+INPUT = \
+doc/zeroconf.txt \
+include/mdns.h \
+include/mdns_responder.h \
+include/mdns_config.h \
+include/system.h \
+src/mdns_responder.c \
+include/linklocal.h \
+src/linklocal.c
 
 # If the value of the INPUT tag contains directories, you can use the 
 # FILE_PATTERNS tag to specify one or more wildcard pattern (like *.cpp 

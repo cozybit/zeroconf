@@ -1,7 +1,6 @@
-/******************************************************************************
- * linklocal.c
+/*! \file linklocal.c
  *
- * 
+ *  \brief Link-Local implimentation
  ******************************************************************************/
 
 #include "system.h"
@@ -12,16 +11,16 @@
  ******************************************************************************/
 
 /* Constants called out by RFC 3927.  All time values are in seconds. */
-#define PROBE_WAIT           1 /* initial random delay */
-#define PROBE_NUM            3 /* number of probe packets */
-#define PROBE_MIN            1 /* minimum delay till repeated probe */
-#define PROBE_MAX            2 /* maximum delay till repeated probe */
-#define ANNOUNCE_WAIT        2 /* delay before announcing */
-#define ANNOUNCE_NUM         2 /* number of announcement packets */
-#define ANNOUNCE_INTERVAL    2 /* time between announcement packets */
-#define MAX_CONFLICTS       10 /* max conflicts before rate limiting */
-#define RATE_LIMIT_INTERVAL 60 /* delay between successive attempts */
-#define DEFEND_INTERVAL     10 /* minimum interval between defensive ARPs */
+#define PROBE_WAIT           1 /**< initial random delay */
+#define PROBE_NUM            3 /**< number of probe packets */
+#define PROBE_MIN            1 /**< minimum delay till repeated probe */
+#define PROBE_MAX            2 /**< maximum delay till repeated probe */
+#define ANNOUNCE_WAIT        2 /**< delay before announcing */
+#define ANNOUNCE_NUM         2 /**< number of announcement packets */
+#define ANNOUNCE_INTERVAL    2 /**< time between announcement packets */
+#define MAX_CONFLICTS       10 /**< max conflicts before rate limiting */
+#define RATE_LIMIT_INTERVAL 60 /**< delay between successive attempts */
+#define DEFEND_INTERVAL     10 /**< minimum interval between defensive ARPs */
 
 enum {
 	LL_NO_ADDRESS = 0,
@@ -31,24 +30,24 @@ enum {
 	LL_STABLE,
 };
 
-/* time to wait between attempts to init tcp stack. */
+/**< time to wait between attempts to init tcp stack. */
 #define LL_SYS_INIT_RETRY 1000
 
-/* WARNING!  Works only with little endian! */
+/**< WARNING!  Works only with little endian! */
 #define LL_NETMASK 0x0000ffff
 
 static unsigned int ll_state = LL_NO_ADDRESS;
 static unsigned int ll_candidate_ip = 0;
 static char ll_mac[6];
 
-/* Task information for the User Interface task*/
+/**< Task information for the User Interface task*/
 static sys_thread ll_main_thread;
 static sys_eflags ll_eflags;
 #define LL_CONFLICT_EVENT 0x1
 static int ll_running = 0;
 static unsigned char ll_stack[2048];
 
-/* ARP packet definitions.  Consider moving to its own file */
+/**< ARP packet definitions.  Consider moving to its own file */
 
 #define ARP_TYPE 0x0806
 
@@ -59,9 +58,9 @@ PACKED_STRUCT_BEGIN struct arp_pkt {
 	unsigned char prot_size;
 	unsigned short op;
 	unsigned char sender_mac[6];
-	unsigned char sender_ip[4]; /* network byte order */
+	unsigned char sender_ip[4]; /**< network byte order */
 	unsigned char target_mac[6];
-	unsigned char target_ip[4]; /* network byte order */
+	unsigned char target_ip[4]; /**< network byte order */
 } PACKET_STRUCT_END;
 
 #define ARP_OP_REQUEST 1
@@ -337,14 +336,7 @@ sys_thread_return ll_main(sys_thread_data data)
  * Public Functions
  ******************************************************************************/
 
-/* This function launches link-local address thread.  If link-local addressing
- * is to be used, link-local manager should be called prior to treck stack
- * initialization.  Otherwise, the Treck tcpip handler will consume ARP packets
- * before the link-local manager ever sees them.  Applications should poll the
- * state variable treck_ready to know if the treck stack is up.
- *
- * Return values: SYS_SUCCESS for success, other for failure.
- */
+/* launches link-local address thread. */ 
 sys_status ll_init(void)
 {
 	sys_status ret;
@@ -389,9 +381,7 @@ sys_status ll_init(void)
 	return ret;
 }
 
-/*
- * Return values: SYS_SUCCESS for success, other for failure.
- */
+/* shuts down link-local thread */
 sys_status ll_shutdown(void)
 {
 	LOG("LL %d: Shutting down.\r\n", sys_time_get());
