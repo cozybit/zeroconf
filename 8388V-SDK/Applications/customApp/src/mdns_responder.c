@@ -246,7 +246,7 @@ sys_thread_return mdns_main( sys_thread_data data )
 			if( FD_ISSET( mc_sock, &fds ) ) { /* wait remaining time */
 				t = get_time();
 				t = t > start_time ? t - start_time : start_time - t;
-				timeout.tv_usec = t <= 250000 ? (250-t)*1000 : 250000;
+				timeout.tv_usec = t <= 250 ? (250-t)*1000 : 0;
 			}
 			else { /* send message, advance to next state */
 				mdns_status++;
