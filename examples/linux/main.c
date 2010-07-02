@@ -1,3 +1,10 @@
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #ifdef MDNS_HOST_TEST
 #include "host.h"
@@ -94,7 +101,7 @@ int send_message( struct mdns_message *m, int sock, short port )
 	return 1;
 }
 
-int main( void )
+int mdns_launch(UINT32 ipaddr)
 {
 	int mc_sock;
 	int active_fds;
@@ -116,8 +123,10 @@ int main( void )
 	struct rr_ptr service_ptr;
 	struct rr_txt service_txt;
 
-	/* XXX: use system data here */
-	service_a.ip = TEST_IP;
+	/* We accept the IP arg in network order, but internally (and for no good
+	 * reason) we store it in host order.
+	 */
+	service_a.ip = htonl(ipaddr);
 
 	service_srv.priority = 0;
 	service_srv.weight = 0;
@@ -174,7 +183,7 @@ int main( void )
 					debug_print_message( &rx_message );
 				/* TODO: parse, decide if/how to respond */
 				if( status == STARTED && 
-					from.sin_addr.s_addr != htonl(TEST_IP) && 
+					from.sin_addr.s_addr != ipaddr &&
 					MDNS_IS_QUERY( rx_message ) ) {
 					/* XXX just respond to anyone that isn't myself */
 					DB_PRINT( "responding to query...\n" );
@@ -217,3 +226,48 @@ int main( void )
 	return 0;
 }
 
+#define HELP_TEXT \
+"Usage: mdns [options] <command>\n\n" \
+"command can be one of the following:\n" \
+"launch        start mdns daemon\n" \
+"halt          stop mdns daemon\n" \
+"\n" \
+"Options\n" \
+"-h           Print this help text\n" \
+"-b <ipaddr>  ipaddress to bind to\n"
+
+int main(int argc, char **argv)
+{
+	int ret = 0;
+	char opt;
+	in_addr_t ipaddr = 0;
+	char *cmd;
+
+	while ((opt = getopt(argc, argv, "hb:")) != -1) {
+		switch (opt) {
+		case 'h':
+			printf(HELP_TEXT);
+			return 0;
+		case 'b':
+			ipaddr = inet_addr(optarg);
+			break;
+		default:
+			printf("Unexpected option %c\n", opt);
+			return -1;
+		}
+	}
+
+	if (optind >= argc) {
+		printf("No command specified.\n");
+		return -1;
+	}
+
+	cmd = argv[optind];
+    if (strcmp(cmd, "launch") == 0) {
+		ret = mdns_launch(ipaddr);
+	} else {
+        printf("No such command: %s\n", cmd);
+		return -1;
+    }
+	return ret;
+}

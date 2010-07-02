@@ -15,8 +15,10 @@ class mdns:
 	def start(self, args=""):
 		self.session.sendline("killall mdns")
 		self.session.prompt()
-		self.session.sendline("mdns " + args + " > /dev/null 2>&1 &")
+		command = "mdns " + args + " launch > /dev/null 2>&1 &"
+		self.session.sendline(command)
 		self.session.prompt()
 		# we have to wait for mdns to start.  This is because it sends several
 		# probes for its name before claiming it.
 		time.sleep(2)
+		return 0
