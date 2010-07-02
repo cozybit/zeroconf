@@ -1,7 +1,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-
+#include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -16,6 +16,9 @@
 #include "mdns_config.h"
 #include "debug.h"
 #include "mdns_os.h"
+#include "priv.h"
+
+#define CTRL_PORT 12345
 
 int m_socket( void )
 {
@@ -105,6 +108,12 @@ int send_message( struct mdns_message *m, int sock, short port )
 /* mdns state */
 static void *mdns_thread;
 static int mc_sock;
+static int ctrl_sock;
+static int mdns_enabled;
+
+/* control message types */
+#define MDNS_CTRL_HALT 0
+
 static int active_fds;
 static fd_set fds;
 static int len = 0;
@@ -124,19 +133,62 @@ static struct rr_srv service_srv;
 static struct rr_ptr service_ptr;
 static struct rr_txt service_txt;
 
+static int send_ctrl_msg(int msg)
+{
+	int ret;
+	struct sockaddr_in to;
+
+	if (ctrl_sock == -1)
+		return -1;
+
+	memset((char *)&to, 0, sizeof(to));
+	to.sin_family = PF_INET;
+	to.sin_port = htons(CTRL_PORT);
+	to.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+	ret = sendto(ctrl_sock, &msg, sizeof(msg), 0,
+				 (struct sockaddr *)&to, sizeof(to));
+	if (ret != -1)
+		ret = 0;
+
+	return ret;
+}
+
 /* This is the mdns thread function */
 static void do_mdns(void *data)
 {
-	while( 1 ) {
+	int max_sock;
+	int msg, ret;
+
+	mdns_enabled = 1;
+
+	while(mdns_enabled) {
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 250000;
 		FD_ZERO(&fds);
-		FD_SET( mc_sock, &fds);
-		active_fds = select( mc_sock+1, &fds, NULL, NULL, &timeout);
+		FD_SET(mc_sock, &fds);
+		FD_SET(ctrl_sock, &fds);
+		max_sock = ctrl_sock > mc_sock ? ctrl_sock : mc_sock;
+
+		active_fds = select(max_sock + 1, &fds, NULL, NULL, &timeout);
 
 		if( active_fds < 0 )
 			DB_PRINT("error: select() failed\n" );
-	
+
+		if (FD_ISSET(ctrl_sock, &fds)) {
+			ret = recvfrom(ctrl_sock, &msg, sizeof(msg), 0,
+						   (struct sockaddr *)0, 0);
+			if (ret == -1) {
+				DB_PRINT("Warning: failed to get control message\n");
+			} else {
+				if (msg == MDNS_CTRL_HALT) {
+					DB_PRINT("mdns done.\n");
+					mdns_enabled = 0;
+					break;
+				}
+			}
+		}
+
 		if( FD_ISSET( mc_sock, &fds ) ) {
 			while( ( len = recvfrom( mc_sock, rx_buffer, 1000, 0, 
 							(struct sockaddr*)&from, &in_size ) ) > 0 ) {
@@ -187,6 +239,9 @@ static void do_mdns(void *data)
 
 int mdns_launch(UINT32 ipaddr)
 {
+	int one = 1, ret;
+    struct sockaddr_in ctrl_listen;
+    int addr_len;
 
 	/* We accept the IP arg in network order, but internally (and for no good
 	 * reason) we store it in host order.
@@ -229,10 +284,44 @@ int mdns_launch(UINT32 ipaddr)
 	mdns_add_question( &tx_message, "\6andrey\5_http\4_tcp\5local",
 		T_ANY, C_IN );
 
+    /* create control socket */
+    ctrl_sock = socket(PF_INET, SOCK_DGRAM, 0);
+    if (ctrl_sock < 0) {
+		DB_PRINT("Failed to create control socket.\n");
+        return -1;
+    }
+    setsockopt(ctrl_sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one));
+    ctrl_listen.sin_family = PF_INET;
+    ctrl_listen.sin_port = htons(CTRL_PORT);
+    ctrl_listen.sin_addr.s_addr = inet_addr("127.0.0.1");
+    addr_len = sizeof(struct sockaddr_in);
+
+    /* bind control socket */
+    ret = bind(ctrl_sock, (struct sockaddr *)&ctrl_listen, addr_len);
+    if (ret < 0) {
+		DB_PRINT("Failed to bind control socket\n");
+        return -1;
+    }
+
 	mdns_thread = mdns_thread_create(do_mdns, NULL);
 	if (mdns_thread == NULL)
 		return -1;
 	return 0;
+}
+
+void mdns_halt(void)
+{
+	int ret;
+	ret = send_ctrl_msg(MDNS_CTRL_HALT);
+	if (ret != 0)
+		DB_PRINT("Warning: failed to send HALT message to mdns\n");
+	else
+		mdns_thread_yield();
+	if (mdns_enabled != 0)
+		DB_PRINT("Warning: failed to halt mdns.  Forcing.\n");
+
+	mdns_thread_delete(mdns_thread);
+	mdns_enabled = 0;
 }
 
 #define HELP_TEXT \
@@ -251,6 +340,8 @@ int main(int argc, char **argv)
 	char opt;
 	in_addr_t ipaddr = 0;
 	char *cmd;
+	FILE *f;
+	pid_t pid;
 
 	while ((opt = getopt(argc, argv, "hb:")) != -1) {
 		switch (opt) {
@@ -274,6 +365,20 @@ int main(int argc, char **argv)
 	cmd = argv[optind];
     if (strcmp(cmd, "launch") == 0) {
 		ret = mdns_launch(ipaddr);
+
+	} else if (strcmp(cmd, "halt") == 0) {
+		f = fopen(MDNS_PIDFILE, "r");
+		if (f == NULL) {
+			printf("Failed to open pid file: %s\n", strerror(errno));
+			return -1;
+		}
+		ret = fscanf(f, "%d\n", &pid);
+		if (ret != 1) {
+			printf("Failed to read pid\n");
+			return -1;
+		}
+		return kill(pid, SIGTERM);
+
 	} else {
         printf("No such command: %s\n", cmd);
 		return -1;

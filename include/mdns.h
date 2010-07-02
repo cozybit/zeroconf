@@ -37,4 +37,7 @@ void mdns_add_question( struct mdns_message *m, char* qname,
 void mdns_add_answer( struct mdns_message *m, char *name, UINT16 type,
 	UINT16 class, UINT32 ttl, struct mdns_rr *rr );
 
+int mdns_launch(UINT32 ipaddr);
+void mdns_halt(void);
+
 #endif

@@ -19,6 +19,18 @@ class mdnsTest(unittest.TestCase):
 	def expectEqual(self, a, b):
 		self.failIf(a != b, "Expected " + a + " but got " + b)
 
+	def tearDown(self):
+		mdns.stop()
+
+	def test_StartStop(self):
+		self.failIf(mdns.start("-b " + ipaddr) != 0, "Failed to launch mdns")
+		mdns.stop()
+		self.failIf(mdns.start("-b " + ipaddr) != 0, "Failed to launch mdns")
+
+	def test_StartStart(self):
+		self.failIf(mdns.start("-b " + ipaddr) != 0, "Failed to launch mdns")
+		self.failIf(mdns.start("-b " + ipaddr) == 0, "Started mdns twice!")
+
 	def test_SimpleNameQuery(self):
 		# launch mdns
 		self.failIf(mdns.start("-b " + ipaddr) != 0, "Failed to launch mdns")

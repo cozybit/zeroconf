@@ -13,9 +13,7 @@ class mdns:
 		self.conf = conf
 
 	def start(self, args=""):
-		self.session.sendline("killall mdns")
-		self.session.prompt()
-		command = "mdns " + args + " launch > /dev/null 2>&1"
+		command = "mdns " + args + " launch"
 		self.session.sendline(command)
 		self.session.prompt()
 		self.session.sendline("echo $?")
@@ -28,3 +26,7 @@ class mdns:
 		# probes for its name before claiming it.
 		time.sleep(2)
 		return 0
+
+	def stop(self, args=""):
+		self.session.sendline("mdns halt")
+		self.session.prompt()

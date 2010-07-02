@@ -38,4 +38,12 @@ void *mdns_thread_create(mdns_thread_entry entry, void *data);
  */
 void mdns_thread_delete(void *t);
 
+/*
+ * mdns_thread_yield: yield to other runnable threads
+ *
+ * Some mdns routines need to yeild after sending commands to the mdns thread.
+ * This allows the mdns thread to run and respond to the command.
+ */
+void mdns_thread_yield(void);
+
 #endif /* __MDNS_OS_H__ */

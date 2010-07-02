@@ -3,6 +3,8 @@
  *
  * Example implementation of mdns os abstraction functions for linux processes
  */
+#include "host.h"
+#include "mdns.h"
 #include "mdns_os.h"
 #include "priv.h"
 
@@ -17,6 +19,16 @@
 
 /* TODO: Use system-independent log function */
 #define LOG printf
+
+static void linux_mdns_signal(int sig)
+{
+    switch(sig){
+    case SIGHUP:
+    case SIGTERM:
+		mdns_halt();
+        break;
+    }
+}
 
 /* Our "thread" is really a process.  We only support one thread with this
  * function, so we'll fail if the thread is already running.
@@ -77,6 +89,15 @@ void *mdns_thread_create(mdns_thread_entry entry, void *data)
 		signal(SIGTSTP, SIG_IGN);
 		signal(SIGTTOU, SIG_IGN);
 		signal(SIGTTIN, SIG_IGN);
+
+		/* On an RTOS with a single memory space, we would generally just
+		 * communicate with the mdns task by invoking the API.  But on linux it
+		 * runs off in its own process, so we have to send signals.  SIGHUP and
+		 * SIGTERM both invoke mdns_halt().
+		 */
+		signal(SIGHUP, linux_mdns_signal);
+		signal(SIGTERM, linux_mdns_signal);
+
 		/* launch the entry function */
 		entry(data);
 		return NULL;
@@ -87,4 +108,9 @@ void mdns_thread_delete(void *t)
 {
 	/* nothing to free here. */
 	return;
+}
+
+void mdns_thread_yield(void)
+{
+	sleep(0);
 }
