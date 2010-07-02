@@ -70,7 +70,7 @@ int m_socket( void )
 	return sock;
 }
 
-int send_message( struct mdns_message *m, int sock )
+int send_message( struct mdns_message *m, int sock, short port )
 {
 	struct sockaddr_in to;
 	int size, len;
@@ -79,7 +79,7 @@ int send_message( struct mdns_message *m, int sock )
 	size = (unsigned int)m->cur - (unsigned int)m->header;
 
 	to.sin_family = AF_INET;
-	to.sin_port = htons(5353);
+	to.sin_port = port;
 	to.sin_addr.s_addr = inet_addr("224.0.0.251");
 	
 	len = sendto( sock, (char *)m->header, size, 0, (struct sockaddr *)&to,
@@ -178,7 +178,15 @@ int main( void )
 					MDNS_IS_QUERY( rx_message ) ) {
 					/* XXX just respond to anyone that isn't myself */
 					DB_PRINT( "responding to query...\n" );
-					send_message( &tx_message, mc_sock );
+					mdns_add_answer(&rx_message, SERVICE_TARGET,
+									 T_A, C_IN, 225, &my_a);
+
+					rx_message.header->flags.fields.qr = 1; /* response */
+					rx_message.header->flags.fields.aa = 1; /* authoritative */
+					rx_message.header->flags.fields.rcode = 0;
+					rx_message.header->flags.num = htons(rx_message.header->flags.num);
+
+					send_message( &rx_message, mc_sock, from.sin_port );
 				}
 			}
 		}
@@ -201,7 +209,7 @@ int main( void )
 					SERVICE_TYPE SERVICE_DOMAIN,
 					T_PTR, C_IN, 255, &my_ptr );
 			}
-			send_message( &tx_message, mc_sock );
+			send_message( &tx_message, mc_sock, 5353 );
 			status++;
 		}
 	}

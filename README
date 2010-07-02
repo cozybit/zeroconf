@@ -1,49 +1,14 @@
-oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
-o
-o Zeroconf Suite for 8388V
-o
-oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
-
 Introduction
 ------------
 
-Zeroconf is a suite of software that allows a user to:
+coZeroconf is cozybit's zeroconf stack.  It's a suite of software that allows a
+user to:
 
--- Acquire an IP address in the event that no DHCP server is available (IPv4LL)
--- Resolve names to IP addresses (mDNS)
--- Discover services available on a network (DNS-SD)
-
-The IPv4LL implementation is written from scratch by cozybit.  The mDNS and
-DNS-SD implementations are a port of the Apple Darwin mDNSResponder code, which
-is licensed under the Apache 2.0 license.  In addition to the standard zeroconf
-features, this suite implements a simple webserver that can be advertised using
-mDNS.
+-- Acquire an IP address in the event that no DHCP server is available
+-- Resolve names to IP addresses
+-- Advertise available services
 
 Building
 --------
 
-The zerconf suite is based on the 8388V No Host SDK.  To build it, simply type
-"make" in the Build directory of the SDK.  The output is an image called
-nh8388v.axf that can be loaded into the 8388V RAM, or an image called csb0.bin
-that can be loaded into flash using writespi.axf from Marvell.
-
-Testing
--------
-
-See test_framework for details on testing.
-
-TODO
-----
-
--- Introduce notion of "interface" in system abstraction
--- Add DEFEND capability to link local
--- Add option to "prime" link local with an IP address.
--- Make tcpip configuration in link local use callback instead of tcpip system
-   interface.
--- Document link local interface
--- Document log interface
--- Document httpd interface
--- Create simple network manager?
--- Consolidate cozybits into their own directory
--- Create simple linux port
--- Add priority parameter to thread interface
+$ make -C mDNS

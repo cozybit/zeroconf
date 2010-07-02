@@ -1,0 +1,21 @@
+Quick Start
+===========
+
+1: Install dependencies
+
+sudo apt-get install python-nose python-dnspython
+
+2: Run the tests
+
+$ nosetests
+
+Notes
+=====
+
+-- To see the stdout of the tests, invoke nosetests with -s
+
+-- We use a slightly modified version of pxssh.py.  That's why it's here in the
+   test dir instead of using the one that comes with python.
+
+-- The linux tests require that you can ssh into the remote target without a
+   password (i.e., your ssh-agent is set up properly).
