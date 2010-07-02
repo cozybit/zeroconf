@@ -15,6 +15,7 @@
 #include "mdns.h"
 #include "mdns_config.h"
 #include "debug.h"
+#include "mdns_os.h"
 
 int m_socket( void )
 {
@@ -101,69 +102,31 @@ int send_message( struct mdns_message *m, int sock, short port )
 	return 1;
 }
 
-int mdns_launch(UINT32 ipaddr)
+/* mdns state */
+static void *mdns_thread;
+static int mc_sock;
+static int active_fds;
+static fd_set fds;
+static int len = 0;
+static struct timeval timeout;
+static char rx_buffer[1000];
+static char tx_buffer[1000];
+static struct mdns_message tx_message;
+static struct mdns_message rx_message;
+static struct sockaddr_in from;
+static socklen_t in_size = sizeof(struct sockaddr_in);
+static UINT8 status = FIRST_PROBE;
+
+/* device settings */
+static struct mdns_rr my_a, my_srv, my_txt, my_ptr;
+static struct rr_a service_a;
+static struct rr_srv service_srv;
+static struct rr_ptr service_ptr;
+static struct rr_txt service_txt;
+
+/* This is the mdns thread function */
+static void do_mdns(void *data)
 {
-	int mc_sock;
-	int active_fds;
-	fd_set fds;
-	int len = 0;
-	struct timeval timeout;
-	char rx_buffer[1000];
-	char tx_buffer[1000];
-	struct mdns_message tx_message;
-	struct mdns_message rx_message;
-	struct sockaddr_in from;
-	socklen_t in_size = sizeof(struct sockaddr_in);
-	UINT8 status = FIRST_PROBE;
-
-	/* device settings */
-	struct mdns_rr my_a, my_srv, my_txt, my_ptr;
-	struct rr_a service_a;
-	struct rr_srv service_srv;
-	struct rr_ptr service_ptr;
-	struct rr_txt service_txt;
-
-	/* We accept the IP arg in network order, but internally (and for no good
-	 * reason) we store it in host order.
-	 */
-	service_a.ip = htonl(ipaddr);
-
-	service_srv.priority = 0;
-	service_srv.weight = 0;
-	service_srv.port = 80;
-	service_srv.target = SERVICE_TARGET;
-
-	service_ptr.name = SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN;
-	
-	service_txt.data = "\xF""path=index.html";
-
-	my_a.data.a = &service_a;
-	my_a.length = rr_length_a;
-	my_a.transfer = rr_transfer_a;
-
-	my_srv.data.srv = &service_srv;
-	my_srv.length = rr_length_srv;
-	my_srv.transfer = rr_transfer_srv;
-
-	my_ptr.data.ptr = &service_ptr;
-	my_ptr.length = rr_length_ptr;
-	my_ptr.transfer = rr_transfer_ptr;
-
-	my_txt.data.txt = &service_txt;
-	my_txt.length = rr_length_txt;
-	my_txt.transfer = rr_transfer_txt;
-
-	mc_sock = m_socket();
-	if( mc_sock < 0 ) {
-		DB_PRINT( "error: unable to open multicast socket\n" );
-		return 1;
-	}
-
-	/* set up probe to claim name */
-	mdns_transmit_init( &tx_message, tx_buffer, QUERY );
-	mdns_add_question( &tx_message, "\6andrey\5_http\4_tcp\5local",
-		T_ANY, C_IN );
-
 	while( 1 ) {
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 250000;
@@ -171,10 +134,8 @@ int mdns_launch(UINT32 ipaddr)
 		FD_SET( mc_sock, &fds);
 		active_fds = select( mc_sock+1, &fds, NULL, NULL, &timeout);
 
-		if( active_fds < 0 ) {
-			DB_PRINT( "error: select() failed\n" );
-			return 1;
-		}
+		if( active_fds < 0 )
+			DB_PRINT("error: select() failed\n" );
 	
 		if( FD_ISSET( mc_sock, &fds ) ) {
 			while( ( len = recvfrom( mc_sock, rx_buffer, 1000, 0, 
@@ -183,7 +144,7 @@ int mdns_launch(UINT32 ipaddr)
 					debug_print_message( &rx_message );
 				/* TODO: parse, decide if/how to respond */
 				if( status == STARTED && 
-					from.sin_addr.s_addr != ipaddr &&
+					from.sin_addr.s_addr != htonl(service_a.ip) &&
 					MDNS_IS_QUERY( rx_message ) ) {
 					/* XXX just respond to anyone that isn't myself */
 					DB_PRINT( "responding to query...\n" );
@@ -222,7 +183,55 @@ int mdns_launch(UINT32 ipaddr)
 			status++;
 		}
 	}
+}
 
+int mdns_launch(UINT32 ipaddr)
+{
+
+	/* We accept the IP arg in network order, but internally (and for no good
+	 * reason) we store it in host order.
+	 */
+	service_a.ip = htonl(ipaddr);
+
+	service_srv.priority = 0;
+	service_srv.weight = 0;
+	service_srv.port = 80;
+	service_srv.target = SERVICE_TARGET;
+
+	service_ptr.name = SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN;
+
+	service_txt.data = "\xF""path=index.html";
+
+	my_a.data.a = &service_a;
+	my_a.length = rr_length_a;
+	my_a.transfer = rr_transfer_a;
+
+	my_srv.data.srv = &service_srv;
+	my_srv.length = rr_length_srv;
+	my_srv.transfer = rr_transfer_srv;
+
+	my_ptr.data.ptr = &service_ptr;
+	my_ptr.length = rr_length_ptr;
+	my_ptr.transfer = rr_transfer_ptr;
+
+	my_txt.data.txt = &service_txt;
+	my_txt.length = rr_length_txt;
+	my_txt.transfer = rr_transfer_txt;
+
+	mc_sock = m_socket();
+	if( mc_sock < 0 ) {
+		DB_PRINT( "error: unable to open multicast socket\n" );
+		return 1;
+	}
+
+	/* set up probe to claim name */
+	mdns_transmit_init( &tx_message, tx_buffer, QUERY );
+	mdns_add_question( &tx_message, "\6andrey\5_http\4_tcp\5local",
+		T_ANY, C_IN );
+
+	mdns_thread = mdns_thread_create(do_mdns, NULL);
+	if (mdns_thread == NULL)
+		return -1;
 	return 0;
 }
 

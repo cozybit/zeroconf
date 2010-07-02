@@ -5,7 +5,7 @@ LIBS = $(MDNS_DIR)/libmdns.a
 
 all: mdns
 
-mdns: main.o
+mdns: main.o os_linux.o
 	$(CC) $^ $(LIBS) -o mdns
 
 clean:
