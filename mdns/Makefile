@@ -1,20 +1,10 @@
-CDEFS=-DMDNS_HOST_TEST
-CFLAGS=-Wall
+CFLAGS = -DMDNS_HOST_TEST -I$(TOP)/include
+OBJS = mdns.o debug.o
 
-mdns: main.o mdns.o debug.o
-	gcc main.o mdns.o debug.o -o mdns
+all: libmdns.a
 
-test: test.o mdns.o
-	gcc test.o mdns.o -o test
-
-main.o: main.c
-	gcc $(CFLAGS) $(CDEFS) -c main.c
-
-mdns.o: mdns.c
-	gcc $(CFLAGS) $(CDEFS) -c mdns.c
-
-debug.o: debug.c
-	gcc $(CFLAGS) $(CDEFS) -c debug.c
+libmdns.a: $(OBJS)
+	$(AR) rcs $@ $^
 
 clean:
-	rm -f *.o mdns
+	rm -f *.o libmdns.a
