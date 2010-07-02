@@ -1,8 +1,18 @@
-import unittest
+import unittest, sys, os, ConfigParser
 import dns.query, dns.message
 import mdns_subject
 
-mdns = mdns_subject.mdns()
+# Parse config file
+configfile = "test.conf"
+if not os.path.exists(configfile):
+	print "config file " + configfile + " does not exist."
+	assert 0
+conf = ConfigParser.ConfigParser()
+conf.read(configfile)
+ipaddr = conf.get("target", "ipaddr")
+
+# create the mdns device to test
+mdns = mdns_subject.mdns(conf)
 
 def test_SimpleNameQuery():
 	# launch mdns
@@ -22,7 +32,7 @@ def test_SimpleNameQuery():
 		assert r.answer[0].rdclass == dns.rdataclass.IN
 		assert r.answer[0].rdtype == dns.rdatatype.A
 		assert len(r.answer[0]) == 1
-		assert r.answer[0][0].__str__() == "192.168.1.80"
+		assert r.answer[0][0].__str__() == ipaddr
 
 	except dns.exception.Timeout:
 		assert 0
