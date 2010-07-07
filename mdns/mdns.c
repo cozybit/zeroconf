@@ -401,7 +401,7 @@ static int send_ctrl_msg(int msg)
 static void do_mdns(void *data)
 {
 	int max_sock;
-	int msg, ret;
+	int msg, ret, i;
 
 	mdns_enabled = 1;
 
@@ -434,24 +434,34 @@ static void do_mdns(void *data)
 		}
 
 		if (FD_ISSET(mc_sock, &fds)) {
-			while ((len = recvfrom(mc_sock, rx_buffer, 1000, 0,
-									 (struct sockaddr*)&from, &in_size)) > 0) {
-				if (mdns_parse_message(&rx_message, rx_buffer))
-					debug_print_message(&rx_message);
+			len = recvfrom(mc_sock, rx_buffer, 1000, 0,
+						   (struct sockaddr*)&from, &in_size);
+			if (len < 0) {
+				DB_PRINT("failed to recv packet\n");
+				continue;
+			}
+			if (mdns_parse_message(&rx_message, rx_buffer)) {
+				debug_print_message(&rx_message);
 				/* TODO: parse, decide if/how to respond */
 				if (status == STARTED &&
 					from.sin_addr.s_addr != htonl(service_a.ip) &&
 					MDNS_IS_QUERY(rx_message)) {
-					/* XXX just respond to anyone that isn't myself */
-					DB_PRINT("responding to query...\n");
-					mdns_add_answer(&rx_message, fqdn, T_A, C_IN, 225, &my_a);
 
-					rx_message.header->flags.fields.qr = 1; /* response */
-					rx_message.header->flags.fields.aa = 1; /* authoritative */
-					rx_message.header->flags.fields.rcode = 0;
-					rx_message.header->flags.num = htons(rx_message.header->flags.num);
-
-					send_message(&rx_message, mc_sock, from.sin_port);
+					for(i = 0; i < rx_message.num_questions; i++) {
+						if (rx_message.questions[i].qtype == T_A &&
+							strcmp(rx_message.questions[i].qname, fqdn) == 0)
+						{
+							DB_PRINT("responding to query...\n");
+							mdns_add_answer(&rx_message, fqdn, T_A, C_IN, 225,
+											&my_a);
+							rx_message.header->flags.fields.qr = 1;
+							rx_message.header->flags.fields.aa = 1;
+							rx_message.header->flags.fields.rcode = 0;
+							rx_message.header->flags.num =
+								htons(rx_message.header->flags.num);
+							send_message(&rx_message, mc_sock, from.sin_port);
+						}
+					}
 				}
 			}
 		}

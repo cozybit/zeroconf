@@ -75,3 +75,16 @@ class mdnsTest(unittest.TestCase):
 					"Failed to detect invalid input")
 		self.failIf(mdns.start("-b " + ipaddr + " -n foo.") != 2,
 					"Failed to detect invalid input")
+
+	def test_WrongNameQuery(self):
+		# launch mdns
+		self.failIf(mdns.start("-b " + ipaddr + " -n http-andrey") != 0,
+					"Failed to launch mdns")
+
+		q = dns.message.make_query("foobar-doesnt-exist.local", 1, 1)
+		try:
+			r = dns.query.udp(q, '224.0.0.251', port=5353, timeout=2)
+			self.failIf(1, "Got a response for a non-existent hostname")
+
+		except dns.exception.Timeout:
+			pass
