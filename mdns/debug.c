@@ -1,15 +1,13 @@
 #include "mdns_private.h"
 
-/* We really shouldn't depend on stdio */
-#include <stdio.h>
-
+#ifdef MDNS_DBG
 void debug_print_ip(uint32_t ip)
 {
-	printf("%u.%u.%u.%u",
-		   ip>>24,
-		   ((ip & 0x00FF0000)>>16),
-		   ((ip & 0x0000FF00)>>8),
-		   ip & 0x000000FF
+	DBG("%u.%u.%u.%u",
+		ip>>24,
+		((ip & 0x00FF0000)>>16),
+		((ip & 0x0000FF00)>>8),
+		ip & 0x000000FF
 		);
 }
 
@@ -47,10 +45,10 @@ void debug_print_name(struct mdns_message *m, char *name)
 /* print question (query) data */
 void debug_print_question(struct mdns_message *m, struct mdns_question *q)
 {
-	DB_PRINT("--------------------------------------------------------\n"
-			 "question: \"");
+	DBG("--------------------------------------------------------\n"
+		"question: \"");
 	debug_print_name(m, q->qname);
-	DB_PRINT("\"\n(type %u, class %u)\n", q->qtype, q->qclass);
+	DBG("\"\n(type %u, class %u)\n", q->qtype, q->qclass);
 }
 
 /* print resource (answer) and associated RR */
@@ -58,62 +56,62 @@ void debug_print_resource(struct mdns_message *m, struct mdns_resource *r)
 {
 	struct rr_srv *srv;
 
-	DB_PRINT("--------------------------------------------------------\n"
-			 "resource \"");
+	DBG("--------------------------------------------------------\n"
+		"resource \"");
 	debug_print_name(m, r->name);
-	DB_PRINT("\" (type %u, class %u%s)\n\tttl=%u, rdlength=%u\n",
-			 r->type,
-			 r->class & 0x8000 ? r->class & ~(0x8000) : r->class,
-			 r->class & 0x8000 ? " FLUSH" : "", r->ttl, r->rdlength);
+	DBG("\" (type %u, class %u%s)\n\tttl=%u, rdlength=%u\n",
+		r->type,
+		r->class & 0x8000 ? r->class & ~(0x8000) : r->class,
+		r->class & 0x8000 ? " FLUSH" : "", r->ttl, r->rdlength);
 	switch(r->type) {
 	case T_A:
-		DB_PRINT("\tA type, IP=");
+		DBG("\tA type, IP=");
 		debug_print_ip(ntohl(*((uint32_t*)r->rdata)));
-		DB_PRINT("\n");
+		DBG("\n");
 		break;
 	case T_NS:
-		DB_PRINT("\tNS type, name=\"");
+		DBG("\tNS type, name=\"");
 		debug_print_name(m, (char *)r->rdata);
-		DB_PRINT("\"\n");
+		DBG("\"\n");
 		break;
 	case T_CNAME:
-		DB_PRINT("\tCNAME type, name=\"");
+		DBG("\tCNAME type, name=\"");
 		debug_print_name(m, (char *)r->rdata);
-		DB_PRINT("\"\n");
+		DBG("\"\n");
 		break;
 	case T_SRV:
-		DB_PRINT("\tSRV type, ");
+		DBG("\tSRV type, ");
 		srv = (struct rr_srv*)r->rdata;
-		printf("priority: %u, weight: %u, port: %u, target: \"",
-			   ntohs(srv->priority), ntohs(srv->weight), ntohs(srv->port));
+		DBG("priority: %u, weight: %u, port: %u, target: \"",
+			ntohs(srv->priority), ntohs(srv->weight), ntohs(srv->port));
 		debug_print_name(m, (char *)(r->rdata+3*sizeof(uint16_t)));
-		DB_PRINT("\"\n");
+		DBG("\"\n");
 		break;
 	case T_PTR:
-		DB_PRINT("\tPTR type, name=\"");
+		DBG("\tPTR type, name=\"");
 		debug_print_name(m, (char *)r->rdata);
-		DB_PRINT("\"\n");
+		DBG("\"\n");
 		break;
 	case T_TXT:
-		DB_PRINT("\tTXT type, data=\"");
+		DBG("\tTXT type, data=\"");
 		debug_print_txt((char *)r->rdata, r->rdlength);
-		DB_PRINT("\"\n");
+		DBG("\"\n");
 		break;
 	default:
-		DB_PRINT("\tunknown RR type\n");
+		DBG("\tunknown RR type\n");
 		break;
 	}
 }
 
 void debug_print_header(struct mdns_header *h)
 {
-	DB_PRINT("--------------------------------------------------------\n"
-			 "header:\nID=%u, QR=%u, AA=%d OPCODE=%u\n"
-			 "QDCOUNT=%u, ANCOUNT=%u, NSCOUNT=%u, ARCOUNT=%u\n",
-			 ntohs(h->id), h->flags.fields.qr,
-			 h->flags.fields.aa, h->flags.fields.opcode,
-			 ntohs(h->qdcount), ntohs(h->ancount),
-			 ntohs(h->nscount), ntohs(h->arcount));
+	DBG("--------------------------------------------------------\n"
+		"header:\nID=%u, QR=%u, AA=%d OPCODE=%u\n"
+		"QDCOUNT=%u, ANCOUNT=%u, NSCOUNT=%u, ARCOUNT=%u\n",
+		ntohs(h->id), h->flags.fields.qr,
+		h->flags.fields.aa, h->flags.fields.opcode,
+		ntohs(h->qdcount), ntohs(h->ancount),
+		ntohs(h->nscount), ntohs(h->arcount));
 }
 
 /* print information about a message: header, questions, answers */
@@ -121,9 +119,7 @@ void debug_print_message(struct mdns_message *m)
 {
 	int i;
 
-	DB_PRINT("########################################################\n"
-			 "printing message:\n");
-
+	DBG("########################################################\n");
 	debug_print_header(m->header);
 
 	for(i = 0; i < m->num_questions; i++)
@@ -132,3 +128,4 @@ void debug_print_message(struct mdns_message *m)
 	for(i = 0; i < m->num_answers; i++)
 		debug_print_resource(m, &m->answers[i]);
 }
+#endif /* MDNS_DBG */

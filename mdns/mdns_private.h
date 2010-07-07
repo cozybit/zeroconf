@@ -33,9 +33,18 @@ void mdns_add_question(struct mdns_message *m, char* qname,
 void mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
 	uint16_t class, uint32_t ttl, struct mdns_rr *rr);
 
-#define DB_PRINT(...) do { \
-	printf(__VA_ARGS__); \
-    fflush(stdout); \
-} while (0)
-
+#ifdef MDNS_LOG
+#define LOG mdns_log
+#ifdef MDNS_DBG
 void debug_print_message(struct mdns_message *m);
+#define DBG mdns_log
+#else
+#define debug_print_message {}
+#define DBG {}
+#endif
+
+#else
+#define debug_print_message {}
+#define DBG {}
+#define LOG {}
+#endif

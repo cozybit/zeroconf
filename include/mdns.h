@@ -13,6 +13,11 @@
  * Developers may wish to enable this during development to ensure that various
  * inputs such as host names are legal.  Then, if the inputs are not going to
  * change, this option can be turned off to save code space.
+ *
+ * MDNS_LOG: define this to include logging.
+ *
+ * MDNS_DBG: define this to include debug-level logging.  This has no effect if
+ * MDNS_LOG is not defined.
  */
 
 #define MDNS_CTRL_PORT 12345

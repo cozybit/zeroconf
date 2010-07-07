@@ -4,7 +4,9 @@ OBJS = mdns.o debug.o
 # Build-time options can be overriden from command line or higher-level
 # makefiles
 OPTIONS ?= \
-	MDNS_CHECK_ARGS
+	MDNS_CHECK_ARGS \
+	MDNS_LOG \
+	MDNS_DBG
 
 CFLAGS += $(addprefix -D, $(OPTIONS))
 

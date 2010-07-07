@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "mdns.h"
 #include "mdns_os.h"
@@ -124,6 +125,15 @@ void mdns_thread_delete(void *t)
 void mdns_thread_yield(void)
 {
 	sleep(0);
+}
+
+void mdns_log(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	vprintf(fmt, ap);
+	va_end(ap);
+    fflush(stdout);
 }
 
 #define HELP_TEXT \

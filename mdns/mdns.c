@@ -101,13 +101,13 @@ int mdns_parse_message(struct mdns_message *m, char *b)
 	m->header->flags.num = ntohs(m->header->flags.num);
 
 	if (m->header->flags.fields.opcode != 0) {
-		DB_PRINT("dropping message with opcode != 0\n");
+		DBG("dropping message with opcode != 0\n");
 		return 0;
 	}
 
 #if 0
 	if (m->header->flags.fields.rcode != 0) {
-		DB_PRINT("dropping message with rcode != 0\n");
+		DBG("dropping message with rcode != 0\n");
 		return 0;
 	}
 #endif
@@ -118,7 +118,7 @@ int mdns_parse_message(struct mdns_message *m, char *b)
 		/* get qname */
 		m->questions[i].qname = m->cur;
 		if (!mdns_traverse_name(m)) { /* move past qname */
-			DB_PRINT("dropping message: invalid label in question %d\n",i);
+			DBG("dropping message: invalid label in question %d\n",i);
 			return 0;
 		}
 		/* get qtype */
@@ -126,7 +126,7 @@ int mdns_parse_message(struct mdns_message *m, char *b)
 		if (t <= T_ANY)
 			m->questions[i].qtype = t;
 		else {
-			DB_PRINT("dropping message: invalid type %u\n", t);
+			DBG("dropping message: invalid type %u\n", t);
 			return 0;
 		}
 		/* get qclass */
@@ -134,7 +134,7 @@ int mdns_parse_message(struct mdns_message *m, char *b)
 		if ((t & ~0x8000) == 1)
 			m->questions[i].qclass = t;
 		else {
-			DB_PRINT("dropping message: invalid class %u\n", t);
+			DBG("dropping message: invalid class %u\n", t);
 			return 0;
 		}
 	}
@@ -142,7 +142,7 @@ int mdns_parse_message(struct mdns_message *m, char *b)
 	for(i = 0; i < m->num_answers && i < MDNS_MAX_ANSWERS; i++) {
 		m->answers[i].name = m->cur;
 		if (!mdns_traverse_name(m)) {
-			DB_PRINT("dropping message: invalid label in answer %d\n", i);
+			DBG("dropping message: invalid label in answer %d\n", i);
 			return 0;
 		}
 		m->answers[i].type = mdns_read_n16(m);
@@ -279,14 +279,14 @@ int m_socket(void)
 
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock < 0) {
-		DB_PRINT("error: could not open multicast socket\n");
+		LOG("error: could not open multicast socket\n");
 		return sock;
 	}
 
 #ifdef SO_REUSEPORT
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, (char*)&yes,
 					sizeof(yes)) < 0) {
-		DB_PRINT("error: failed to set SO_REUSEPORT option\n");
+		LOG("error: failed to set SO_REUSEPORT option\n");
 		return -1;
 	}
 #endif
@@ -302,25 +302,25 @@ int m_socket(void)
 	mc.imr_interface.s_addr = htonl(INADDR_ANY);
 	if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mc,
 					sizeof(mc)) < 0) {
-		DB_PRINT("error: failed to join multicast group\n");
+		LOG("error: failed to join multicast group\n");
 		return -1;
 	}
 	/* set other IP-level options */
 	if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (unsigned char *)&ttl,
 					sizeof(ttl)) < 0) {
-		DB_PRINT("error: failed to set multicast TTL\n");
+		LOG("error: failed to set multicast TTL\n");
 		return -1;
 	}
 #if defined(IP_MULTICAST_LOOP) && !defined(LOOPBACK)
 	if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *)&no,
 					sizeof(no)) < 0) {
-		DB_PRINT("error: failed to unset IP_MULTICAST_LOOP option\n");
+		LOG("error: failed to unset IP_MULTICAST_LOOP option\n");
 		return -1;
 	}
 #endif
 
 	if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
-		DB_PRINT("error: failed to put socket in non-blocking mode\n");
+		LOG("error: failed to put socket in non-blocking mode\n");
 		return -1;
 	}
 	return sock;
@@ -342,11 +342,11 @@ int send_message(struct mdns_message *m, int sock, short port)
 				  sizeof(struct sockaddr_in));
 
 	if (len < size) {
-		DB_PRINT("error: failed to send message\n");
+		LOG("error: failed to send message\n");
 		return 0;
 	}
 
-	DB_PRINT("sent %u-byte message\n", size);
+	DBG("sent %u-byte message\n", size);
 	return 1;
 }
 
@@ -416,17 +416,17 @@ static void do_mdns(void *data)
 		active_fds = select(max_sock + 1, &fds, NULL, NULL, &timeout);
 
 		if (active_fds < 0 && errno != EINTR)
-			DB_PRINT("error: select() failed: %d\n", errno);
+			LOG("error: select() failed: %d\n", errno);
 
 		if (FD_ISSET(ctrl_sock, &fds)) {
-			DB_PRINT("Got control message.\n");
+			DBG("Got control message.\n");
 			ret = recvfrom(ctrl_sock, &msg, sizeof(msg), 0,
 						   (struct sockaddr *)0, 0);
 			if (ret == -1) {
-				DB_PRINT("Warning: failed to get control message\n");
+				LOG("Warning: failed to get control message\n");
 			} else {
 				if (msg == MDNS_CTRL_HALT) {
-					DB_PRINT("mdns done.\n");
+					LOG("mdns done.\n");
 					mdns_enabled = 0;
 					break;
 				}
@@ -437,7 +437,7 @@ static void do_mdns(void *data)
 			len = recvfrom(mc_sock, rx_buffer, 1000, 0,
 						   (struct sockaddr*)&from, &in_size);
 			if (len < 0) {
-				DB_PRINT("failed to recv packet\n");
+				LOG("failed to recv packet\n");
 				continue;
 			}
 			if (mdns_parse_message(&rx_message, rx_buffer)) {
@@ -452,10 +452,10 @@ static void do_mdns(void *data)
 						 * ANY, send all the records, etc.
 						 */
 						if (strcmp(rx_message.questions[i].qname, fqdn) == 0) {
-							DB_PRINT("responding to query:\n");
+							DBG("responding to query:\n");
 							debug_print_message(&rx_message);
 							if (from.sin_port == htons(5353)) {
-								DB_PRINT("Expected src port.\n");
+								DBG("Expected src port.\n");
 								tx_message.header->id = rx_message.header->id;
 								send_message(&tx_message, mc_sock, from.sin_port);
 							} else {
@@ -520,7 +520,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
 
 	/* populate the fqdn */
 	if (!valid_label(hostname) || !valid_label(domain)) {
-		DB_PRINT("Invalid hostname: %s\n", hostname);
+		LOG("Invalid hostname: %s\n", hostname);
 		return MDNS_INVAL;
 	}
 	/* names are preceded by their len */
@@ -539,7 +539,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
 
 	mc_sock = m_socket();
 	if (mc_sock < 0) {
-		DB_PRINT("error: unable to open multicast socket\n");
+		LOG("error: unable to open multicast socket\n");
 		return 1;
 	}
 
@@ -551,7 +551,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
 	/* create control socket */
 	ctrl_sock = socket(PF_INET, SOCK_DGRAM, 0);
 	if (ctrl_sock < 0) {
-		DB_PRINT("Failed to create control socket.\n");
+		LOG("Failed to create control socket.\n");
 		return -1;
 	}
 	setsockopt(ctrl_sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one));
@@ -563,7 +563,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
 	/* bind control socket */
 	ret = bind(ctrl_sock, (struct sockaddr *)&ctrl_listen, addr_len);
 	if (ret < 0) {
-		DB_PRINT("Failed to bind control socket\n");
+		LOG("Failed to bind control socket\n");
 		return -1;
 	}
 
@@ -578,15 +578,15 @@ void mdns_halt(void)
 	int ret;
 	int count = 0;
 
-	DB_PRINT("Halting mdns.\n");
+	LOG("Halting mdns.\n");
 	ret = send_ctrl_msg(MDNS_CTRL_HALT);
-	if (ret != 0)
-		DB_PRINT("Warning: failed to send HALT message to mdns: %d\n", errno);
-	else
+	if (ret != 0) {
+		LOG("Warning: failed to send HALT message to mdns: %d\n", errno);
+	} else {
 		mdns_thread_yield();
-
+	}
 	if (mdns_enabled != 0)
-		DB_PRINT("Warning: failed to halt mdns.  Forcing.\n");
+		LOG("Warning: failed to halt mdns.  Forcing.\n");
 
 	mdns_thread_delete(mdns_thread);
 	mdns_enabled = 0;

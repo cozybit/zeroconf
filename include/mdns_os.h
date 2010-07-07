@@ -46,4 +46,12 @@ void mdns_thread_delete(void *t);
  */
 void mdns_thread_yield(void);
 
+/*
+ * mdns_log: printf-like function to write log messages
+ *
+ * The mdns daemon will write log messages depending on its build-time
+ * log-level.  See mdns.h for details.
+ */
+void mdns_log(const char *fmt, ...);
+
 #endif /* __MDNS_OS_H__ */
