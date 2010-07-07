@@ -441,25 +441,41 @@ static void do_mdns(void *data)
 				continue;
 			}
 			if (mdns_parse_message(&rx_message, rx_buffer)) {
-				debug_print_message(&rx_message);
-				/* TODO: parse, decide if/how to respond */
 				if (status == STARTED &&
 					from.sin_addr.s_addr != htonl(service_a.ip) &&
 					MDNS_IS_QUERY(rx_message)) {
 
 					for(i = 0; i < rx_message.num_questions; i++) {
-						if (rx_message.questions[i].qtype == T_A &&
-							strcmp(rx_message.questions[i].qname, fqdn) == 0)
-						{
-							DB_PRINT("responding to query...\n");
-							mdns_add_answer(&rx_message, fqdn, T_A, C_IN, 225,
-											&my_a);
-							rx_message.header->flags.fields.qr = 1;
-							rx_message.header->flags.fields.aa = 1;
-							rx_message.header->flags.fields.rcode = 0;
-							rx_message.header->flags.num =
-								htons(rx_message.header->flags.num);
-							send_message(&rx_message, mc_sock, from.sin_port);
+						/* TODO: Really, we should compose our response based
+						 * on the questions.  For example, if the query is for
+						 * an A record, send an A record back.  If it's for
+						 * ANY, send all the records, etc.
+						 */
+						if (strcmp(rx_message.questions[i].qname, fqdn) == 0) {
+							DB_PRINT("responding to query:\n");
+							debug_print_message(&rx_message);
+							if (from.sin_port == htons(5353)) {
+								DB_PRINT("Expected src port.\n");
+								tx_message.header->id = rx_message.header->id;
+								send_message(&tx_message, mc_sock, from.sin_port);
+							} else {
+								/* Some clients (e.g., python-dns) expect the
+								 * original question to appear in the response.
+								 * I failed to find a reason for this in the
+								 * standard, but I did verify this by reading
+								 * the python source code and testing with a
+								 * known good mdns responder.
+								 */
+								mdns_add_answer(&rx_message, fqdn, T_A, C_IN, 225,
+												&my_a);
+								rx_message.header->flags.fields.qr = 1;
+								rx_message.header->flags.fields.aa = 1;
+								rx_message.header->flags.fields.rcode = 0;
+								rx_message.header->flags.num =
+									htons(rx_message.header->flags.num);
+								send_message(&rx_message, mc_sock, from.sin_port);
+							}
+							break;
 						}
 					}
 				}

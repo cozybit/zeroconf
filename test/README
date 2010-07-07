@@ -22,3 +22,6 @@ Notes
 
 -- If you use the "ControlMaster auto" option with your ssh client, you may get
    some unexpected failures from pxssh.
+
+-- For some reason, the tests don't work on my Ubuntu dev machine unless I've
+   got avahi up.  Not sure what's up with that.
