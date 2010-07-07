@@ -13,7 +13,7 @@ class mdns:
 		self.conf = conf
 
 	def start(self, args=""):
-		command = "mdns " + args + " launch"
+		command = "mdns " + args + " -l /root/mdns.log launch"
 		self.session.sendline(command)
 		self.session.prompt()
 		self.session.sendline("echo $?")

@@ -33,5 +33,9 @@ void mdns_add_question(struct mdns_message *m, char* qname,
 void mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
 	uint16_t class, uint32_t ttl, struct mdns_rr *rr);
 
-#define DB_PRINT		printf
+#define DB_PRINT(...) do { \
+	printf(__VA_ARGS__); \
+    fflush(stdout); \
+} while (0)
+
 void debug_print_message(struct mdns_message *m);

@@ -26,6 +26,7 @@
 
 /* TODO: Use system-independent log function */
 #define LOG printf
+char *logfile = NULL;
 
 static void linux_mdns_signal(int sig)
 {
@@ -79,7 +80,10 @@ void *mdns_thread_create(mdns_thread_entry entry, void *data)
 
 		/* redirect stdin, out, and err */
 		freopen("/dev/null", "r", stdin);
-		freopen("/dev/null", "w", stdout);
+		if (logfile != NULL)
+			freopen(logfile, "w", stdout);
+		else
+			freopen("/dev/null", "w", stdout);
 		umask(027);
 		ret = lockf(lock, F_TLOCK, 0);
 		if (0 > ret) {
@@ -132,7 +136,8 @@ void mdns_thread_yield(void)
 "-h             Print this help text\n" \
 "-b <ipaddr>    ipaddress to bind to\n" \
 "-d <domain>    domain to resolve (default is 'local')\n" \
-"-n <hostname>  hostname to resolve (default is 'node')\n"
+"-n <hostname>  hostname to resolve (default is 'node')\n" \
+"-l <logfile>   logfile for daemon (default is /dev/null)\n"
 
 int main(int argc, char **argv)
 {
@@ -143,7 +148,7 @@ int main(int argc, char **argv)
 	char *domain = "local";
 	char *hostname = "node";
 
-	while ((opt = getopt(argc, argv, "hb:d:n:")) != -1) {
+	while ((opt = getopt(argc, argv, "hb:d:n:l:")) != -1) {
 		switch (opt) {
 		case 'h':
 			printf(HELP_TEXT);
@@ -156,6 +161,9 @@ int main(int argc, char **argv)
 			break;
 		case 'n':
 			hostname = optarg;
+			break;
+		case 'l':
+			logfile = optarg;
 			break;
 		default:
 			printf("Unexpected option %c\n", opt);
