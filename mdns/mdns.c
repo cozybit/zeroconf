@@ -317,6 +317,10 @@ int m_socket(void)
 	}
 #endif
 
+	if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
+		DB_PRINT("error: failed to put socket in non-blocking mode\n");
+		return -1;
+	}
 	return sock;
 }
 
@@ -376,8 +380,10 @@ static int send_ctrl_msg(int msg)
 {
 	int ret;
 	struct sockaddr_in to;
+	int s;
 
-	if (ctrl_sock == -1)
+	s = socket(PF_INET, SOCK_DGRAM, 0);
+	if (s < 0)
 		return -1;
 
 	memset((char *)&to, 0, sizeof(to));
@@ -385,8 +391,7 @@ static int send_ctrl_msg(int msg)
 	to.sin_port = htons(MDNS_CTRL_PORT);
 	to.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-	ret = sendto(ctrl_sock, &msg, sizeof(msg), 0,
-				 (struct sockaddr *)&to, sizeof(to));
+	ret = sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *)&to, sizeof(to));
 	if (ret != -1)
 		ret = 0;
 
@@ -411,10 +416,11 @@ static void do_mdns(void *data)
 
 		active_fds = select(max_sock + 1, &fds, NULL, NULL, &timeout);
 
-		if (active_fds < 0)
-			DB_PRINT("error: select() failed\n");
+		if (active_fds < 0 && errno != EINTR)
+			DB_PRINT("error: select() failed: %d\n", errno);
 
 		if (FD_ISSET(ctrl_sock, &fds)) {
+			DB_PRINT("Got control message.\n");
 			ret = recvfrom(ctrl_sock, &msg, sizeof(msg), 0,
 						   (struct sockaddr *)0, 0);
 			if (ret == -1) {
@@ -551,13 +557,17 @@ int mdns_launch(uint32_t ipaddr)
 void mdns_halt(void)
 {
 	int ret;
+	int count = 0;
+
+	DB_PRINT("Halting mdns.\n");
 	ret = send_ctrl_msg(MDNS_CTRL_HALT);
 	if (ret != 0)
-		DB_PRINT("Warning: failed to send HALT message to mdns\n");
+		DB_PRINT("Warning: failed to send HALT message to mdns: %d\n", errno);
 	else
 		mdns_thread_yield();
+
 	if (mdns_enabled != 0)
-		DB_PRINT("Warning: failed to halt mdns.	 Forcing.\n");
+		DB_PRINT("Warning: failed to halt mdns.  Forcing.\n");
 
 	mdns_thread_delete(mdns_thread);
 	mdns_enabled = 0;

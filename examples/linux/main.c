@@ -138,8 +138,6 @@ int main(int argc, char **argv)
 	char opt;
 	in_addr_t ipaddr = 0;
 	char *cmd;
-	FILE *f;
-	pid_t pid;
 
 	while ((opt = getopt(argc, argv, "hb:")) != -1) {
 		switch (opt) {
@@ -165,17 +163,8 @@ int main(int argc, char **argv)
 		ret = mdns_launch(ipaddr);
 
 	} else if (strcmp(cmd, "halt") == 0) {
-		f = fopen(MDNS_PIDFILE, "r");
-		if (f == NULL) {
-			printf("Failed to open pid file: %s\n", strerror(errno));
-			return -1;
-		}
-		ret = fscanf(f, "%d\n", &pid);
-		if (ret != 1) {
-			printf("Failed to read pid\n");
-			return -1;
-		}
-		return kill(pid, SIGTERM);
+		mdns_halt();
+		return 0;
 
 	} else {
 		printf("No such command: %s\n", cmd);
