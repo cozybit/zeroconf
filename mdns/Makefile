@@ -1,4 +1,4 @@
-CFLAGS = -DMDNS_HOST_TEST -I$(TOP)/include
+CFLAGS += -I$(TOP)/include
 OBJS = mdns.o debug.o
 
 all: libmdns.a

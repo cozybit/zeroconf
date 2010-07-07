@@ -1,6 +1,11 @@
 TOP = $(CURDIR)
 export TOP
 
+ifneq ($(DEBUG),)
+	CFLAGS += -g
+endif
+export CFLAGS
+
 .PHONY: mdns linux
 
 all: mdns linux
