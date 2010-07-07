@@ -129,8 +129,10 @@ void mdns_thread_yield(void)
 "halt          stop mdns daemon\n" \
 "\n" \
 "Options\n" \
-"-h           Print this help text\n" \
-"-b <ipaddr>  ipaddress to bind to\n"
+"-h             Print this help text\n" \
+"-b <ipaddr>    ipaddress to bind to\n" \
+"-d <domain>    domain to resolve (default is 'local')\n" \
+"-n <hostname>  hostname to resolve (default is 'node')\n"
 
 int main(int argc, char **argv)
 {
@@ -138,14 +140,22 @@ int main(int argc, char **argv)
 	char opt;
 	in_addr_t ipaddr = 0;
 	char *cmd;
+	char *domain = "local";
+	char *hostname = "node";
 
-	while ((opt = getopt(argc, argv, "hb:")) != -1) {
+	while ((opt = getopt(argc, argv, "hb:d:n:")) != -1) {
 		switch (opt) {
 		case 'h':
 			printf(HELP_TEXT);
 			return 0;
 		case 'b':
 			ipaddr = inet_addr(optarg);
+			break;
+		case 'd':
+			domain = optarg;
+			break;
+		case 'n':
+			hostname = optarg;
 			break;
 		default:
 			printf("Unexpected option %c\n", opt);
@@ -160,7 +170,7 @@ int main(int argc, char **argv)
 
 	cmd = argv[optind];
 	if (strcmp(cmd, "launch") == 0) {
-		ret = mdns_launch(ipaddr);
+		ret = mdns_launch(ipaddr, domain, hostname);
 
 	} else if (strcmp(cmd, "halt") == 0) {
 		mdns_halt();

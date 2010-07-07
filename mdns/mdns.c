@@ -11,8 +11,10 @@
 
 #include "mdns.h"
 #include "mdns_private.h"
-#include "mdns_config.h"
 #include "mdns_os.h"
+
+/* Our fully qualified domain name is something like 'node.local.' */
+static uint8_t fqdn[2*(MDNS_MAX_LABEL_LEN + 1)];
 
 uint16_t mdns_name_length(char *name);
 uint16_t mdns_read_n16(struct mdns_message *m);
@@ -370,11 +372,8 @@ static socklen_t in_size = sizeof(struct sockaddr_in);
 static uint8_t status = FIRST_PROBE;
 
 /* device settings */
-static struct mdns_rr my_a, my_srv, my_txt, my_ptr;
+static struct mdns_rr my_a;
 static struct rr_a service_a;
-static struct rr_srv service_srv;
-static struct rr_ptr service_ptr;
-static struct rr_txt service_txt;
 
 static int send_ctrl_msg(int msg)
 {
@@ -445,8 +444,7 @@ static void do_mdns(void *data)
 					MDNS_IS_QUERY(rx_message)) {
 					/* XXX just respond to anyone that isn't myself */
 					DB_PRINT("responding to query...\n");
-					mdns_add_answer(&rx_message, SERVICE_TARGET,
-									T_A, C_IN, 225, &my_a);
+					mdns_add_answer(&rx_message, fqdn, T_A, C_IN, 225, &my_a);
 
 					rx_message.header->flags.fields.qr = 1; /* response */
 					rx_message.header->flags.fields.aa = 1; /* authoritative */
@@ -461,20 +459,7 @@ static void do_mdns(void *data)
 			if (status == ANNOUNCE) {
 				mdns_transmit_init(&tx_message, tx_buffer, RESPONSE);
 				/* A */
-				mdns_add_answer(&tx_message, SERVICE_TARGET,
-								T_A, C_FLUSH, 225, &my_a);
-				/* SRV */
-				mdns_add_answer(&tx_message,
-								SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN,
-								T_SRV, C_FLUSH, 225, &my_srv);
-				/* TXT */
-				mdns_add_answer(&tx_message,
-								SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN,
-								T_TXT, C_FLUSH, 225, &my_txt);
-				/* PTR */
-				mdns_add_answer(&tx_message,
-								SERVICE_TYPE SERVICE_DOMAIN,
-								T_PTR, C_IN, 255, &my_ptr);
+				mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 225, &my_a);
 			}
 			send_message(&tx_message, mc_sock, 5353);
 			status++;
@@ -482,41 +467,49 @@ static void do_mdns(void *data)
 	}
 }
 
-int mdns_launch(uint32_t ipaddr)
+/* return 0 for invalid, 1 for valid */
+#ifdef MDNS_CHECK_ARGS
+static int valid_label(char *name)
+{
+	if (strlen(name) > MDNS_MAX_LABEL_LEN ||
+		strchr(name, '.') != NULL)
+		return 0;
+	return 1;
+}
+#else
+#define valid_label(name) (1)
+#endif
+
+int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
 {
 	int one = 1, ret;
 	struct sockaddr_in ctrl_listen;
 	int addr_len;
+	uint8_t *p, len;
 
 	/* We accept the IP arg in network order, but internally (and for no good
 	 * reason) we store it in host order.
 	 */
 	service_a.ip = htonl(ipaddr);
 
-	service_srv.priority = 0;
-	service_srv.weight = 0;
-	service_srv.port = 80;
-	service_srv.target = SERVICE_TARGET;
-
-	service_ptr.name = SERVICE_NAME SERVICE_TYPE SERVICE_DOMAIN;
-
-	service_txt.data = "\xF""path=index.html";
+	/* populate the fqdn */
+	if (!valid_label(hostname) || !valid_label(domain)) {
+		DB_PRINT("Invalid hostname: %s\n", hostname);
+		return MDNS_INVAL;
+	}
+	/* names are preceded by their len */
+	p = fqdn;
+	len = (uint8_t)strlen(hostname);
+	*p++ = len;
+	strcpy(p, hostname);
+	p += len;
+	len = (uint8_t)strlen(domain);
+	*p++ = len;
+	strcpy(p, domain);
 
 	my_a.data.a = &service_a;
 	my_a.length = rr_length_a;
 	my_a.transfer = rr_transfer_a;
-
-	my_srv.data.srv = &service_srv;
-	my_srv.length = rr_length_srv;
-	my_srv.transfer = rr_transfer_srv;
-
-	my_ptr.data.ptr = &service_ptr;
-	my_ptr.length = rr_length_ptr;
-	my_ptr.transfer = rr_transfer_ptr;
-
-	my_txt.data.txt = &service_txt;
-	my_txt.length = rr_length_txt;
-	my_txt.transfer = rr_transfer_txt;
 
 	mc_sock = m_socket();
 	if (mc_sock < 0) {

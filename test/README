@@ -19,3 +19,6 @@ Notes
 
 -- The linux tests require that you can ssh into the remote target without a
    password (i.e., your ssh-agent is set up properly).
+
+-- If you use the "ControlMaster auto" option with your ssh client, you may get
+   some unexpected failures from pxssh.

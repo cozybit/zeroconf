@@ -1,6 +1,13 @@
 CFLAGS += -I$(TOP)/include
 OBJS = mdns.o debug.o
 
+# Build-time options can be overriden from command line or higher-level
+# makefiles
+OPTIONS ?= \
+	MDNS_CHECK_ARGS
+
+CFLAGS += $(addprefix -D, $(OPTIONS))
+
 all: libmdns.a
 
 libmdns.a: $(OBJS)
