@@ -45,23 +45,16 @@ struct mdns_header {
 	uint16_t arcount;
 };
 
-/* Resource Record (RR) representations */
-struct rr_a { uint32_t ip; };
-struct rr_cname { char *name; };
-struct rr_txt { char *data; };
-struct rr_ns { char *name; };
-struct rr_srv { uint16_t priority; uint16_t weight; uint16_t port; char *target; };
-struct rr_ptr { char *name; };
+/* DNS Q/R values */
+#define QUERY 0
+#define RESPONSE 1
 
-/* Resource Record (RR) pointer */
-union rr_p {
-	struct rr_a *a;
-	struct rr_cname *cname;
-	struct rr_txt *txt;
-	struct rr_ns *ns;
-	struct rr_srv *srv;
-	struct rr_ptr *ptr;
-};
+/* DNS opcodes (see RFC 2929) */
+#define DNS_OPCODE_QUERY 0
+#define DNS_OPCODE_IQUERY 1
+#define DNS_OPCODE_STATUS 2
+#define DNS_OPCODE_NOTIFY 3
+#define DNS_OPCODE_UPDATE 5
 
 /* mDNS question (query) representation */
 struct mdns_question {
@@ -80,23 +73,30 @@ struct mdns_resource {
 	void *rdata;
 };
 
+/* structured rdata for SRV record */
+struct rr_srv {
+	uint16_t priority;
+	uint16_t weight;
+	uint16_t port;
+	char target[0];
+};
+
 /* mDNS message representation */
 struct mdns_message {
+	/* raw data for packet.  The maximum mDNS message is actually 9000 bytes
+	 * including all lower-level headers (Multicast DNS draft sec 18).
+	 * However, the same section advises implementors to keep it under 1500
+	 * bytes, which is the Ethernet MTU.
+	 */
+	char data[1500];
 	struct mdns_header *header;
-	char *cur;
-	/* pointers to (and representations of) questions and answers */
+	char *cur; /* next byte to read or write */
+	char *end; /* end of message buffer */
+	int len; /* length of message buffer */
 	struct mdns_question questions[MDNS_MAX_QUESTIONS];
+	uint16_t num_questions;
 	struct mdns_resource answers[MDNS_MAX_ANSWERS];
-	uint16_t num_questions, num_answers; /* for convenience */
+	uint16_t num_answers;
 };
-
-struct mdns_rr {
-	void(*transfer)( struct mdns_message *m, union rr_p r );
-	uint16_t(*length)( union rr_p r );
-	union rr_p data;
-};
-
-#define MDNS_IS_QUERY(msg)		(msg.header->flags.fields.qr == 0)
-#define MDNS_IS_RESPONSE(msg)	(msg.header->flags.fields.qr == 1)
 
 #endif

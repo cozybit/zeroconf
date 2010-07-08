@@ -81,10 +81,10 @@ void debug_print_resource(struct mdns_message *m, struct mdns_resource *r)
 		break;
 	case T_SRV:
 		DBG("\tSRV type, ");
-		srv = (struct rr_srv*)r->rdata;
+		srv = (struct rr_srv *)r->rdata;
 		DBG("priority: %u, weight: %u, port: %u, target: \"",
 			ntohs(srv->priority), ntohs(srv->weight), ntohs(srv->port));
-		debug_print_name(m, (char *)(r->rdata+3*sizeof(uint16_t)));
+		debug_print_name(m, srv->target);
 		DBG("\"\n");
 		break;
 	case T_PTR:

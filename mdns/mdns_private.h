@@ -1,38 +1,34 @@
 #include "mdns_message.h"
 
-typedef enum { QUERY, RESPONSE } msg_type;
-
 enum mdns_status_t {
-	FIRST_PROBE,	/* wait a random amount of time and probe */
-	SECOND_PROBE,	/* wait 250ms and probe */
-	THIRD_PROBE,	/* wait 250ms and probe */
-	ANNOUNCE,		/* send announcement message to claim name */
-	STARTED			/* we have claimed our name */
+	FIRST_PROBE_SENT,	/* wait a random amount of time and probe */
+	SECOND_PROBE_SENT,	/* wait 250ms and probe */
+	THIRD_PROBE_SENT,	/* wait 250ms and probe */
+	IDLE,				/* we have claimed our name */
 };
 
-/* RR transfer functions */
-void rr_transfer_a(struct mdns_message *m, union rr_p r);
-void rr_transfer_cname(struct mdns_message *m, union rr_p r);
-void rr_transfer_txt(struct mdns_message *m, union rr_p r);
-void rr_transfer_ns(struct mdns_message *m, union rr_p r);
-void rr_transfer_srv(struct mdns_message *m, union rr_p r);
-void rr_transfer_ptr(struct mdns_message *m, union rr_p r);
+enum mdns_event_t {
+	EVENT_RX,		/* recieved a DNS packet */
+	EVENT_CTRL,		/* recieved a control message */
+	EVENT_TIMEOUT,	/* timed out waiting for DNS packet */
+};
 
-/* RR length functions */
-uint16_t rr_length_a(union rr_p r);
-uint16_t rr_length_cname(union rr_p r);
-uint16_t rr_length_txt(union rr_p r);
-uint16_t rr_length_ns(union rr_p r);
-uint16_t rr_length_srv(union rr_p r);
-uint16_t rr_length_ptr(union rr_p r);
+#ifdef MDNS_DBG
+static char *statenames[] = {
+	"FIRST_PROBE_SENT",
+	"SECOND_PROBE_SENT",
+	"THIRD_PROBE_SENT",
+	"IDLE",
+};
 
-void mdns_transmit_init(struct mdns_message *m, char *b, msg_type mtype);
-int mdns_parse_message(struct mdns_message *m, char *b);
-void mdns_add_question(struct mdns_message *m, char* qname, 
-	uint16_t qtype, uint16_t qclass);
-void mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
-	uint16_t class, uint32_t ttl, struct mdns_rr *rr);
+static char *eventnames[] = {
+	"EVENT_RX",
+	"EVENT_CTRL",
+	"EVENT_TIMEOUT",
+};
+#endif
 
+/* logging helpers */
 #ifdef MDNS_LOG
 #define LOG mdns_log
 #ifdef MDNS_DBG
@@ -48,3 +44,9 @@ void debug_print_message(struct mdns_message *m);
 #define DBG {}
 #define LOG {}
 #endif
+
+/* helpers for accessing elements */
+#define get_uint16(p) (ntohs(*((uint16_t *)(p))))
+#define get_uint32(p) (ntohl(*((uint32_t *)(p))))
+#define set_uint16(p, v) (*((uint16_t*)(p)) = htons((v)))
+#define set_uint32(p, v) (*((uint32_t*)(p)) = htonl((v)))
