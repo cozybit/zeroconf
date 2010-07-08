@@ -7,12 +7,13 @@
 #define MDNS_MAX_LABEL_LEN	63	/* defined by the standard */
 #define MDNS_MAX_QUESTIONS	32
 #define MDNS_MAX_ANSWERS	10
+#define MDNS_INADDRARPA_LEN	30 /* like .45.1.168.192.in-addr.arpa */
 
 /* class */
 #define C_IN	0x0001	/* Internet */
 #define C_FLUSH	0x8001	/* FLUSH */
 
-/* types (that are used in mDNS) */
+/* types (that are used in mDNS).  See RFC 1035 for format details */
 #define T_A		1	/* host address */
 #define T_NS	2	/* authoritative name server */
 #define T_CNAME	5	/* canonical name for an alias */

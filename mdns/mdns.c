@@ -15,6 +15,8 @@
 
 /* Our fully qualified domain name is something like 'node.local.' */
 static uint8_t fqdn[MDNS_MAX_NAME_LEN + 1];
+/* Our reverse name for the in-addr.arpa PTR record */
+static uint8_t in_addr_arpa[MDNS_INADDRARPA_LEN];
 static uint32_t my_ipaddr;
 
 /* global mdns state */
@@ -248,7 +250,9 @@ static int mdns_add_uint32(struct mdns_message *m, uint32_t i)
 static int mdns_add_name(struct mdns_message *m, char *name)
 {
 	int len = mdns_name_length(name);
-	CHECK_TAILROOM(m, len);
+	CHECK_TAILROOM(m, len + sizeof(uint16_t));
+	set_uint16(m->cur, len);
+	m->cur += sizeof(uint16_t);
 	memcpy(m->cur, name, len);
 	m->cur += len;
 	return 0;
@@ -390,11 +394,14 @@ static int mdns_prepare_response(struct mdns_message *rx,
 								 struct mdns_message *tx,
 								 struct sockaddr_in *from)
 {
-	int i, ret;
+	int i, ret = 0;
 	struct mdns_question *q;
 
 	if (rx->header->flags.fields.qr != QUERY)
 		return 0;
+
+	mdns_response_init(tx);
+	tx->header->id = rx->header->id;
 
 	for(i = 0; i < rx->num_questions; i++) {
 		/* TODO: Really, we should compose our response based on the questions.
@@ -403,34 +410,43 @@ static int mdns_prepare_response(struct mdns_message *rx,
 		 * the a record.
 		 */
 		q = &rx->questions[i];
-		if (strcmp(q->qname, fqdn) == 0) {
-			DBG("responding to query:\n");
-			debug_print_message(rx);
-			mdns_response_init(tx);
-			tx->header->id = rx->header->id;
-			if (from->sin_port != htons(5353)) {
-				/* Regular DNS clients (e.g., pydns) expect the original
-				 * question to appear in the response.
-				 */
-				ret = mdns_add_question(tx, q->qname, q->qtype, q->qclass);
-				if (ret != 0)
-					return -1;
-				/* This could be a pointer to the copy of fqdn in the question,
-				 * but we don't have code handy to do that.  So we send a
-				 * duplicate
-				 */
-				if (mdns_add_answer(tx, fqdn, T_A, C_IN, 225) != 0 ||
-					mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
-					return -1;
-			} else {
-				if (mdns_add_answer(tx, fqdn, T_A, C_FLUSH, 225) != 0 ||
-					mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
-					return -1;
+		if (q->qtype == T_ANY || q->qtype == T_A) {
+			if (strcmp(q->qname, fqdn) == 0) {
+				if (from->sin_port != htons(5353)) {
+					/* Regular DNS clients (e.g., pydns) expect the original
+					 * question to appear in the response.
+					 *
+					 * TODO: I'm pretty sure we don't have to support this
+					 * case.  But it means that we do have to fix the test
+					 * framework.
+					 */
+					ret = mdns_add_question(tx, q->qname, q->qtype, q->qclass);
+					if (ret != 0)
+						return -1;
+					/* This could be a pointer to the copy of fqdn in the question,
+					 * but we don't have code handy to do that.  So we send a
+					 * duplicate
+					 */
+					if (mdns_add_answer(tx, fqdn, T_A, C_IN, 225) != 0 ||
+						mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
+						return -1;
+				} else {
+					if (mdns_add_answer(tx, fqdn, T_A, C_FLUSH, 225) != 0 ||
+						mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
+						return -1;
+				}
+				ret = 1;
 			}
-			return 1;
+		} else if (q->qtype == T_ANY || q->qtype == T_PTR) {
+			if (strcmp(q->qname, in_addr_arpa) == 0) {
+				if (mdns_add_answer(tx, in_addr_arpa, T_PTR, C_FLUSH, 225) != 0 ||
+					mdns_add_name(tx, fqdn) != 0)
+					return -1;
+				ret = 1;
+			}
 		}
 	}
-	return 0;
+	return ret;
 }
 
 /* This is the mdns thread function */
@@ -566,6 +582,8 @@ static void do_mdns(void *data)
 				ret = mdns_prepare_response(&rx_message, &tx_message, &from);
 				if (ret <= 0)
 					break;
+				DBG("responding to query:\n");
+				debug_print_message(&rx_message);
 				send_message(&tx_message, mc_sock, from.sin_port);
 			}
 			break;
@@ -585,6 +603,30 @@ static int valid_label(char *name)
 #else
 #define valid_label(name) (1)
 #endif
+
+/* create the inaddrarpa domain name DNS string for ipaddr.  Output buffer must
+ * be at least MDNS_INADDRARPA_LEN.  ipaddr must be in host order.
+ */
+static void ipaddr_to_inaddrarpa(uint32_t ipaddr, char *out)
+{
+	char *ptr = out;
+	uint8_t byte;
+	int i, len;
+
+	/* This is a DNS name of the form 45.1.168.192.in-addr.arpa */
+	for (i = 0; i < 4; i++) {
+		byte = ipaddr & 0xff;
+		ipaddr >>= 8;
+		len = sprintf(ptr + 1, "%d", byte);
+		*ptr = len;
+		ptr += len + 1;
+	}
+	*ptr++ = 7;
+	sprintf(ptr, "in-addr");
+	ptr += 7;
+	*ptr++ = 4;
+	sprintf(ptr, "arpa");
+}
 
 int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
 {
@@ -609,6 +651,8 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
 	len = (uint8_t)strlen(domain);
 	*p++ = len;
 	strcpy(p, domain);
+
+	ipaddr_to_inaddrarpa(htonl(ipaddr), in_addr_arpa);
 
 	mc_sock = m_socket();
 	if (mc_sock < 0) {
@@ -661,5 +705,7 @@ void mdns_halt(void)
 		LOG("Warning: failed to halt mdns.  Forcing.\n");
 
 	mdns_thread_delete(mdns_thread);
+	close(ctrl_sock);
+	close(mc_sock);
 	mdns_enabled = 0;
 }
