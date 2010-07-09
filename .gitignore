@@ -1,0 +1,9 @@
+*.o
+*.pyc
+mDNS/main
+cscope.*
+TAGS
+mDNS/mdns
+mdns/mdns
+examples/linux/mdns
+mdns/libmdns.a
