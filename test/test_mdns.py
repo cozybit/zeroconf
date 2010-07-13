@@ -1,6 +1,7 @@
 import unittest, sys, os, ConfigParser
 import dns.query, dns.message
 import mdns_subject
+import mdns_tool
 
 # Parse config file
 configfile = "test.conf"
@@ -88,3 +89,12 @@ class mdnsTest(unittest.TestCase):
 
 		except dns.exception.Timeout:
 			pass
+
+	def test_Inject(self):
+		# Simple test to test that the injector functions
+		# launch mdns
+		self.failIf(mdns.start("-b " + ipaddr + " -n inject") != 0,
+					"Failed to launch mdns")
+
+		q = dns.message.make_query("inject.local", 1, 1)
+		mdns_tool.inject(q, '224.0.0.251')
