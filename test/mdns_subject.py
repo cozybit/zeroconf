@@ -11,6 +11,7 @@ class mdns:
 		self.session = pxssh.pxssh()
 		self.session.login(conf.get("target", "ipaddr"), "root")
 		self.conf = conf
+		self.stop()
 
 	def start(self, args=""):
 		command = "mdns " + args + " -l /root/mdns.log launch"
