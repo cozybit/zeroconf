@@ -71,9 +71,9 @@ class mdnsTest(unittest.TestCase):
 			assert 0
 
 	def test_InvalidLaunch(self):
-		self.failIf(mdns.start("-b " + ipaddr + " -d foo.") != 2,
+		self.failIf(mdns.start("-b " + ipaddr + " -d foo.") != 1,
 					"Failed to detect invalid input")
-		self.failIf(mdns.start("-b " + ipaddr + " -n foo.") != 2,
+		self.failIf(mdns.start("-b " + ipaddr + " -n foo.") != 1,
 					"Failed to detect invalid input")
 
 	def test_WrongNameQuery(self):

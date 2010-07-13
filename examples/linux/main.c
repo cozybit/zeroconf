@@ -188,7 +188,7 @@ int main(int argc, char **argv)
 
 	cmd = argv[optind];
 	if (strcmp(cmd, "launch") == 0) {
-		ret = mdns_launch(ipaddr, domain, hostname);
+		ret = mdns_launch(ipaddr, domain, hostname, NULL);
 
 	} else if (strcmp(cmd, "halt") == 0) {
 		mdns_halt();

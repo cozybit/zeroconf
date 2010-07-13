@@ -628,7 +628,8 @@ static void ipaddr_to_inaddrarpa(uint32_t ipaddr, char *out)
 	sprintf(ptr, "arpa");
 }
 
-int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
+int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
+                struct mdns_service **services)
 {
 	int one = 1, ret;
 	struct sockaddr_in ctrl_listen;
@@ -659,6 +660,9 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname)
 		LOG("error: unable to open multicast socket\n");
 		return 1;
 	}
+
+    if (services != NULL)
+        LOG("Warning: services not implemented yet.\n");
 
 	/* set up probe to claim name. */
 	mdns_query_init(&tx_message);
