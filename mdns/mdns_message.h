@@ -1,7 +1,8 @@
 #ifndef MDNS_MESSAGE_H
 #define MDNS_MESSAGE_H
 
-#include <stdint.h>
+#include "mdns_port.h"
+
 /* settings */
 #define MDNS_MAX_QUESTIONS	32
 #define MDNS_MAX_ANSWERS	10
@@ -21,7 +22,7 @@
 #define T_ANY	255	/* all records */
 
 /* mDNS message header */
-struct mdns_header {
+BEGIN_PACK struct mdns_header {
 	uint16_t id;
 	union {
 		struct { uint16_t
@@ -42,7 +43,7 @@ struct mdns_header {
 	uint16_t ancount; /* number of resource records in answer section */
 	uint16_t nscount;
 	uint16_t arcount;
-};
+} END_PACK;
 
 /* DNS Q/R values */
 #define QUERY 0

@@ -1,17 +1,13 @@
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdint.h>
 
 #include "mdns.h"
 #include "mdns_private.h"
-#include "mdns_os.h"
+#include "mdns_port.h"
 
 /* Our fully qualified domain name is something like 'node.local.' */
 static uint8_t fqdn[MDNS_MAX_NAME_LEN + 1];

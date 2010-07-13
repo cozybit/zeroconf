@@ -21,7 +21,6 @@
 #include <stdarg.h>
 
 #include "mdns.h"
-#include "mdns_os.h"
 
 #define MDNS_PIDFILE "/var/run/mdns.pid"
 

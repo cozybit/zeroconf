@@ -6,7 +6,8 @@ OBJS = mdns.o debug.o
 OPTIONS ?= \
 	MDNS_CHECK_ARGS \
 	MDNS_LOG \
-	MDNS_DBG
+	MDNS_DBG \
+	MDNS_SYSTEM=LINUX
 
 CFLAGS += $(addprefix -D, $(OPTIONS))
 

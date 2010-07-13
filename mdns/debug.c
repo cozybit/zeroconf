@@ -15,7 +15,7 @@ void debug_print_txt(char *txt, uint16_t len)
 {
 	uint16_t i;
 	for(i = 0; i < len; i++)
-		putchar(txt[i]);
+		DBG("%c", txt[i]);
 }
 
 /* print a RFC-1035 format domain name */
@@ -34,7 +34,7 @@ void debug_print_name(struct mdns_message *m, char *name)
 			continue;
 		}
 		else { /* label */
-			putchar('.');
+			DBG(".");
 			debug_print_txt(s+1, *s); /* print label text */
 			s += *s;
 		}

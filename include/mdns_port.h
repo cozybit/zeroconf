@@ -1,12 +1,36 @@
 /* 
  * Copyright (C) cozybit, Inc. 2007-2010
  *
- * mdns_os.h: operating system abstraction layer for mdns
+ * mdns_port.h: porting layer for mdns
  *
+ * The porting layer is comprised of functions that must be implemented and
+ * linked with mdns.  Various compiler and system defines are also implemented
+ * in this file.  Feel free to expand these to work with you system.
  */
 
-#ifndef __MDNS_OS_H__
-#define __MDNS_OS_H__
+#ifndef __MDNS_PORT_H__
+#define __MDNS_PORT_H__
+
+/* system-dependent definitions */
+#if MDNS_SYSTEM == LINUX
+#include <stdio.h>  /* sprintf */
+#include <stdint.h> /* for uint8_t and friends */
+#include <string.h> /* memset, memcpy, strlen, strchr, strcpy */
+
+#else
+#error "mdns target system is not defined"
+#endif
+
+/* compiler-dependent definitions */
+#ifdef __GNUC__
+/* wrappers to define packed structures */
+#define BEGIN_PACK
+#define END_PACK __attribute__((__packed__))
+
+#else
+#error "mdns compiler is not defined"
+#endif
+
 
 /*
  * mdsn_thread_entry: Thread entry point function
@@ -54,4 +78,4 @@ void mdns_thread_yield(void);
  */
 void mdns_log(const char *fmt, ...);
 
-#endif /* __MDNS_OS_H__ */
+#endif /* __MDNS_PORT_H__ */

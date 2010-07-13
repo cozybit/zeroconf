@@ -1,13 +1,17 @@
 #ifndef MDNS_H
 #define MDNS_H
 
-#include <stdint.h>
+#include <mdns_port.h>
 
 /* Build options
  *
- * A number of build options are available in order to optimize footprint, etc.
- * These are conventially provided from the makefile as opposed to being
- * defined directly in a header file.  They include:
+ * A number of build options are available in order to optimize footprint,
+ * specify the target system, etc.  These are conventially provided from the
+ * makefile as opposed to being defined directly in a header file.  They
+ * include:
+ *
+ * MDNS_SYSTEM: This must be set to the target system for which mdns is being
+ * compiled.  For example, specify "MDNS_SYSTEM=LINUX" for a linux target.
  *
  * MDNS_CHECK_ARGS: define this to enable various error checking on the input.
  * Developers may wish to enable this during development to ensure that various
