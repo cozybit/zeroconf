@@ -635,6 +635,8 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	my_ipaddr = ipaddr;
 
 	/* populate the fqdn */
+    if (domain == NULL)
+        domain = "local";
 	if (!valid_label(hostname) || !valid_label(domain)) {
 		LOG("Invalid hostname: %s\n", hostname);
 		return MDNS_INVAL;

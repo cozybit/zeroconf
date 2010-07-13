@@ -154,7 +154,7 @@ int main(int argc, char **argv)
 	char opt;
 	in_addr_t ipaddr = 0;
 	char *cmd;
-	char *domain = "local";
+	char *domain = NULL;
 	char *hostname = "node";
 
 	while ((opt = getopt(argc, argv, "hb:d:n:l:")) != -1) {
