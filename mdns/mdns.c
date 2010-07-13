@@ -187,20 +187,40 @@ static int mdns_response_init(struct mdns_message *m)
 	return 0;
 }
 
+/* add a name, type, class, ttl tuple to the message m.  If the ttl is
+ * (uint32_t)-1, then we only add the name, type, and class.  This is common
+ * functionality used to add questions, answers, and authorities.  No error
+ * checking is performed; the caller is responsible for ensuring that all
+ * values will fit.  Return 0 for success or -1 for failure.
+ */
+static int __mdns_add_tuple(struct mdns_message *m, char *name, uint16_t type,
+							uint16_t class, uint32_t ttl)
+{
+	uint16_t len = (uint16_t)mdns_name_length(name);
+	int size = ttl == (uint32_t)-1 ? len + 2*sizeof(uint16_t) :
+		len + 2*sizeof(uint16_t) + sizeof(uint32_t);
+	CHECK_TAILROOM(m, size);
+	memcpy(m->cur, name, len);
+	m->cur += len;
+	set_uint16(m->cur, type);
+	m->cur += sizeof(uint16_t);
+	set_uint16(m->cur, class);
+	m->cur += sizeof(uint16_t);
+	if (ttl != (uint32_t)-1) {
+		set_uint32(m->cur, ttl);
+		m->cur += sizeof(uint32_t);
+	}
+	return 0;
+}
+
 /* add a question with name qname, type qtype, and class qclass to the message
  * m.  Return 0 for success, -1 for failure.
  */
 static int mdns_add_question(struct mdns_message *m, char *qname,
 							 uint16_t qtype, uint16_t qclass)
 {
-	uint16_t len = (uint16_t)mdns_name_length(qname);
-	CHECK_TAILROOM(m, len + 2*sizeof(uint16_t));
-	memcpy(m->cur, qname, len);
-	m->cur += len;
-	set_uint16(m->cur, qtype);
-	m->cur += sizeof(uint16_t);
-	set_uint16(m->cur, qclass);
-	m->cur += sizeof(uint16_t);
+	if (__mdns_add_tuple(m, qname, qtype, qclass, (uint32_t)-1) == -1)
+		return -1;
 	m->header->qdcount = htons(htons(m->header->qdcount) + 1);
 	return 0;
 }
@@ -212,18 +232,22 @@ static int mdns_add_question(struct mdns_message *m, char *qname,
 static int mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
 						   uint16_t class, uint32_t ttl)
 {
-	uint16_t len = (uint16_t)mdns_name_length(name);
-	CHECK_TAILROOM(m, len + 3*sizeof(uint16_t) + sizeof(uint32_t));
-
-	memcpy(m->cur, name, len);
-	m->cur += len;
-	set_uint16(m->cur, type);
-	m->cur += sizeof(uint16_t);
-	set_uint16(m->cur, class);
-	m->cur += sizeof(uint16_t);
-	set_uint32(m->cur, ttl);
-	m->cur += sizeof(uint32_t);
+	if (__mdns_add_tuple(m, name, type, class, ttl))
+		return -1;
 	m->header->ancount = htons(htons(m->header->ancount) + 1);
+	return 0;
+}
+
+/* add a proposed answer for name to the authority section of the message m.
+ * Return 0 for success, -1 for failure.  Note that this function does not add
+ * the resource record data.  It just populates the common header.
+ */
+static int mdns_add_authority(struct mdns_message *m, char *name,
+							  uint16_t type, uint16_t class, uint32_t ttl)
+{
+	if (__mdns_add_tuple(m, name, type, class, ttl))
+		return -1;
+	m->header->nscount = htons(htons(m->header->nscount) + 1);
 	return 0;
 }
 
@@ -625,7 +649,7 @@ static void ipaddr_to_inaddrarpa(uint32_t ipaddr, char *out)
 }
 
 int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
-                struct mdns_service **services)
+				struct mdns_service **services)
 {
 	int one = 1, ret;
 	struct sockaddr_in ctrl_listen;
@@ -635,8 +659,8 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	my_ipaddr = ipaddr;
 
 	/* populate the fqdn */
-    if (domain == NULL)
-        domain = "local";
+	if (domain == NULL)
+		domain = "local";
 	if (!valid_label(hostname) || !valid_label(domain)) {
 		LOG("Invalid hostname: %s\n", hostname);
 		return MDNS_INVAL;
@@ -659,12 +683,19 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 		return 1;
 	}
 
-    if (services != NULL)
-        LOG("Warning: services not implemented yet.\n");
+	if (services != NULL)
+		LOG("Warning: services not implemented yet.\n");
 
-	/* set up probe to claim name. */
+	/* prepare probe to claim name and services */
 	mdns_query_init(&tx_message);
-	mdns_add_question(&tx_message, fqdn, T_ANY, C_IN);
+	if (mdns_add_question(&tx_message, fqdn, T_ANY, C_IN) != 0 ||
+		mdns_add_authority(&tx_message, fqdn, T_A, C_IN, 255) != 0 ||
+		mdns_add_uint32(&tx_message, my_ipaddr) != 0 ||
+		mdns_add_authority(&tx_message, in_addr_arpa, T_PTR, C_FLUSH, 255) != 0 ||
+		mdns_add_name(&tx_message, fqdn) != 0) {
+		LOG("Failed to create probe packet.\n");
+		return MDNS_TOOBIG;
+	}
 
 	/* create control socket */
 	ctrl_sock = socket(PF_INET, SOCK_DGRAM, 0);

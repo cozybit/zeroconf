@@ -51,6 +51,7 @@
 #define MDNS_SUCCESS	0
 #define MDNS_INVAL		1	/* invalid argument */
 #define MDNS_BADSRV		2	/* bad service descriptor */
+#define MDNS_TOOBIG		3	/* not enough room for everything */
 
 /* service descriptor
  *
@@ -129,6 +130,9 @@ struct mdns_service
  *
  * MDNS_BADSRV: one of the service descriptors in the services list was
  * invalid.
+ *
+ * MDNS_TOOBIG: The combination of name information and service descriptors
+ * does not fit in a single packet, which is required by this implementation.
  *
  * Notes:
  *
