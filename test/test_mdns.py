@@ -12,8 +12,8 @@ conf = ConfigParser.ConfigParser()
 conf.read(configfile)
 ipaddr = conf.get("target", "ipaddr")
 
-# create the mdns device to test
-mdns = mdns_subject.mdns(conf)
+# create the mdns unit under test
+uut = mdns_subject.mdns_subject(conf)
 
 class mdnsTest(unittest.TestCase):
 
@@ -35,21 +35,25 @@ class mdnsTest(unittest.TestCase):
 		self.expectEqual(ipaddr, r.answer[0][0].__str__())
 
 	def tearDown(self):
-		mdns.stop()
+		uut.stop()
 
 	def test_StartStop(self):
-		self.failIf(mdns.start("-b " + ipaddr) != 0, "Failed to launch mdns")
-		mdns.stop()
-		self.failIf(mdns.start("-b " + ipaddr) != 0, "Failed to launch mdns")
+		ret = uut.start_and_wait("-b " + ipaddr)
+		self.failIf(ret != 0, "Failed to launch mdns")
+		uut.stop()
+		ret = uut.start_and_wait("-b " + ipaddr)
+		self.failIf(ret != 0, "Failed to launch mdns")
 
 	def test_StartStart(self):
-		self.failIf(mdns.start("-b " + ipaddr) != 0, "Failed to launch mdns")
-		self.failIf(mdns.start("-b " + ipaddr) == 0, "Started mdns twice!")
+		ret = uut.start_and_wait("-b " + ipaddr)
+		self.failIf(ret != 0, "Failed to launch mdns")
+		ret = uut.start_and_wait("-b " + ipaddr)
+		self.failIf(ret == 0, "Started mdns twice!")
 
 	def test_SimpleNameQuery(self):
 		# launch mdns
-		self.failIf(mdns.start("-b " + ipaddr + " -n http-andrey") != 0,
-					"Failed to launch mdns")
+		ret = uut.start_and_wait("-b " + ipaddr + " -n http-andrey")
+		self.failIf(ret != 0, "Failed to launch mdns")
 
 		q = dns.message.make_query("http-andrey.local", 1, 1)
 		try:
@@ -60,8 +64,8 @@ class mdnsTest(unittest.TestCase):
 			assert 0
 
 	def test_DifferentDomain(self):
-		self.failIf(mdns.start("-b " + ipaddr + " -n testme -d foobar") != 0,
-					"Failed to launch mdns")
+		ret = uut.start_and_wait("-b " + ipaddr + " -n testme -d foobar")
+		self.failIf(ret != 0, "Failed to launch mdns")
 
 		q = dns.message.make_query("testme.foobar", 1, 1)
 		try:
@@ -72,15 +76,15 @@ class mdnsTest(unittest.TestCase):
 			assert 0
 
 	def test_InvalidLaunch(self):
-		self.failIf(mdns.start("-b " + ipaddr + " -d foo.") != 1,
-					"Failed to detect invalid input for -d")
-		self.failIf(mdns.start("-b " + ipaddr + " -n foo.") != 1,
-					"Failed to detect invalid input for -n")
+		ret = uut.start_and_wait("-b " + ipaddr + " -d foo.")
+		self.failIf(ret != 1, "Failed to detect invalid input for -d")
+		ret = uut.start_and_wait("-b " + ipaddr + " -n foo.")
+		self.failIf(ret != 1, "Failed to detect invalid input for -n")
 
 	def test_WrongNameQuery(self):
 		# launch mdns
-		self.failIf(mdns.start("-b " + ipaddr + " -n http-andrey") != 0,
-					"Failed to launch mdns")
+		ret = uut.start_and_wait("-b " + ipaddr + " -n http-andrey")
+		self.failIf(ret != 0, "Failed to launch mdns")
 
 		q = dns.message.make_query("foobar-doesnt-exist.local", 1, 1)
 		try:
@@ -93,8 +97,8 @@ class mdnsTest(unittest.TestCase):
 	def test_Inject(self):
 		# Simple test to test that the injector functions
 		# launch mdns
-		self.failIf(mdns.start("-b " + ipaddr + " -n inject") != 0,
-					"Failed to launch mdns")
+		ret = uut.start_and_wait("-b " + ipaddr + " -n inject")
+		self.failIf(ret != 0, "Failed to launch mdns")
 
 		q = dns.message.make_query("inject.local", 1, 1)
 		mdns_tool.inject(q, '224.0.0.251')
