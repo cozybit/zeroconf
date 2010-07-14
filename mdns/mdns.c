@@ -469,6 +469,41 @@ static int mdns_prepare_response(struct mdns_message *rx,
 	return ret;
 }
 
+/* dumb macro to set a struct timeval to "ms" milliseconds. */
+#define SET_TIMEOUT(t, ms)								\
+	do {												\
+		(t)->tv_sec = (ms)/1000;						\
+		(t)->tv_usec = ((ms) - (ms)/1000) * 1000;		\
+	} while (0)
+
+/* calculate the interval between the start and stop timestamps accounting for
+ * wrap.
+ */
+static uint32_t interval(uint32_t start, uint32_t stop)
+{
+	if (stop >= start)
+		return stop - start;
+	return UINT32_MAX - start + stop;
+}
+
+/* We wanted to timeout after "target" ms, but we got interrupted.  Calculate
+ * the new timeout "t" given that we started our timeout at "start" and were
+ * interupted at "stop".
+ */
+static void recalc_timeout(struct timeval *t, uint32_t start, uint32_t stop,
+						   uint32_t target)
+{
+	uint32_t waited, remaining;
+
+	waited = interval(start, stop);
+	if (target <= waited) {
+		SET_TIMEOUT(t, 0);
+		return;
+	}
+	remaining = target - waited;
+	SET_TIMEOUT(t, remaining);
+}
+
 /* This is the mdns thread function */
 static void do_mdns(void *data)
 {
@@ -479,18 +514,19 @@ static void do_mdns(void *data)
 	fd_set fds;
 	int len = 0;
 	struct timeval *timeout;
-	struct timeval twofiftyms;
+	struct timeval probe_wait_time;
 	socklen_t in_size = sizeof(struct sockaddr_in);
 	int state = FIRST_PROBE_SENT;
 	int event;
+	uint32_t start_wait, stop_wait;
 
 	mdns_enabled = 1;
 
 	/* start by sending the first probe */
+	DBG("Sending first probe\n");
 	send_message(&tx_message, mc_sock, 5353);
-	twofiftyms.tv_sec = 0;
-	twofiftyms.tv_usec = 250000;
-	timeout = &twofiftyms;
+	SET_TIMEOUT(&probe_wait_time, 250);
+	timeout = &probe_wait_time;
 
 	while (mdns_enabled) {
 		FD_ZERO(&fds);
@@ -498,7 +534,9 @@ static void do_mdns(void *data)
 		FD_SET(ctrl_sock, &fds);
 		max_sock = ctrl_sock > mc_sock ? ctrl_sock : mc_sock;
 
+		start_wait = mdns_time_ms();
 		active_fds = select(max_sock + 1, &fds, NULL, NULL, timeout);
+		stop_wait = mdns_time_ms();
 
 		if (active_fds < 0 && errno != EINTR)
 			LOG("error: select() failed: %d\n", errno);
@@ -543,36 +581,31 @@ static void do_mdns(void *data)
 		switch (state) {
 		case FIRST_PROBE_SENT:
 			if (event == EVENT_TIMEOUT) {
+				DBG("Sending second probe\n");
 				send_message(&tx_message, mc_sock, 5353);
-				twofiftyms.tv_sec = 0;
-				twofiftyms.tv_usec = 250000;
-				timeout = &twofiftyms;
+				SET_TIMEOUT(&probe_wait_time, 250);
+				timeout = &probe_wait_time;
 				state = SECOND_PROBE_SENT;
 			} else if (event == EVENT_RX) {
 				/* TODO: does somebody have our name?  If so, try a new name
-				 * and reset the state machine.  If this is some other
-				 * business, recalculate the timeout and move along.
+				 * and reset the state machine.
 				 */
-				twofiftyms.tv_sec = 0;
-				twofiftyms.tv_usec = 250000;
-				timeout = &twofiftyms;
-				state = SECOND_PROBE_SENT;
+				recalc_timeout(&probe_wait_time, start_wait, stop_wait, 250);
+				timeout = &probe_wait_time;
 			}
 			break;
 
 		case SECOND_PROBE_SENT:
 			if (event == EVENT_TIMEOUT) {
+				DBG("Sending third probe\n");
 				send_message(&tx_message, mc_sock, 5353);
-				twofiftyms.tv_sec = 0;
-				twofiftyms.tv_usec = 250000;
-				timeout = &twofiftyms;
+				SET_TIMEOUT(&probe_wait_time, 250);
+				timeout = &probe_wait_time;
 				state = THIRD_PROBE_SENT;
 			} else if (event == EVENT_RX) {
 				/* TODO */
-				twofiftyms.tv_sec = 0;
-				twofiftyms.tv_usec = 250000;
-				timeout = &twofiftyms;
-				state = THIRD_PROBE_SENT;
+				recalc_timeout(&probe_wait_time, start_wait, stop_wait, 250);
+				timeout = &probe_wait_time;
 			}
 			break;
 

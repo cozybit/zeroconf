@@ -78,4 +78,15 @@ void mdns_thread_yield(void);
  */
 void mdns_log(const char *fmt, ...);
 
+/*
+ * mdns_time_ms: get current time in milliseconds
+ *
+ * The mdns daemon needs a millisecond up counter for calculating timeouts.
+ * The base of the count is arbitrary.  For example, this function could return
+ * the number of milliseconds since boot, or since the beginning of the epoch,
+ * etc.  Wrap-around is handled internally.  The precision should be to the
+ * nearest 10ms.
+ */
+uint32_t mdns_time_ms(void);
+
 #endif /* __MDNS_PORT_H__ */
