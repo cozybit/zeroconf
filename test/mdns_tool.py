@@ -1,4 +1,12 @@
 import socket
+from threading import Thread
+import time
+import pcap
+import struct
+import string
+import Queue
+from impacket import ImpactPacket
+import dns.message
 
 def inject(q, where, port=5353, source=None, source_port=0):
 	pkt = q.to_wire()
@@ -11,3 +19,130 @@ def inject(q, where, port=5353, source=None, source_port=0):
 	finally:
 		s.close()
 
+# dumphex prints out data bytes in hex
+def dumphex(s):
+    bytes = map(lambda x: '%.2x' % x, map(ord, s))
+    for i in xrange(0,len(bytes)/16):
+        print '        %s' % string.join(bytes[i*16:(i+1)*16],' ')
+    print '        %s' % string.join(bytes[(i+1)*16:],' ')
+
+# Exception returns
+class ReadTimeout(Exception):
+    "Exception raised by mdns_sniffer.read(): no packet in queue."
+    pass
+
+class NotUDP(Exception):
+    "Exception raised by mdns_sniffer.read(): mdns packet is not UDP."
+    pass
+
+# Packet Queue
+# This needs to be global here because capture_packet must be file global due
+# to calling restrictions with pylibpcap.
+class FlushQueue(Queue.Queue):
+	def flush(self):
+		self.mutex.acquire()
+		self.queue.clear()
+		self.mutex.release()
+
+packetQueue = FlushQueue()
+
+def clearPacketQueue():
+	packetQueue.flush()
+
+def readPacketQueue(timeout):
+	return packetQueue.get(True, timeout)
+
+def writePacketQueue(data):
+	try:
+		packetQueue.put(data, False)
+	except:
+		pass
+
+# capture_packet
+# This is the callback for pylibpcap's dispatch function.  It gets called for
+# every packet captured.  It places the packets into the packetQueue
+def capture_packet(pktlen, data, timestamp):
+	if not data:
+		return
+
+	# print 'got packet len: ' + str(pktlen)
+	if data[12:14]=='\x08\x00': # We're only interested in IP packets
+		writePacketQueue(data[14:]) # strip the header
+
+# sniffer_thread
+# This is an internal class that actually handles the sniffing.
+class sniffer_thread(Thread):
+	def __init__(self,dev,filter):
+		Thread.__init__(self)
+		self.done = False;
+		self.p = pcap.pcapObject()
+		self.net, self.mask = pcap.lookupnet(dev)
+		# open_live creates and opens the pcapture interface
+		#   arguments are (device, snaplen, promisc, read_timeout_ms)
+		#   note:    to_ms does nothing on linux
+		#   promisc is 0, we don't open in promiscious mode
+		self.p.open_live(dev, 1600, 0, 10)
+		self.p.setfilter(filter, 0, 0)
+		self.p.setnonblock(1)
+
+	def run(self):
+		clearPacketQueue()
+		while not self.done:
+			self.p.dispatch(1, capture_packet)
+
+	def stop(self):
+		self.done = True;
+
+	def read(self, timeout):
+		return readPacketQueue(timeout)
+
+	def stats(self):
+		print self.p.stats()
+
+# sniffer
+# This class is the actual interface to the sniffer.  Basic usage:
+# 1. create a sniffer object
+# 2. call start()
+# 3. call read() to get mdns packets
+# 4. call stop()
+class sniffer:
+	def __init__(self):
+		pass
+
+	def start(self, srcIP, dev='eth0', filter_extra=' and port mdns'):
+		self.filter = 'src host ' + srcIP + filter_extra
+		print "sniffer start() for filter: " + self.filter
+		self.dev = dev
+		self.mySniffer = sniffer_thread(self.dev,self.filter)
+		clearPacketQueue()
+		self.mySniffer.start()
+		time.sleep(1) # this gives libpcap a moment to get started.
+		              # it can miss the first packet if mdns is started
+		              # immedately
+
+	def stop(self):
+		self.mySniffer.stop()
+		self.mySniffer.join()
+
+	def read_raw(self, timeout):
+		try:
+			data = self.mySniffer.read(timeout)
+		except:
+			raise ReadTimeout
+		return data
+
+	def read(self, timeout):
+		try:
+			data = self.mySniffer.read(timeout)
+		except:
+			raise ReadTimeout
+		# so we have data, now process it
+		ip_pkt = ImpactPacket.IP(data)
+		offset = ip_pkt.get_header_size()
+		if not ip_pkt.get_ip_p() == ImpactPacket.UDP.protocol:
+			raise NotUDP
+
+		udp_pkt = ImpactPacket.UDP(data[offset:])
+		offset += udp_pkt.get_header_size()
+		dnsmsg = dns.message.from_wire(data[offset:])
+		return dnsmsg

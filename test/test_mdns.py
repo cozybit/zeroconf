@@ -2,6 +2,7 @@ import unittest, sys, os, ConfigParser
 import dns.query, dns.message
 import mdns_subject
 import mdns_tool
+import time
 
 # Parse config file
 configfile = "test.conf"
@@ -11,6 +12,8 @@ if not os.path.exists(configfile):
 conf = ConfigParser.ConfigParser()
 conf.read(configfile)
 ipaddr = conf.get("target", "ipaddr")
+sniffip = conf.get("sniffer", "ipaddr")
+sniffdev = conf.get("sniffer","dev")
 
 # create the mdns device to test
 mdns = mdns_subject.mdns(conf)
@@ -98,3 +101,43 @@ class mdnsTest(unittest.TestCase):
 
 		q = dns.message.make_query("inject.local", 1, 1)
 		mdns_tool.inject(q, '224.0.0.251')
+
+	def test_Sniff(self):
+		s = mdns_tool.sniffer()
+		s.start(sniffip, sniffdev, '')
+		count = 0
+		while (count < 4):
+			try:
+				data = s.read_raw(1)
+				print "packet (" + str(count) +"):"
+				mdns_tool.dumphex(data)
+				count += 1
+			except mdns_tool.ReadTimeout:
+				pass
+		s.stop()
+
+	def test_mdnsProbe(self):
+		# Simple test to see that we get the expected probe packets
+		# first start sniffer
+		s = mdns_tool.sniffer()
+		s.start(sniffip, sniffdev)
+
+		# launch mdns
+		self.failIf(mdns.start("-b " + ipaddr + " -n fooo") != 0,
+			"Failed to launch mdns")
+
+		# Check packets
+		count = 0
+		while (count < 4):
+			try:
+				dnsmsg = s.read(1)
+				print "packet (" + str(count) +"):"
+				print dnsmsg.to_text()
+				print "\n\n"
+				count += 1
+			except mdns_tool.ReadTimeout:
+				pass
+			except KeyboardInterrupt:
+				break
+
+		s.stop()

@@ -3,7 +3,7 @@ Quick Start
 
 1: Install dependencies
 
-sudo apt-get install python-nose python-dnspython
+sudo apt-get install python-nose python-dnspython python-libpcap python-impacket
 
 2: Create a configuration file for your tests.  See test.sample.conf for
    documentation and an example.
@@ -35,3 +35,8 @@ Notes
 
 -- Be sure to deploy the mdns executable to your device under test.  The test
    framework doesn't do this automatically.
+
+-- On some systems, in particular OS X, libpcap buffers packets and doesn't
+   return them until it has a full buffer.  Enabling the BIOCIMMEDIATE ioctl
+   solves this.  In particular, one has to coment out some #ifdefs in pcap-bpf.c
+   in order to force this to work. See pcap-immediate.patch
