@@ -73,8 +73,8 @@ static char *put_name(char *dst, char *name)
 static void reset_fqdn(void)
 {
 	char *p;
-	p = put_name(fqdn, hostname);
-	put_name(p, domain);
+	p = put_name(fqdn, hname);
+	put_name(p, dname);
 }
 
 #define CHECK_TAILROOM(m, l) \
@@ -621,9 +621,9 @@ static void recalc_timeout(struct timeval *t, uint32_t start, uint32_t stop,
  * return the next state.  Also, update the timeout with the time until the
  * next event.  state must be one of the probe states!
  */
-static int process_probe_resp(struct mdns_message *rx, struct mdns_message *p,
-							  int state, int event, struct timeval *timeout,
-							  uint32_t start_wait, uint32_t stop_wait)
+static int process_probe_resp(struct mdns_message *rx, int state,
+							  struct timeval *timeout, uint32_t start_wait,
+							  uint32_t stop_wait)
 {
 	int ret;
 
