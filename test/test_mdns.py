@@ -41,7 +41,7 @@ class mdnsTest(unittest.TestCase):
 		except dns.exception.Timeout:
 			self.failIf(1, "Timed out waiting for mdns response.")
 
-	def tearDown(self):
+	def setUp(self):
 		uut.stop()
 
 	def test_StartStop(self):
@@ -123,30 +123,4 @@ class mdnsTest(unittest.TestCase):
 		mdns_tool.inject(r, '224.0.0.251')
 		time.sleep(2) # device should rename itself foo-2
 		q = dns.message.make_query("foo-2.local", 1, 1)
-		self.queryAndVerify(q)
-
-	def test_AnswerSeveralProbes(self):
-		ret = uut.start("-b " + ipaddr + " -n foo")
-		self.failIf(ret != 0, "Failed to launch mdns")
-		q = dns.message.make_query("foo.local", 1, 1)
-		r = dns.message.make_response(q)
-		r.question = []
-		r.find_rrset(r.answer, dns.name.Name(["foo", "local", ""]),
-					 dns.rdataclass.IN, dns.rdatatype.A,
-					 create=True, force_unique=True)
-		time.sleep(0.050) # wait for first probe to go out
-		mdns_tool.inject(r, '224.0.0.251')
-
-		# force it to increment the hostname a few times
-		for i in range(2, 7):
-			r.answer = []
-			r.find_rrset(r.answer,
-						 dns.name.Name(["foo-" + str(i), "local", ""]),
-						 dns.rdataclass.IN, dns.rdatatype.A,
-						 create=True, force_unique=True)
-			time.sleep(0.250) # wait for first probe to go out
-			mdns_tool.inject(r, '224.0.0.251')
-
-		time.sleep(2) # device should rename itself foo-7
-		q = dns.message.make_query("foo-7.local", 1, 1)
 		self.queryAndVerify(q)
