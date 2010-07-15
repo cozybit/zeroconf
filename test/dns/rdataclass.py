@@ -33,6 +33,7 @@ CH = 3
 HS = 4
 NONE = 254
 ANY = 255
+FLUSH = 0x8000|IN
 
 _by_text = {
     'RESERVED0' : RESERVED0,
@@ -40,7 +41,8 @@ _by_text = {
     'CH' : CH,
     'HS' : HS,
     'NONE' : NONE,
-    'ANY' : ANY
+    'ANY' : ANY,
+    'IN|FLUSH' : FLUSH
     }
 
 # We construct the inverse mapping programmatically to ensure that we

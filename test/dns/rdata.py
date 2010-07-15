@@ -351,7 +351,9 @@ def get_rdata_class(rdclass, rdtype):
         for comp in components[1:]:
             mod = getattr(mod, comp)
         return mod
-    
+
+    if rdclass == dns.rdataclass.FLUSH:
+        rdclass = dns.rdataclass.IN
     mod = _rdata_modules.get((rdclass, rdtype))
     rdclass_text = dns.rdataclass.to_text(rdclass)
     rdtype_text = dns.rdatatype.to_text(rdtype)

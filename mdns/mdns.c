@@ -461,8 +461,7 @@ static int max_probe_growth(int num_services)
  * for no need to respond, or 1 for send response.
  */
 static int mdns_prepare_response(struct mdns_message *rx,
-								 struct mdns_message *tx,
-								 struct sockaddr_in *from)
+								 struct mdns_message *tx)
 {
 	int i, ret = 0;
 	struct mdns_question *q;
@@ -474,37 +473,12 @@ static int mdns_prepare_response(struct mdns_message *rx,
 	tx->header->id = rx->header->id;
 
 	for(i = 0; i < rx->num_questions; i++) {
-		/* TODO: Really, we should compose our response based on the questions.
-		 * For example, if the query is for an A record, send an A record back.
-		 * If it's for ANY, send all the records, etc.  Currently, we just send
-		 * the a record.
-		 */
 		q = &rx->questions[i];
 		if (q->qtype == T_ANY || q->qtype == T_A) {
 			if (strcmp(q->qname, fqdn) == 0) {
-				if (from->sin_port != htons(5353)) {
-					/* Regular DNS clients (e.g., pydns) expect the original
-					 * question to appear in the response.
-					 *
-					 * TODO: I'm pretty sure we don't have to support this
-					 * case.  But it means that we do have to fix the test
-					 * framework.
-					 */
-					ret = mdns_add_question(tx, q->qname, q->qtype, q->qclass);
-					if (ret != 0)
-						return -1;
-					/* This could be a pointer to the copy of fqdn in the question,
-					 * but we don't have code handy to do that.  So we send a
-					 * duplicate
-					 */
-					if (mdns_add_answer(tx, fqdn, T_A, C_IN, 225) != 0 ||
-						mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
-						return -1;
-				} else {
-					if (mdns_add_answer(tx, fqdn, T_A, C_FLUSH, 225) != 0 ||
-						mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
-						return -1;
-				}
+				if (mdns_add_answer(tx, fqdn, T_A, C_FLUSH, 225) != 0 ||
+					mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
+					return -1;
 				ret = 1;
 			}
 		} else if (q->qtype == T_ANY || q->qtype == T_PTR) {
@@ -785,7 +759,7 @@ static void do_mdns(void *data)
 		case IDLE:
 			if (event == EVENT_RX) {
 				/* prepare a response if necessary */
-				ret = mdns_prepare_response(&rx_message, &tx_message, &from);
+				ret = mdns_prepare_response(&rx_message, &tx_message);
 				if (ret <= 0)
 					break;
 				DBG("responding to query:\n");

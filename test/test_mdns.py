@@ -29,7 +29,7 @@ class mdnsTest(unittest.TestCase):
 		# expect the response to contain a single A record with the IP address
 		assert len(r.answer) == 1
 		self.expectEqual(q.question[0].name.__str__(), r.answer[0].name.__str__())
-		assert r.answer[0].rdclass == dns.rdataclass.IN
+		assert r.answer[0].rdclass == dns.rdataclass.FLUSH
 		assert r.answer[0].rdtype == dns.rdatatype.A
 		assert len(r.answer[0]) == 1
 		self.expectEqual(ipaddr, r.answer[0][0].__str__())
@@ -62,7 +62,8 @@ class mdnsTest(unittest.TestCase):
 		ret = uut.start_and_wait("-b " + ipaddr + " -n http-andrey")
 		self.failIf(ret != 0, "Failed to launch mdns")
 
-		q = dns.message.make_query("http-andrey.local", 1, 1)
+		q = dns.message.make_query("http-andrey.local", dns.rdatatype.A,
+								   dns.rdataclass.IN)
 		try:
 			r = dns.query.udp(q, '224.0.0.251', port=5353, timeout=5)
 			self.compareQandA(q, r)
@@ -74,7 +75,8 @@ class mdnsTest(unittest.TestCase):
 		ret = uut.start_and_wait("-b " + ipaddr + " -n testme -d foobar")
 		self.failIf(ret != 0, "Failed to launch mdns")
 
-		q = dns.message.make_query("testme.foobar", 1, 1)
+		q = dns.message.make_query("testme.foobar", dns.rdatatype.A,
+								   dns.rdataclass.IN)
 		try:
 			r = dns.query.udp(q, '224.0.0.251', port=5353, timeout=5)
 			self.compareQandA(q, r)
@@ -93,7 +95,8 @@ class mdnsTest(unittest.TestCase):
 		ret = uut.start_and_wait("-b " + ipaddr + " -n http-andrey")
 		self.failIf(ret != 0, "Failed to launch mdns")
 
-		q = dns.message.make_query("foobar-doesnt-exist.local", 1, 1)
+		q = dns.message.make_query("foobar-doesnt-exist.local", dns.rdatatype.A,
+								   dns.rdataclass.IN)
 		try:
 			r = dns.query.udp(q, '224.0.0.251', port=5353, timeout=2)
 			self.failIf(1, "Got a response for a non-existent hostname")
@@ -107,20 +110,23 @@ class mdnsTest(unittest.TestCase):
 		ret = uut.start_and_wait("-b " + ipaddr + " -n inject")
 		self.failIf(ret != 0, "Failed to launch mdns")
 
-		q = dns.message.make_query("inject.local", 1, 1)
+		q = dns.message.make_query("inject.local", dns.rdatatype.A,
+								   dns.rdataclass.IN)
 		mdns_tool.inject(q, '224.0.0.251')
 
 	def test_AnswerOneProbe(self):
 		ret = uut.start("-b " + ipaddr + " -n foo")
 		self.failIf(ret != 0, "Failed to launch mdns")
-		q = dns.message.make_query("foo.local", 1, 1)
+		q = dns.message.make_query("foo.local", dns.rdatatype.A,
+								   dns.rdataclass.IN)
 		r = dns.message.make_response(q)
 		r.question = []
 		r.find_rrset(r.answer, dns.name.Name(["foo", "local", ""]),
-					 dns.rdataclass.IN, dns.rdatatype.A,
+					 dns.rdataclass.FLUSH, dns.rdatatype.A,
 					 create=True, force_unique=True)
 		time.sleep(0.050) # wait for first probe to go out
 		mdns_tool.inject(r, '224.0.0.251')
 		time.sleep(2) # device should rename itself foo-2
-		q = dns.message.make_query("foo-2.local", 1, 1)
+		q = dns.message.make_query("foo-2.local", dns.rdatatype.A,
+								   dns.rdataclass.FLUSH)
 		self.queryAndVerify(q)

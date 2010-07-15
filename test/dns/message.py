@@ -266,12 +266,6 @@ class Message(object):
 			return True
 		if dns.opcode.is_update(self.flags):
 			return True
-		for n in self.question:
-			if n not in other.question:
-				return False
-		for n in other.question:
-			if n not in self.question:
-				return False
 		return True
 
 	def section_number(self, section):
