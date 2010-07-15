@@ -34,7 +34,8 @@ void debug_print_name(struct mdns_message *m, char *name)
 			continue;
 		}
 		else { /* label */
-			DBG(".");
+			if (s != name)
+				DBG(".");
 			debug_print_txt(s+1, *s); /* print label text */
 			s += *s;
 		}
