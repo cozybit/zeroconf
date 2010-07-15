@@ -1,6 +1,7 @@
 #include "mdns_message.h"
 
 enum mdns_status_t {
+	INIT,
 	FIRST_PROBE_SENT,	/* wait a random amount of time and probe */
 	SECOND_PROBE_SENT,	/* wait 250ms and probe */
 	THIRD_PROBE_SENT,	/* wait 250ms and probe */
@@ -14,18 +15,8 @@ enum mdns_event_t {
 };
 
 #ifdef MDNS_DBG
-static char *statenames[] = {
-	"FIRST_PROBE_SENT",
-	"SECOND_PROBE_SENT",
-	"THIRD_PROBE_SENT",
-	"IDLE",
-};
-
-static char *eventnames[] = {
-	"EVENT_RX",
-	"EVENT_CTRL",
-	"EVENT_TIMEOUT",
-};
+extern char *statenames[];
+extern char *eventnames[];
 #endif
 
 /* logging helpers */
@@ -33,16 +24,19 @@ static char *eventnames[] = {
 #define LOG mdns_log
 #ifdef MDNS_DBG
 void debug_print_message(struct mdns_message *m);
+void debug_print_name(struct mdns_message *m, char *name);
 #define DBG mdns_log
 #else
-#define debug_print_message {}
-#define DBG {}
+#define debug_print_message(m) do {} while (0)
+#define debug_print_name(m, n) do {} while (0)
+#define DBG(...) do {} while (0)
 #endif
 
 #else
-#define debug_print_message {}
-#define DBG {}
-#define LOG {}
+#define debug_print_message(m) do {} while (0)
+#define debug_print_name(m, n) do {} while (0)
+#define DBG(...) do {} while (0)
+#define LOG(...) do {} while (0)
 #endif
 
 /* helpers for accessing elements */

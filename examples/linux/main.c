@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdarg.h>
+#include <sys/time.h>
 
 #include "mdns.h"
 
@@ -133,6 +134,15 @@ void mdns_log(const char *fmt, ...)
 	vprintf(fmt, ap);
 	va_end(ap);
     fflush(stdout);
+}
+
+uint32_t mdns_time_ms(void)
+{
+    struct timeval t;
+
+    if (gettimeofday(&t, NULL) != 0)
+        printf("Warning: Failed to get time.\n");
+    return (uint32_t)(t.tv_sec * 1000 + t.tv_usec/1000);
 }
 
 #define HELP_TEXT \

@@ -3,7 +3,7 @@ Quick Start
 
 1: Install dependencies
 
-sudo apt-get install python-nose python-dnspython python-libpcap python-impacket
+sudo apt-get install python-nose python-libpcap python-impacket
 
 2: Create a configuration file for your tests.  See test.sample.conf for
    documentation and an example.
@@ -22,6 +22,9 @@ Notes
 
 -- We use a slightly modified version of pxssh.py.  That's why it's here in the
    test dir instead of using the one that comes with python.
+
+-- We use a forked version of dnspython that works with mdns packets.  That's
+   why we don't use the one available with your distro.
 
 -- The linux tests require that you can ssh into the remote target without a
    password (i.e., your ssh-agent is set up properly).

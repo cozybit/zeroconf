@@ -64,7 +64,9 @@
  * servname: string that is the service instance name that will be advertised.
  * It could be something like "Brian's Website" or "Special Service on Device
  * #123".  This is the name that is typically presented to users browsing for
- * your service.  The servname must not exceed MDNS_MAX_LABEL_LEN bytes.
+ * your service.  The servname must not exceed MDNS_MAX_LABEL_LEN bytes.  The
+ * MDNS specification allows servname to be a UTF8 string.  However, only the
+ * ascii subset of UTF-8 has been tested.
  *
  * servtype: string that represents the service type.  This should be a type
  * registered at http://dns-sd.org/ServiceTypes.html.  For example, "http" is
@@ -136,11 +138,18 @@ struct mdns_service
  *
  * Notes:
  *
- * The MDNS specification allows servname to be a UTF8 string.  However, only
- * the ascii subset of UTF-8 has been tested.
+ * The domain, hostname, and struct mdns_service elements must persist and
+ * remain unchanged between calls to mdns_launch and mdns_halt.
  *
- * The struct mdns_service elements must persist and remain unchanged between
- * calls to mdns_launch and mdns_halt.
+ * While mdns_launch returns immediately, the hostname and any servnames may
+ * not be unique on the network.  In the event of a conflict, the names will
+ * appended with an integer.  For example, if the hostname "foo.local" is
+ * taken, mdns will attempt to claim "foo-2.local", then foo-3.local, and so on
+ * until the conflicts cease.  If mdns gets all the way to foo-9.local and
+ * still fail, it waits for 5 seconds (per the mDSN specification) and then
+ * starts back at foo.local.  If a developer anticipates a network to have many
+ * of her devices, she should devise a sensible scheme outside of mdns to
+ * ensure that the names are unique.
  */
 int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
                 struct mdns_service **services);

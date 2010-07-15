@@ -13,9 +13,18 @@
 
 /* system-dependent definitions */
 #if MDNS_SYSTEM == LINUX
+/* bsd socket stuff */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h> /* close */
+
 #include <stdio.h>  /* sprintf */
 #include <stdint.h> /* for uint8_t and friends */
-#include <string.h> /* memset, memcpy, strlen, strchr, strcpy */
+#include <string.h> /* memset, memcpy, memmove, strlen, strchr, strcpy */
 
 #else
 #error "mdns target system is not defined"
@@ -77,5 +86,16 @@ void mdns_thread_yield(void);
  * log-level.  See mdns.h for details.
  */
 void mdns_log(const char *fmt, ...);
+
+/*
+ * mdns_time_ms: get current time in milliseconds
+ *
+ * The mdns daemon needs a millisecond up counter for calculating timeouts.
+ * The base of the count is arbitrary.  For example, this function could return
+ * the number of milliseconds since boot, or since the beginning of the epoch,
+ * etc.  Wrap-around is handled internally.  The precision should be to the
+ * nearest 10ms.
+ */
+uint32_t mdns_time_ms(void);
 
 #endif /* __MDNS_PORT_H__ */
