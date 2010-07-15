@@ -1,4 +1,4 @@
-CFLAGS += -Wall -I$(TOP)/include
+CFLAGS += -I$(TOP)/include
 
 MDNS_DIR = $(TOP)/mdns
 LIBS = $(MDNS_DIR)/libmdns.a

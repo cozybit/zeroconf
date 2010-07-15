@@ -1,6 +1,20 @@
 #include "mdns_private.h"
 
 #ifdef MDNS_DBG
+char *statenames[] = {
+	"INIT"
+	"FIRST_PROBE_SENT",
+	"SECOND_PROBE_SENT",
+	"THIRD_PROBE_SENT",
+	"IDLE",
+};
+
+char *eventnames[] = {
+	"EVENT_RX",
+	"EVENT_CTRL",
+	"EVENT_TIMEOUT",
+};
+
 void debug_print_ip(uint32_t ip)
 {
 	DBG("%u.%u.%u.%u",

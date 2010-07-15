@@ -13,6 +13,15 @@
 
 /* system-dependent definitions */
 #if MDNS_SYSTEM == LINUX
+/* bsd socket stuff */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h> /* close */
+
 #include <stdio.h>  /* sprintf */
 #include <stdint.h> /* for uint8_t and friends */
 #include <string.h> /* memset, memcpy, memmove, strlen, strchr, strcpy */

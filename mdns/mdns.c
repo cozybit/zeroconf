@@ -1,10 +1,3 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <errno.h>
-
 #include "mdns.h"
 #include "mdns_private.h"
 #include "mdns_port.h"
@@ -12,9 +5,9 @@
 static char *hname; /* this is a cstring, not a DNS string */
 static char *dname; /* this is a cstring, not a DNS string */
 /* Our fully qualified domain name is something like 'node.local.' */
-static uint8_t fqdn[MDNS_MAX_NAME_LEN + 1];
+static char fqdn[MDNS_MAX_NAME_LEN + 1];
 /* Our reverse name for the in-addr.arpa PTR record */
-static uint8_t in_addr_arpa[MDNS_INADDRARPA_LEN];
+static char in_addr_arpa[MDNS_INADDRARPA_LEN];
 static uint32_t my_ipaddr;
 
 /* global mdns state */
@@ -446,7 +439,9 @@ static int mdns_prepare_probe(struct mdns_message *m)
 		mdns_add_authority(m, in_addr_arpa, T_PTR, C_FLUSH, 255) != 0 ||
 		mdns_add_name(m, fqdn) != 0) {
 		LOG("Resource records don't fit into probe packet.\n");
+		return -1;
 	}
+	return 0;
 }
 
 /* if we detect a conflict during probe time, we must grow our host name and
@@ -579,6 +574,7 @@ static int fix_response_conflicts(struct mdns_message *m)
 			ret = 1;
 		}
 	}
+	return ret;
 }
 
 /* dumb macro to set a struct timeval to "ms" milliseconds. */
@@ -721,10 +717,8 @@ static void do_mdns(void *data)
 			event = EVENT_TIMEOUT;
 		}
 
-		/*
 		DBG("Got event %s in state %s\n",
 			eventnames[event], statenames[state]);
-		*/
 		switch (state) {
 		case INIT:
 			if (event == EVENT_TIMEOUT) {
@@ -910,7 +904,6 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 void mdns_halt(void)
 {
 	int ret;
-	int count = 0;
 
 	LOG("Halting mdns.\n");
 	ret = send_ctrl_msg(MDNS_CTRL_HALT);

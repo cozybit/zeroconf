@@ -1,6 +1,7 @@
 TOP = $(CURDIR)
 export TOP
 
+CFLAGS += -Wall
 ifneq ($(DEBUG),)
 	CFLAGS += -g
 endif
