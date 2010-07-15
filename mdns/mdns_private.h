@@ -1,3 +1,6 @@
+#ifndef __MDNS_PRIVATE_H__
+#define __MDNS_PRIVATE_H__
+
 #include "mdns_message.h"
 
 enum mdns_status_t {
@@ -44,3 +47,25 @@ void debug_print_name(struct mdns_message *m, char *name);
 #define get_uint32(p) (ntohl(*((uint32_t *)(p))))
 #define set_uint16(p, v) (*((uint16_t*)(p)) = htons((v)))
 #define set_uint32(p, v) (*((uint32_t*)(p)) = htonl((v)))
+
+/* helpers for handling dns names */
+int dname_increment(char *name);
+
+#ifdef MDNS_TESTS
+
+#define FAIL_UNLESS(condition, ...) \
+	do { \
+		if (!(condition)) { \
+			printf("FAIL: %s: %d: ", __FILE__, __LINE__); \
+			printf(__VA_ARGS__); \
+			printf("\n"); \
+		} else { \
+			printf("PASS: %s: %d\n", __FILE__, __LINE__); \
+		} \
+	} while (0)
+
+#endif
+
+void dname_tests(void);
+
+#endif /* __MDNS_PRIVATE_H__ */

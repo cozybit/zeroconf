@@ -150,6 +150,7 @@ uint32_t mdns_time_ms(void)
 "command can be one of the following:\n" \
 "launch        start mdns daemon\n" \
 "halt          stop mdns daemon\n" \
+"test          run internal tests." \
 "\n" \
 "Options\n" \
 "-h             Print this help text\n" \
@@ -201,6 +202,10 @@ int main(int argc, char **argv)
 
 	} else if (strcmp(cmd, "halt") == 0) {
 		mdns_halt();
+		return 0;
+
+	} else if (strcmp(cmd, "test") == 0) {
+		mdns_tests();
 		return 0;
 
 	} else {

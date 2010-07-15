@@ -22,6 +22,10 @@
  *
  * MDNS_DBG: define this to include debug-level logging.  This has no effect if
  * MDNS_LOG is not defined.
+ *
+ * MDNS_TESTS: define this to compile the internal tests.  In this case, you
+ * can invoke mdns_tests() to run the tests.  Expect test results to be printed
+ * using mdns_log().
  */
 
 /* mdns control scoket port
@@ -157,5 +161,15 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 /* halt the mdns thread
  */
 void mdns_halt(void);
+
+/* mdns_tests: run internal mdns tests
+ *
+ * This function is useful to verify that various internal mdns functionality
+ * is properly working after a port, or after adding new features.  If
+ * MDNS_TEST is undefined, it is an empty function.  It is not meant to be
+ * compiled or run in a production system.  Test output is written using
+ * mdns_log().
+ */
+void mdns_tests(void);
 
 #endif

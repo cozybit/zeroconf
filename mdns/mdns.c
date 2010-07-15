@@ -493,37 +493,6 @@ static int mdns_prepare_response(struct mdns_message *rx,
 	return ret;
 }
 
-/* Change the name foo.local to foo-2.local.  If it already says foo-X.local,
- * make it foo-(X+1).local.  If it says foo-9.local, just leave it alone and
- * return -1.  The caller should sleep for a while and re-try foo.local at that
- * point.  name must be a valid dns name.
- */
-int mdns_increment_name(char *name)
-{
-	int len = name[0], newlen;
-
-	if (name[len - 1] == '-' && name[len] >= '2' && name[len] < '9') {
-		name[len] += 1;
-		return 0;
-	}
-
-	if (name[len - 1] == '-' && name[len] == '9')
-		return -1;
-
-	newlen = len + 2;
-	if (newlen > MDNS_MAX_LABEL_LEN)
-		newlen = MDNS_MAX_LABEL_LEN;
-
-	name[0] = newlen;
-	memmove(&name[len + 3], &name[len + 1], strlen(name) - len - 1);
-	name[len + 1] = '-';
-	name[len + 2] = '2';
-	DBG("Derived new name: ");
-	debug_print_name(NULL, name);
-	DBG("\n");
-	return 0;
-}
-
 /* does the message m conflict with our host name or service names?  If so,
  * alter the service names and return 1.  Otherwise return 0.  If we've seen so
  * many conflicts that we have tried all the possible names, return -1;
@@ -543,7 +512,7 @@ static int fix_response_conflicts(struct mdns_message *m)
 			debug_print_message(m);
 			DBG("\n");
 			/* try a different name */
-			if (mdns_increment_name(fqdn) == -1)
+			if (dname_increment(fqdn) == -1)
 				ret = -1;
 			ret = 1;
 		}
@@ -894,3 +863,15 @@ void mdns_halt(void)
 	close(mc_sock);
 	mdns_enabled = 0;
 }
+
+#ifdef MDNS_TESTS
+void mdns_tests(void)
+{
+	dname_tests();
+}
+#else
+void mdns_tests(void)
+{
+	return;
+}
+#endif
