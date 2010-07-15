@@ -40,7 +40,7 @@ void debug_print_name(struct mdns_message *m, char *name)
 
 	while(*s) {
 		if(*s & 0xC0) { /* pointer */
-			if(ptr != 0)
+			if(ptr != 0 || m == NULL)
 				break;
 			/* go print at start of message+offset */
 			s = (char *)m->header+((uint8_t)(((*s & ~(0xC0))<<8) | *(s+1)));
