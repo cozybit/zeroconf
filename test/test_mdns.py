@@ -1,4 +1,4 @@
-import unittest, sys, os, ConfigParser, time
+import unittest, sys, os, ConfigParser, time, socket, struct
 import dns.query, dns.message
 import mdns_subject
 import mdns_tool
@@ -206,5 +206,41 @@ class mdnsTest(unittest.TestCase):
 		mdns_tool.inject(r, '224.0.0.251')
 		time.sleep(2) # device should rename itself foo-2
 		q = dns.message.make_query("foo-2.local", dns.rdatatype.A,
+								   dns.rdataclass.FLUSH)
+		self.queryAndVerify(q)
+
+	def test_SimultaneousGreaterProbe(self):
+		ret = uut.start("-b " + ipaddr + " -n foo")
+		self.failIf(ret != 0, "Failed to launch mdns")
+		p = dns.message.make_query("foo.local", dns.rdatatype.ANY,
+								   dns.rdataclass.IN)
+		myip = socket.ntohl(struct.unpack('L', socket.inet_aton(ipaddr))[0])
+		myip = struct.pack('L', socket.htonl(myip + 1))
+		myip = socket.inet_ntoa(myip)
+		rr = dns.rrset.from_text("foo.local.", 255, dns.rdataclass.IN,
+								 dns.rdatatype.A, myip)
+		p.authority = [rr]
+		time.sleep(0.050) # wait for first probe to go out
+		mdns_tool.inject(p, '224.0.0.251')
+		time.sleep(2) # device should rename itself foo-2
+		q = dns.message.make_query("foo-2.local", dns.rdatatype.A,
+								   dns.rdataclass.FLUSH)
+		self.queryAndVerify(q)
+
+	def test_SimultaneousLesserProbe(self):
+		ret = uut.start("-b " + ipaddr + " -n foo")
+		self.failIf(ret != 0, "Failed to launch mdns")
+		p = dns.message.make_query("foo.local", dns.rdatatype.ANY,
+								   dns.rdataclass.IN)
+		myip = socket.ntohl(struct.unpack('L', socket.inet_aton(ipaddr))[0])
+		myip = struct.pack('L', socket.htonl(myip - 1))
+		myip = socket.inet_ntoa(myip)
+		rr = dns.rrset.from_text("foo.local.", 255, dns.rdataclass.IN,
+								 dns.rdatatype.A, myip)
+		p.authority = [rr]
+		time.sleep(0.050) # wait for first probe to go out
+		mdns_tool.inject(p, '224.0.0.251')
+		time.sleep(2) # device should not rename itself
+		q = dns.message.make_query("foo.local", dns.rdatatype.A,
 								   dns.rdataclass.FLUSH)
 		self.queryAndVerify(q)

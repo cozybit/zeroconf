@@ -3,7 +3,7 @@
 #include "mdns_port.h"
 
 static char *hname; /* this is a cstring, not a DNS string */
-static char *dname; /* this is a cstring, not a DNS string */
+static char *domname; /* this is a cstring, not a DNS string */
 /* Our fully qualified domain name is something like 'node.local.' */
 static char fqdn[MDNS_MAX_NAME_LEN + 1];
 /* Our reverse name for the in-addr.arpa PTR record */
@@ -28,9 +28,10 @@ static void reset_fqdn(void)
 {
 	char *p;
 	p = dname_put_label(fqdn, hname);
-	dname_put_label(p, dname);
+	dname_put_label(p, domname);
 }
 
+/* ensure that message m has at least l bytes of room left */
 #define CHECK_TAILROOM(m, l) \
 	do { \
 		if (m->cur + l - 1 > m->end) { \
@@ -38,6 +39,39 @@ static void reset_fqdn(void)
 			return -1; \
 		} \
 	} while (0)
+
+/* return the number of valid bytes in message m's buffer */
+#define VALID_LENGTH(m) ((m)->cur - (m)->data)
+
+/* parse a resource record from the current pointer and put it in the resource
+ * structure r.  Return 0 for success, -1 for failure.
+ */
+static int parse_resource(struct mdns_message *m, struct mdns_resource *r)
+{
+	int len;
+
+	r->name = m->cur;
+	len = dname_size(m->cur);
+	if (len == -1) {
+		DBG("Warning: invalid label in resource\n");
+		return -1;
+	}
+	CHECK_TAILROOM(m, len);
+	m->cur += len;
+	CHECK_TAILROOM(m, 3*sizeof(uint16_t) + sizeof(uint32_t));
+	r->type = get_uint16(m->cur);
+	m->cur += sizeof(uint16_t);
+	r->class = get_uint16(m->cur);
+	m->cur += sizeof(uint16_t);
+	r->ttl = get_uint32(m->cur);
+	m->cur += sizeof(uint32_t);
+	r->rdlength = get_uint16(m->cur);
+	m->cur += sizeof(uint16_t);
+	CHECK_TAILROOM(m, r->rdlength);
+	r->rdata = m->cur;
+	m->cur += r->rdlength;
+	return 0;
+}
 
 /* Parse an incoming dns message of length blen into the struct mdns_message m.
  * Return 0 for success, -1 for failure.
@@ -57,6 +91,7 @@ static int mdns_parse_message(struct mdns_message *m, int mlen)
 	m->cur = (char *)m->header + sizeof(struct mdns_header);
 	m->num_questions = ntohs(m->header->qdcount);
 	m->num_answers = ntohs(m->header->ancount);
+	m->num_authorities = ntohs(m->header->nscount);
 	m->header->flags.num = ntohs(m->header->flags.num);
 
 	if (m->header->flags.fields.opcode != DNS_OPCODE_QUERY) {
@@ -106,30 +141,25 @@ static int mdns_parse_message(struct mdns_message *m, int mlen)
 		m->num_answers = MDNS_MAX_ANSWERS;
 	}
 	for(i = 0; i < m->num_answers; i++) {
-		m->answers[i].name = m->cur;
-		len = dname_size(m->cur);
+		len = parse_resource(m, &m->answers[i]);
 		if (len == -1) {
-			DBG("Warning: invalid label in answer %d\n", i);
+			DBG("Failed to parse answer %d\n", i);
 			return -1;
 		}
-		CHECK_TAILROOM(m, len);
-		m->cur += len;
-		CHECK_TAILROOM(m, 4*sizeof(uint16_t));
-		m->answers[i].type = get_uint16(m->cur);
-		m->cur += sizeof(uint16_t);
-		m->answers[i].class = get_uint16(m->cur);
-		m->cur += sizeof(uint16_t);
-		m->answers[i].ttl = get_uint16(m->cur);
-		m->cur += sizeof(uint16_t);
-		m->answers[i].rdlength = get_uint16(m->cur);
-		m->cur += sizeof(uint16_t);
-		CHECK_TAILROOM(m, m->answers[i].rdlength);
-		m->answers[i].rdata = m->cur;
-		m->cur += m->answers[i].rdlength;
 	}
 
-	if (ntohs(m->header->nscount) != 0)
-		LOG("Warning: Ignroing authority RRs\n");
+	if (m->num_authorities > MDNS_MAX_AUTHORITIES) {
+		LOG("Warning: Only parsing first %d authorities of %d\n",
+			MDNS_MAX_ANSWERS, m->num_answers);
+		m->num_answers = MDNS_MAX_AUTHORITIES;
+	}
+	for(i = 0; i < m->num_authorities; i++) {
+		len = parse_resource(m, &m->authorities[i]);
+		if (len == -1) {
+			DBG("Failed to parse authority %d.\n", i);
+			return -1;
+		}
+	}
 
 	if (ntohs(m->header->arcount) != 0)
 		LOG("Warning: Ignroing additional RRs\n");
@@ -147,6 +177,9 @@ static int mdns_query_init(struct mdns_message *m)
 	m->cur = m->data + sizeof(struct mdns_header);
 	m->end = m->data + sizeof(m->data) - 1;
 	memset(m->header, 0x00, sizeof(struct mdns_header));
+	m->num_questions = 0;
+	m->num_answers = 0;
+	m->num_authorities = 0;
 	return 0;
 }
 
@@ -201,6 +234,7 @@ static int mdns_add_question(struct mdns_message *m, char *qname,
 	if (__mdns_add_tuple(m, qname, qtype, qclass, (uint32_t)-1) == -1)
 		return -1;
 	m->header->qdcount = htons(htons(m->header->qdcount) + 1);
+	m->num_questions += 1;
 	return 0;
 }
 
@@ -214,6 +248,7 @@ static int mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
 	if (__mdns_add_tuple(m, name, type, class, ttl))
 		return -1;
 	m->header->ancount = htons(htons(m->header->ancount) + 1);
+	m->num_answers += 1;
 	return 0;
 }
 
@@ -227,6 +262,7 @@ static int mdns_add_authority(struct mdns_message *m, char *name,
 	if (__mdns_add_tuple(m, name, type, class, ttl))
 		return -1;
 	m->header->nscount = htons(htons(m->header->nscount) + 1);
+	m->num_authorities += 1;
 	return 0;
 }
 
@@ -402,6 +438,12 @@ static int mdns_prepare_probe(struct mdns_message *m)
 		LOG("Resource records don't fit into probe packet.\n");
 		return -1;
 	}
+	/* populate the internal data structures of m so we can easily compare this
+	 * probe to a probe response later.  Be sure to leave the end pointer at
+	 * the end of our buffer so we can grow the packet if necessary.
+	 */
+	mdns_parse_message(m, VALID_LENGTH(m));
+	m->end = m->data + sizeof(m->data) - 1;
 	return 0;
 }
 
@@ -454,28 +496,92 @@ static int mdns_prepare_response(struct mdns_message *rx,
 	return ret;
 }
 
-/* does the message m conflict with our host name or service names?  If so,
- * alter the service names and return 1.  Otherwise return 0.  If we've seen so
- * many conflicts that we have tried all the possible names, return -1;
+/* find and return the authority with "name" from message "m".  "name" must be
+ * a complete dname without any pointers.
  */
-static int fix_response_conflicts(struct mdns_message *m)
+static struct mdns_resource *find_authority(struct mdns_message *m, char *name)
 {
-	struct mdns_resource *r;
+	int i;
+	struct mdns_resource *r = NULL;
+	for(i = 0; i < m->num_authorities; i++) {
+		if (dname_cmp(m->data, m->authorities[i].name, NULL, name) == 0) {
+			r = &m->authorities[i];
+			break;
+		}
+	}
+	return r;
+}
+
+/* is the resource a "lexicographically later" than b?
+ */
+static int rr_is_greater(struct mdns_resource *a, struct mdns_resource *b)
+{
+	int min, i;
+
+	if ((a->class & ~0x8000) > (b->class & ~0x8000) ||
+		a->type > b->type)
+		return 1;
+
+	/* TODO: We only call this on an A record, so we can just compare bytes.
+	 * Other records may require more sophisticated parsing.
+	 */
+	min = a->rdlength > b->rdlength ? b->rdlength : a->rdlength;
+	for (i = 0; i < min; i++) {
+		if (((char *)a->rdata)[i] == ((char *)b->rdata)[i])
+			continue;
+		return (((char *)a->rdata)[i] > ((char *)b->rdata)[i]);
+	}
+	/* if we get all the way here, one rdata is a substring of the other.  The
+	 * longer one wins.
+	 */
+	return (a->rdlength > b->rdlength);
+}
+
+/* does the incoming message m conflict with our probe p?  If so, alter the
+ * service/host names as necessary and return 1.  Otherwise return 0.  If we've
+ * seen so many conflicts that we have tried all the possible names, return -1;
+ */
+static int fix_response_conflicts(struct mdns_message *m,
+								  struct mdns_message *p)
+{
+	struct mdns_resource *r, *pr;
+	struct mdns_question *q;
 	int ret = 0, i;
 
-	if (m->header->flags.fields.qr != RESPONSE)
-		return 0;
+	if (m->header->flags.fields.qr == QUERY && m->num_authorities > 0) {
+		/* is this a probe from somebody with conflicting records? */
+		for(i = 0; i < m->num_questions; i++) {
+			q = &m->questions[i];
+			if ((q->qtype == T_ANY || q->qtype == T_A) &&
+				dname_cmp(m->data, q->qname, NULL, fqdn) == 0) {
+				/* somebody want our hostname.  check the authorities. */
+				r = find_authority(m, fqdn);
+				pr = find_authority(p, fqdn);
+				if (r == NULL || pr == NULL)
+					continue;
+				if (rr_is_greater(r, pr)) {
+					/* they win */
+					ret = 1;
+					if (dname_increment(fqdn) == -1)
+						ret = -1;
+					DBG("Found this conflicting probe:\n");
+					debug_print_message(m);
+				}
+			}
+		}
+	}
 
+	/* otherwise, this is a response.  Is it a response to our probe? */
 	for(i = 0; i < m->num_answers; i++) {
 		r = &m->answers[i];
 		if (r->type == T_A && dname_cmp(m->data, r->name, NULL, fqdn) == 0) {
-			DBG("Detected conflict with this packet:\n");
+			DBG("Detected conflict with this response:\n");
 			debug_print_message(m);
 			DBG("\n");
 			/* try a different name */
+			ret = 1;
 			if (dname_increment(fqdn) == -1)
 				ret = -1;
-			ret = 1;
 		}
 	}
 	return ret;
@@ -517,17 +623,17 @@ static void recalc_timeout(struct timeval *t, uint32_t start, uint32_t stop,
 }
 
 
-/* We're in a probe state and we got a probe response (rx).  Process it and
- * return the next state.  Also, update the timeout with the time until the
- * next event.  state must be one of the probe states!
+/* We're in a probe state sending the probe tx, and we got a probe response
+ * (rx).  Process it and return the next state.  Also, update the timeout with
+ * the time until the next event.  state must be one of the probe states!
  */
-static int process_probe_resp(struct mdns_message *rx, int state,
-							  struct timeval *timeout, uint32_t start_wait,
-							  uint32_t stop_wait)
+static int process_probe_resp(struct mdns_message *tx, struct mdns_message *rx,
+							  int state, struct timeval *timeout,
+							  uint32_t start_wait, uint32_t stop_wait)
 {
 	int ret;
 
-	ret = fix_response_conflicts(&rx_message);
+	ret = fix_response_conflicts(rx, tx);
 	if (ret == 1) {
 		/* there were conflicts with some of our names.  The names have been
 		 * adapted.  Go back to square one.
@@ -623,7 +729,6 @@ static void do_mdns(void *data)
 
 		DBG("Got event %s in state %s\n",
 			eventnames[event], statenames[state]);
-		debug_print_message(&rx_message);
 		switch (state) {
 		case INIT:
 			if (event == EVENT_TIMEOUT) {
@@ -645,7 +750,7 @@ static void do_mdns(void *data)
 				SET_TIMEOUT(&probe_wait_time, 250);
 				state = SECOND_PROBE_SENT;
 			} else if (event == EVENT_RX) {
-				state = process_probe_resp(&rx_message, state,
+				state = process_probe_resp(&tx_message, &rx_message, state,
 										   &probe_wait_time, start_wait,
 										   stop_wait);
 			}
@@ -659,7 +764,7 @@ static void do_mdns(void *data)
 				SET_TIMEOUT(&probe_wait_time, 250);
 				state = THIRD_PROBE_SENT;
 			} else if (event == EVENT_RX) {
-				state = process_probe_resp(&rx_message, state,
+				state = process_probe_resp(&tx_message, &rx_message, state,
 										   &probe_wait_time, start_wait,
 										   stop_wait);
 			}
@@ -680,7 +785,7 @@ static void do_mdns(void *data)
 				state = IDLE;
 
 			} else if (event == EVENT_RX) {
-				state = process_probe_resp(&rx_message, state,
+				state = process_probe_resp(&tx_message, &rx_message, state,
 										   &probe_wait_time, start_wait,
 										   stop_wait);
 				timeout = &probe_wait_time;
@@ -757,7 +862,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	}
 	/* populate fqdn */
 	hname = hostname;
-	dname = domain;
+	domname = domain;
 	reset_fqdn();
 
 	ipaddr_to_inaddrarpa(htonl(ipaddr), in_addr_arpa);
@@ -827,8 +932,8 @@ void mdns_halt(void)
 }
 
 #ifdef MDNS_TESTS
-/* This is a probe-like packet with a single query for foo.local and an
- * authority ns with a name pointer to foo.local
+/* This is a probe packet with a single query for foo.local and an authority ns
+ * with a name pointer to foo.local
  */
 char pkt0[] = {0xE4, 0x53, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
 			   0x00, 0x03, 0x66, 0x6F, 0x6F, 0x05, 0x6C, 0x6F, 0x63, 0x61, 0x6C,
@@ -839,10 +944,29 @@ void message_parse_tests(void)
 {
 	int ret;
 	test_title("mdns_parse_message");
-	memcpy(rx_message.data, pkt0, sizeof(pkt0) - 1);
-	ret = mdns_parse_message(&rx_message, sizeof(pkt0) - 1);
+	memcpy(rx_message.data, pkt0, sizeof(pkt0));
+	ret = mdns_parse_message(&rx_message, sizeof(pkt0));
 	FAIL_UNLESS(ret == 0, "Failed to parse probe-like packet");
+	FAIL_UNLESS(VALID_LENGTH(&rx_message) == sizeof(pkt0),
+				"parsed packet has unexpected length");
+	
+	/* prepare a probe, decode it, and check the values */
+	my_ipaddr = ntohl(0xC0A80109);
+	domname = "local";
+	hname = "myname";
+	reset_fqdn();
+	ipaddr_to_inaddrarpa(my_ipaddr, in_addr_arpa);
+	ret = mdns_prepare_probe(&rx_message);
+	FAIL_UNLESS(ret == 0, "Failed to create probe packet");
+	DBG("Created probe:\n");
 	debug_print_message(&rx_message);
+	FAIL_UNLESS(max_probe_growth(0) > rx_message.end - rx_message.cur + 1,
+				"Insufficient tail room after creating probe");
+	memcpy(tx_message.data, rx_message.data, sizeof(rx_message.data));
+	ret = mdns_parse_message(&tx_message, sizeof(tx_message.data));
+	FAIL_UNLESS(ret == 0, "Failed to parse probe packet");
+	DBG("Parsed probe:\n");
+	debug_print_message(&tx_message);
 }
 
 void mdns_tests(void)
