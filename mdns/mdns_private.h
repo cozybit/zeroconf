@@ -1,6 +1,7 @@
 #include "mdns_message.h"
 
 enum mdns_status_t {
+	INIT,
 	FIRST_PROBE_SENT,	/* wait a random amount of time and probe */
 	SECOND_PROBE_SENT,	/* wait 250ms and probe */
 	THIRD_PROBE_SENT,	/* wait 250ms and probe */

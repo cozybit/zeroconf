@@ -9,6 +9,8 @@
 #include "mdns_private.h"
 #include "mdns_port.h"
 
+static char *hname; /* this is a cstring, not a DNS string */
+static char *dname; /* this is a cstring, not a DNS string */
 /* Our fully qualified domain name is something like 'node.local.' */
 static uint8_t fqdn[MDNS_MAX_NAME_LEN + 1];
 /* Our reverse name for the in-addr.arpa PTR record */
@@ -50,6 +52,29 @@ int mdns_name_length(char *name)
 		name += *name + 1;
 	}
 	return name - start + 1;
+}
+
+/* write the normal c string "name" to "dst" with appropriate dns length and
+ * null termination.
+ */
+static char *put_name(char *dst, char *name)
+{
+	int len;
+	char *p = dst;
+
+	len = (uint8_t)strlen(name);
+	*p++ = len;
+	strcpy(p, name);
+	return p + len;
+}
+
+/* reset the fqdn to hostname.domain.
+ */
+static void reset_fqdn(void)
+{
+	char *p;
+	p = put_name(fqdn, hostname);
+	put_name(p, domain);
 }
 
 #define CHECK_TAILROOM(m, l) \
@@ -407,6 +432,36 @@ static int send_ctrl_msg(int msg)
 	return ret;
 }
 
+/* Make m a probe packet suitable for the initial probe sequence.  It must
+ * contain a question for each resource record that we intend on advertising
+ * and an authority with our propose answers.
+ */
+static int mdns_prepare_probe(struct mdns_message *m)
+{
+	mdns_query_init(m);
+	if (mdns_add_question(m, fqdn, T_ANY, C_IN) != 0 ||
+		mdns_add_question(m, in_addr_arpa, T_ANY, C_IN) != 0 ||
+		mdns_add_authority(m, fqdn, T_A, C_IN, 255) != 0 ||
+		mdns_add_uint32(m, htonl(my_ipaddr)) != 0 ||
+		mdns_add_authority(m, in_addr_arpa, T_PTR, C_FLUSH, 255) != 0 ||
+		mdns_add_name(m, fqdn) != 0) {
+		LOG("Resource records don't fit into probe packet.\n");
+	}
+}
+
+/* if we detect a conflict during probe time, we must grow our host name and
+ * service names with -2, or -3, etc.  Report the maximum number of extra bytes
+ * that we would need to do this.
+ */
+static int max_probe_growth(int num_services)
+{
+	/* We need 2 bytes for each instance of the host name that appears in the
+	 * probe (A record q, A record a, inaddrarpa PTR, one for each SRV PTR),
+	 * and 2 for each service name.
+	 */
+	return 2*3 + 2*2*num_services;
+}
+
 /* prepare a response to the message rx.  Put it in tx.  Return -1 for error, 0
  * for no need to respond, or 1 for send response.
  */
@@ -469,6 +524,63 @@ static int mdns_prepare_response(struct mdns_message *rx,
 	return ret;
 }
 
+/* Change the name foo.local to foo-2.local.  If it already says foo-X.local,
+ * make it foo-(X+1).local.  If it says foo-9.local, just leave it alone and
+ * return -1.  The caller should sleep for a while and re-try foo.local at that
+ * point.  name must be a valid dns name.
+ */
+int mdns_increment_name(char *name)
+{
+	int len = name[0], newlen;
+
+	if (name[len - 1] == '-' && name[len] >= '2' && name[len] < '9') {
+		name[len] += 1;
+		return 0;
+	}
+
+	if (name[len - 1] == '-' && name[len] == '9')
+		return -1;
+
+	newlen = len + 2;
+	if (newlen > MDNS_MAX_LABEL_LEN)
+		newlen = MDNS_MAX_LABEL_LEN;
+
+	name[0] = newlen;
+	memmove(&name[len + 3], &name[len + 1], strlen(name) - len - 1);
+	name[len + 1] = '-';
+	name[len + 2] = '2';
+	DBG("Derived new name: ");
+	debug_print_name(NULL, name);
+	DBG("\n");
+	return 0;
+}
+
+/* does the message m conflict with our host name or service names?  If so,
+ * alter the service names and return 1.  Otherwise return 0.  If we've seen so
+ * many conflicts that we have tried all the possible names, return -1;
+ */
+static int fix_response_conflicts(struct mdns_message *m)
+{
+	struct mdns_resource *r;
+	int ret = 0, i;
+
+	if (m->header->flags.fields.qr != RESPONSE)
+		return 0;
+
+	for(i = 0; i < m->num_answers; i++) {
+		r = &m->answers[i];
+		if (r->type == T_A && strncmp(r->name, fqdn, sizeof(fqdn)) == 0) {
+			DBG("Detected conflict with this packet:\n");
+			debug_print_message(m);
+			DBG("\n");
+			/* try a different name */
+			if (mdns_increment_name(fqdn) == -1)
+				ret = -1;
+			ret = 1;
+		}
+	}
+}
+
 /* dumb macro to set a struct timeval to "ms" milliseconds. */
 #define SET_TIMEOUT(t, ms)								\
 	do {												\
@@ -504,6 +616,41 @@ static void recalc_timeout(struct timeval *t, uint32_t start, uint32_t stop,
 	SET_TIMEOUT(t, remaining);
 }
 
+
+/* We're in a probe state and we got a probe response (rx).  Process it and
+ * return the next state.  Also, update the timeout with the time until the
+ * next event.  state must be one of the probe states!
+ */
+static int process_probe_resp(struct mdns_message *rx, struct mdns_message *p,
+							  int state, int event, struct timeval *timeout,
+							  uint32_t start_wait, uint32_t stop_wait)
+{
+	int ret;
+
+	ret = fix_response_conflicts(&rx_message);
+	if (ret == 1) {
+		/* there were conflicts with some of our names.  The names have been
+		 * adapted.  Go back to square one.
+		 */
+		SET_TIMEOUT(timeout, 0);
+		return INIT;
+
+	} else if (ret == -1) {
+		/* we've tried lots of names.  Reset to our original name, sleep for
+		 * 5s, then try again with our original name.
+		 */
+		SET_TIMEOUT(timeout, 5000);
+		reset_fqdn();
+		return INIT;
+	} else {
+		/* this was an unrelated message.  Remain in the same state.  Assume
+		 * the caller has set the timeout properly.
+		 */
+		recalc_timeout(timeout, start_wait, stop_wait, 250);
+		return state;
+	}
+}
+
 /* This is the mdns thread function */
 static void do_mdns(void *data)
 {
@@ -516,16 +663,16 @@ static void do_mdns(void *data)
 	struct timeval *timeout;
 	struct timeval probe_wait_time;
 	socklen_t in_size = sizeof(struct sockaddr_in);
-	int state = FIRST_PROBE_SENT;
+	int state = INIT;
 	int event;
 	uint32_t start_wait, stop_wait;
 
 	mdns_enabled = 1;
 
-	/* start by sending the first probe */
-	DBG("Sending first probe\n");
-	send_message(&tx_message, mc_sock, 5353);
-	SET_TIMEOUT(&probe_wait_time, 250);
+	/* TODO: wait a random amount of time before first probe per
+	 * specification
+	 */
+	SET_TIMEOUT(&probe_wait_time, 0);
 	timeout = &probe_wait_time;
 
 	while (mdns_enabled) {
@@ -579,20 +726,31 @@ static void do_mdns(void *data)
 			eventnames[event], statenames[state]);
 		*/
 		switch (state) {
+		case INIT:
+			if (event == EVENT_TIMEOUT) {
+				DBG("Sending first probe\n");
+				mdns_prepare_probe(&tx_message);
+				send_message(&tx_message, mc_sock, 5353);
+				SET_TIMEOUT(&probe_wait_time, 250);
+				state = FIRST_PROBE_SENT;
+			} else if (event == EVENT_RX) {
+				recalc_timeout(&probe_wait_time, start_wait, stop_wait, 250);
+			}
+			timeout = &probe_wait_time;
+			break;
+
 		case FIRST_PROBE_SENT:
 			if (event == EVENT_TIMEOUT) {
 				DBG("Sending second probe\n");
 				send_message(&tx_message, mc_sock, 5353);
 				SET_TIMEOUT(&probe_wait_time, 250);
-				timeout = &probe_wait_time;
 				state = SECOND_PROBE_SENT;
 			} else if (event == EVENT_RX) {
-				/* TODO: does somebody have our name?  If so, try a new name
-				 * and reset the state machine.
-				 */
-				recalc_timeout(&probe_wait_time, start_wait, stop_wait, 250);
-				timeout = &probe_wait_time;
+				state = process_probe_resp(&rx_message, state,
+										   &probe_wait_time, start_wait,
+										   stop_wait);
 			}
+			timeout = &probe_wait_time;
 			break;
 
 		case SECOND_PROBE_SENT:
@@ -600,13 +758,13 @@ static void do_mdns(void *data)
 				DBG("Sending third probe\n");
 				send_message(&tx_message, mc_sock, 5353);
 				SET_TIMEOUT(&probe_wait_time, 250);
-				timeout = &probe_wait_time;
 				state = THIRD_PROBE_SENT;
 			} else if (event == EVENT_RX) {
-				/* TODO */
-				recalc_timeout(&probe_wait_time, start_wait, stop_wait, 250);
-				timeout = &probe_wait_time;
+				state = process_probe_resp(&rx_message, state,
+										   &probe_wait_time, start_wait,
+										   stop_wait);
 			}
+			timeout = &probe_wait_time;
 			break;
 
 		case THIRD_PROBE_SENT:
@@ -623,9 +781,10 @@ static void do_mdns(void *data)
 				state = IDLE;
 
 			} else if (event == EVENT_RX) {
-				/* TODO */
-				timeout = NULL;
-				state = IDLE;
+				state = process_probe_resp(&rx_message, state,
+										   &probe_wait_time, start_wait,
+										   stop_wait);
+				timeout = &probe_wait_time;
 			}
 			break;
 
@@ -686,8 +845,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 {
 	int one = 1, ret;
 	struct sockaddr_in ctrl_listen;
-	int addr_len;
-	uint8_t *p, len;
+	int addr_len, num_services = 0;
 
 	my_ipaddr = ipaddr;
 
@@ -698,15 +856,10 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 		LOG("Invalid hostname: %s\n", hostname);
 		return MDNS_INVAL;
 	}
-	/* names are preceded by their len */
-	p = fqdn;
-	len = (uint8_t)strlen(hostname);
-	*p++ = len;
-	strcpy(p, hostname);
-	p += len;
-	len = (uint8_t)strlen(domain);
-	*p++ = len;
-	strcpy(p, domain);
+	/* populate fqdn */
+	hname = hostname;
+	dname = domain;
+	reset_fqdn();
 
 	ipaddr_to_inaddrarpa(htonl(ipaddr), in_addr_arpa);
 
@@ -719,14 +872,13 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	if (services != NULL)
 		LOG("Warning: services not implemented yet.\n");
 
-	/* prepare probe to claim name and services */
-	mdns_query_init(&tx_message);
-	if (mdns_add_question(&tx_message, fqdn, T_ANY, C_IN) != 0 ||
-		mdns_add_authority(&tx_message, fqdn, T_A, C_IN, 255) != 0 ||
-		mdns_add_uint32(&tx_message, my_ipaddr) != 0 ||
-		mdns_add_authority(&tx_message, in_addr_arpa, T_PTR, C_FLUSH, 255) != 0 ||
-		mdns_add_name(&tx_message, fqdn) != 0) {
-		LOG("Failed to create probe packet.\n");
+	/* check to make sure all of our names and services will fit */
+	ret = mdns_prepare_probe(&tx_message);
+	if (ret == -1)
+		return MDNS_TOOBIG;
+
+	if (max_probe_growth(num_services) > tx_message.end - tx_message.cur + 1) {
+		LOG("Insufficient space for host name and service names\n");
 		return MDNS_TOOBIG;
 	}
 

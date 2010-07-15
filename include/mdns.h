@@ -139,8 +139,8 @@ struct mdns_service
  * The MDNS specification allows servname to be a UTF8 string.  However, only
  * the ascii subset of UTF-8 has been tested.
  *
- * The struct mdns_service elements must persist and remain unchanged between
- * calls to mdns_launch and mdns_halt.
+ * The domain, hostname, and struct mdns_service elements must persist and
+ * remain unchanged between calls to mdns_launch and mdns_halt.
  */
 int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
                 struct mdns_service **services);

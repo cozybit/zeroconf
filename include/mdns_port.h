@@ -15,7 +15,7 @@
 #if MDNS_SYSTEM == LINUX
 #include <stdio.h>  /* sprintf */
 #include <stdint.h> /* for uint8_t and friends */
-#include <string.h> /* memset, memcpy, strlen, strchr, strcpy */
+#include <string.h> /* memset, memcpy, memmove, strlen, strchr, strcpy */
 
 #else
 #error "mdns target system is not defined"

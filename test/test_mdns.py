@@ -1,4 +1,4 @@
-import unittest, sys, os, ConfigParser
+import unittest, sys, os, ConfigParser, time
 import dns.query, dns.message
 import mdns_subject
 import mdns_tool
@@ -33,6 +33,13 @@ class mdnsTest(unittest.TestCase):
 		assert r.answer[0].rdtype == dns.rdatatype.A
 		assert len(r.answer[0]) == 1
 		self.expectEqual(ipaddr, r.answer[0][0].__str__())
+
+	def queryAndVerify(self, q):
+		try:
+			r = dns.query.udp(q, '224.0.0.251', port=5353, timeout=3)
+			self.compareQandA(q, r)
+		except dns.exception.Timeout:
+			self.failIf(1, "Timed out waiting for mdns response.")
 
 	def tearDown(self):
 		uut.stop()
@@ -102,3 +109,44 @@ class mdnsTest(unittest.TestCase):
 
 		q = dns.message.make_query("inject.local", 1, 1)
 		mdns_tool.inject(q, '224.0.0.251')
+
+	def test_AnswerOneProbe(self):
+		ret = uut.start("-b " + ipaddr + " -n foo")
+		self.failIf(ret != 0, "Failed to launch mdns")
+		q = dns.message.make_query("foo.local", 1, 1)
+		r = dns.message.make_response(q)
+		r.question = []
+		r.find_rrset(r.answer, dns.name.Name(["foo", "local", ""]),
+					 dns.rdataclass.IN, dns.rdatatype.A,
+					 create=True, force_unique=True)
+		time.sleep(0.050) # wait for first probe to go out
+		mdns_tool.inject(r, '224.0.0.251')
+		time.sleep(2) # device should rename itself foo-2
+		q = dns.message.make_query("foo-2.local", 1, 1)
+		self.queryAndVerify(q)
+
+	def test_AnswerSeveralProbes(self):
+		ret = uut.start("-b " + ipaddr + " -n foo")
+		self.failIf(ret != 0, "Failed to launch mdns")
+		q = dns.message.make_query("foo.local", 1, 1)
+		r = dns.message.make_response(q)
+		r.question = []
+		r.find_rrset(r.answer, dns.name.Name(["foo", "local", ""]),
+					 dns.rdataclass.IN, dns.rdatatype.A,
+					 create=True, force_unique=True)
+		time.sleep(0.050) # wait for first probe to go out
+		mdns_tool.inject(r, '224.0.0.251')
+
+		# force it to increment the hostname a few times
+		for i in range(2, 7):
+			r.answer = []
+			r.find_rrset(r.answer,
+						 dns.name.Name(["foo-" + str(i), "local", ""]),
+						 dns.rdataclass.IN, dns.rdatatype.A,
+						 create=True, force_unique=True)
+			time.sleep(0.250) # wait for first probe to go out
+			mdns_tool.inject(r, '224.0.0.251')
+
+		time.sleep(2) # device should rename itself foo-7
+		q = dns.message.make_query("foo-7.local", 1, 1)
+		self.queryAndVerify(q)
