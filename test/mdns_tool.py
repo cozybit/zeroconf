@@ -111,7 +111,6 @@ class sniffer:
 
 	def start(self, srcIP, dev='eth0', filter_extra=' and port mdns'):
 		self.filter = 'src host ' + srcIP + filter_extra
-		print "sniffer start() for filter: " + self.filter
 		self.dev = dev
 		self.mySniffer = sniffer_thread(self.dev,self.filter)
 		clearPacketQueue()
