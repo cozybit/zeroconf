@@ -2,6 +2,7 @@ import unittest, sys, os, ConfigParser, time
 import dns.query, dns.message
 import mdns_subject
 import mdns_tool
+import time
 
 # Parse config file
 configfile = "test.conf"
@@ -11,6 +12,8 @@ if not os.path.exists(configfile):
 conf = ConfigParser.ConfigParser()
 conf.read(configfile)
 ipaddr = conf.get("target", "ipaddr")
+sniffip = conf.get("sniffer", "ipaddr")
+sniffdev = conf.get("sniffer","dev")
 
 # create the mdns unit under test
 uut = mdns_subject.mdns_subject(conf)
@@ -113,6 +116,81 @@ class mdnsTest(unittest.TestCase):
 		q = dns.message.make_query("inject.local", dns.rdatatype.A,
 								   dns.rdataclass.IN)
 		mdns_tool.inject(q, '224.0.0.251')
+
+	def test_mdnsProbe(self):
+		# Simple test to see that we get the expected probe packets
+		# first start sniffer
+		name = "testprobe"
+		s = mdns_tool.sniffer()
+		s.start(sniffip, sniffdev)
+
+		# launch mdns
+		self.failIf(mdns.start("-b " + ipaddr + " -n " + name) != 0,
+			"Failed to launch mdns")
+
+		# Check packets
+
+		# P0
+		P0msg = None
+		try:
+			P0msg = s.read(0.250)
+		except:
+			pass
+
+		self.failIf( P0msg == None, "Failed to get P0" )
+		self.failIf( P0msg.opcode() != dns.opcode.QUERY, "P0 was not a QUERY")
+		self.failIf( P0msg.rcode() != dns.rcode.NOERROR, "P0 rcode was error")
+		self.failIf( str(P0msg.question).find(name) == -1,
+		             "P0 didn't have correct name")
+		self.failIf( str(P0msg.question).find("IN ANY") == -1,
+		             "P0 didn't have correct query type")
+
+		# P1
+		P1msg = None
+		try:
+			P1msg = s.read(0.250)
+		except:
+			pass
+
+		self.failIf( P1msg == None, "Failed to get P1" )
+		self.failIf( P1msg.opcode() != dns.opcode.QUERY, "P1 was not a QUERY")
+		self.failIf( P1msg.rcode() != dns.rcode.NOERROR, "P1 rcode was error")
+		self.failIf( str(P1msg.question).find(name) == -1,
+		             "P1 didn't have correct name")
+		self.failIf( str(P1msg.question).find("IN ANY") == -1,
+		             "P1 didn't have correct query type")
+
+		# P2
+		P2msg = None
+		try:
+			P2msg = s.read(0.250)
+		except:
+			pass
+
+		self.failIf( P2msg == None, "Failed to get P2" )
+		self.failIf( P2msg.opcode() != dns.opcode.QUERY, "P2 was not a QUERY")
+		self.failIf( P2msg.rcode() != dns.rcode.NOERROR, "P2 rcode was error")
+		self.failIf( str(P2msg.question).find(name) == -1,
+		             "P2 didn't have correct name")
+		self.failIf( str(P2msg.question).find("IN ANY") == -1,
+		             "P2 didn't have correct query type")
+
+		# Announce
+		Amsg = None
+		try:
+			Amsg = s.read(0.250)
+		except:
+			pass
+
+		self.failIf( Amsg == None, "Failed to get A" )
+		self.failIf( Amsg.opcode() != dns.opcode.QUERY, "A was not a QUERY")
+		self.failIf( Amsg.rcode() != dns.rcode.NOERROR, "A rcode was error")
+		self.failIf( Amsg.flags & dns.flags.QR != dns.flags.QR, "QR bit not set")
+		self.failIf( Amsg.flags & dns.flags.AA != dns.flags.AA, "AA bit not set")
+		self.failIf( str(Amsg.answer).find(name) == -1,
+		             "A didn't have correct name")
+		# cleanup
+		s.stop()
 
 	def test_AnswerOneProbe(self):
 		ret = uut.start("-b " + ipaddr + " -n foo")

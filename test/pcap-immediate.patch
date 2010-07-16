@@ -1,0 +1,24 @@
+--- libpcap-1.1.1/pcap-bpf.c	2010-03-11 17:56:54.000000000 -0800
++++ libpcap-1.1.1-a/pcap-bpf.c	2010-07-15 07:46:54.000000000 -0700
+@@ -1991,8 +1991,8 @@
+ #endif
+ 	}
+ 
+-#ifdef _AIX
+-#ifdef	BIOCIMMEDIATE
++// #ifdef _AIX
++// #ifdef	BIOCIMMEDIATE
+ 	/*
+ 	 * Darren Reed notes that
+ 	 *
+@@ -2046,8 +2046,8 @@
+ 		status = PCAP_ERROR;
+ 		goto bad;
+ 	}
+-#endif	/* BIOCIMMEDIATE */
+-#endif	/* _AIX */
++// #endif	/* BIOCIMMEDIATE */
++// #endif	/* _AIX */
+ 
+ 	if (p->opt.promisc) {
+ 		/* set promiscuous mode, just warn if it fails */

@@ -3,14 +3,20 @@ Quick Start
 
 1: Install dependencies
 
-sudo apt-get install python-nose
+sudo apt-get install python-nose python-libpcap python-impacket
 
-2: Run the tests
+2: Create a configuration file for your tests.  See test.sample.conf for
+   documentation and an example.
+
+3: Run the tests
 
 $ nosetests
 
 Notes
 =====
+
+-- Ensure that no other mDNS responder (like avahi) is running on your device
+   under test.
 
 -- To see the stdout of the tests, invoke nosetests with -s
 
@@ -26,5 +32,14 @@ Notes
 -- If you use the "ControlMaster auto" option with your ssh client, you may get
    some unexpected failures from pxssh.
 
--- For some reason, the tests don't work on my Ubuntu dev machine unless I've
-   got avahi up.  Not sure what's up with that.
+-- For some reason, avahi needs to run the host that executes the test
+   framework. Perhaps the test framwork doesn't setup the multicast socket
+   properly.
+
+-- Be sure to deploy the mdns executable to your device under test.  The test
+   framework doesn't do this automatically.
+
+-- On some systems, in particular OS X, libpcap buffers packets and doesn't
+   return them until it has a full buffer.  Enabling the BIOCIMMEDIATE ioctl
+   solves this.  In particular, one has to coment out some #ifdefs in pcap-bpf.c
+   in order to force this to work. See pcap-immediate.patch
