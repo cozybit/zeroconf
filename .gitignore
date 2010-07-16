@@ -7,3 +7,5 @@ mDNS/mdns
 mdns/mdns
 examples/linux/mdns
 mdns/libmdns.a
+mdns/version.h
+test/test.conf
