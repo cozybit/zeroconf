@@ -1,5 +1,7 @@
-/* 
- * Copyright (C) cozybit, Inc. 2007-2010
+/*
+ * Copyright (C) cozybit, Inc. 2007-2010. All Rights Reserved.
+ *
+ * Use and redistribution subject to licensing terms.
  *
  * mdns_port.h: porting layer for mdns
  *
@@ -12,7 +14,7 @@
 #define __MDNS_PORT_H__
 
 /* system-dependent definitions */
-#if MDNS_SYSTEM == LINUX
+#if MDNS_SYSTEM_LINUX
 /* bsd socket stuff */
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -97,5 +99,23 @@ void mdns_log(const char *fmt, ...);
  * nearest 10ms.
  */
 uint32_t mdns_time_ms(void);
+
+/* mdns_socket_mcast: create a multicast socket
+ *
+ * More specifically, this function must create a non-blocking socket bound to
+ * the to the specified IPv4 multicast address and port on the interface on
+ * which mdns is to be running.  The multicast TTL should be set to 255 per the
+ * mdns specification.
+ *
+ * mcast_addr: multicast address to join in network byte order
+ *
+ * port: multicast port in network byte order.
+ *
+ * Returns the socket descriptor suitable for use with FD_SET, select,
+ * recvfrom, etc.  Returns -1 on error.
+ *
+ * Note: if available, the SO_REUSEADDR sockopt should be enabled.
+ */
+int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port);
 
 #endif /* __MDNS_PORT_H__ */

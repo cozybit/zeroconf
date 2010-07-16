@@ -1,5 +1,7 @@
 /*
- * Copyright (C) cozybit, Inc. 2007-2010
+ * Copyright (C) cozybit, Inc. 2007-2010. All Rights Reserved.
+ *
+ * Use and redistribution subject to licensing terms.
  *
  * mdns on Linux
  *
@@ -143,6 +145,61 @@ uint32_t mdns_time_ms(void)
     if (gettimeofday(&t, NULL) != 0)
         printf("Warning: Failed to get time.\n");
     return (uint32_t)(t.tv_sec * 1000 + t.tv_usec/1000);
+}
+
+int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port)
+{
+	int sock;
+	int yes = 1;
+	unsigned char ttl = 255;
+	struct sockaddr_in in_addr;
+	struct ip_mreq mc;
+
+	memset(&in_addr, 0, sizeof(in_addr));
+	in_addr.sin_family = AF_INET;
+	in_addr.sin_port = port;
+	in_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock < 0) {
+		LOG("error: could not open multicast socket\n");
+		return sock;
+	}
+
+#ifdef SO_REUSEPORT
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, (char*)&yes,
+					sizeof(yes)) < 0) {
+		LOG("error: failed to set SO_REUSEPORT option\n");
+		return -1;
+	}
+#endif
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
+
+	if (bind(sock, (struct sockaddr*)&in_addr, sizeof(in_addr))) {
+		close(sock);
+		return -1;
+	}
+
+	/* join multicast group */
+	mc.imr_multiaddr.s_addr = mcast_addr;
+	mc.imr_interface.s_addr = htonl(INADDR_ANY);
+	if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mc,
+					sizeof(mc)) < 0) {
+		LOG("error: failed to join multicast group\n");
+		return -1;
+	}
+	/* set other IP-level options */
+	if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (unsigned char *)&ttl,
+					sizeof(ttl)) < 0) {
+		LOG("error: failed to set multicast TTL\n");
+		return -1;
+	}
+
+	if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
+		LOG("error: failed to put socket in non-blocking mode\n");
+		return -1;
+	}
+	return sock;
 }
 
 #define HELP_TEXT \

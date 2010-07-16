@@ -1,24 +1,62 @@
 Introduction
 ------------
 
-coZeroconf is cozybit's zeroconf stack.  It's a suite of software that allows a
-user to:
+mdns allows a device to
 
--- Acquire an IP address in the event that no DHCP server is available
--- Resolve names to IP addresses
--- Advertise available services
+-- Resolve its name to IP addresses for other nodes on the network
+-- Advertise its services to other nodes
 
 Building
 --------
 
-$ make -C mDNS
+1. Set the build vars:
+   $ export CC=your-compiler-cc
+   $ export AR=your-compiler-ar
+   $ export CFLAGS="cflags for your build"
+   $ export OPTIONS="MDNS_LOG MDNS_DBG MDNS_TESTS MDNS_SYSTEM_LINUX"
 
-Releasing
----------
+Note: your OPTIONS may vary depending on how you wish to build mdns.  Edit the
+Makefile to change the default options.  Also, when you change the
+configuration options you must do a clean build.
 
-$ ./scripts/release.sh
+2. Build
 
-If a new release version is desired:
+$ make
 
-$ ./scripts/release.sh -n 1.23
-Note that this will create a new Git release tag of the format v1.23
+The mdns library can be found in mdns/libmdns.a.  The location of your
+executable depends on which system you build for.  For linux, it appears in
+examples/linux/mdns.
+
+3. If you wish to only compile the mdns library:
+
+$ make
+
+Porting
+-------
+
+1. Add sections for your compiler and your system to include/mdns_port.h.  See
+that file for details on exactly what standard C and BSD facilities are
+required.
+
+2. Build the mdns library as described above.  Be sure to set the build
+variables properly for your new system and compiler.
+
+3. Implement the porting functions described in include/mdns_port.h.  These
+comprise the system-specific calls used by mdns.
+
+4. Add calls to mdns_launch() and mdns_halt() at suitable points in your system
+launch code to invoke and tear down the mdns task.  If you wish to run the test
+suite against your ported code (which is recommended), you should wrap the
+mdns_launch() function in such a way that you can invoke it with various
+arguments from some sort of console.
+
+5. You may wish to invoke mdns_test() somewhere if you built with the
+MDNS_TESTS option.  The output of these tests is all text.  Each test that is
+run reports either PASS or FAIL.
+
+6. Build, deploy, and launch your system.
+
+7. Test your system.  At the very least, you should be able to ping your system
+at the hostname and domain that you passed to mdns_launch().  If you wish, you
+may create a new test target for your device and run the automated system
+tests.  See test/README for more detail.

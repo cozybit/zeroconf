@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) cozybit, Inc. 2007-2010. All Rights Reserved.
+ *
+ * Use and redistribution subject to licensing terms.
+ */
 #ifndef __MDNS_PRIVATE_H__
 #define __MDNS_PRIVATE_H__
 
@@ -23,23 +28,26 @@ extern char *eventnames[];
 #endif
 
 /* logging helpers */
-#ifdef MDNS_LOG
+#if defined(MDNS_LOG) && !defined(MDNS_DBG)
 #define LOG mdns_log
-#ifdef MDNS_DBG
-void debug_print_message(struct mdns_message *m);
-void debug_print_name(struct mdns_message *m, char *name);
-#define DBG mdns_log
-#else
 #define debug_print_message(m) do {} while (0)
 #define debug_print_name(m, n) do {} while (0)
 #define DBG(...) do {} while (0)
-#endif
 
-#else
+#elif defined(MDNS_LOG) && defined(MDNS_DBG)
+#define LOG mdns_log
+void debug_print_message(struct mdns_message *m);
+void debug_print_name(struct mdns_message *m, char *name);
+#define DBG mdns_log
+
+#elif !defined(MDNS_LOG) && !defined(MDNS_DBG)
 #define debug_print_message(m) do {} while (0)
 #define debug_print_name(m, n) do {} while (0)
 #define DBG(...) do {} while (0)
 #define LOG(...) do {} while (0)
+
+#else
+#error "MDNS_DBG is only supported if MDNS_LOG is enabled"
 #endif
 
 /* helpers for accessing elements */

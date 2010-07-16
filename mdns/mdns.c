@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) cozybit, Inc. 2007-2010. All Rights Reserved.
+ *
+ * Use and redistribution subject to licensing terms.
+ */
 #include "mdns.h"
 #include "mdns_private.h"
 #include "mdns_port.h"
@@ -313,70 +318,6 @@ static int mdns_add_srv(struct mdns_message *m, uint16_t priority,
 	memcpy(m->cur, target, len);
 	m->cur += len;
 	return 0;
-}
-
-static int m_socket(void)
-{
-	int sock;
-	int yes = 1;
-	int no = 0;
-	unsigned char ttl = 255;
-	struct sockaddr_in in_addr;
-	struct ip_mreq mc;
-
-	/* set up bind address (any, port 5353) */
-	memset(&in_addr, 0, sizeof(in_addr));
-	in_addr.sin_family = AF_INET;
-	in_addr.sin_port = htons(5353);
-	in_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	sock = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sock < 0) {
-		LOG("error: could not open multicast socket\n");
-		return sock;
-	}
-
-#ifdef SO_REUSEPORT
-	if (setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, (char*)&yes,
-					sizeof(yes)) < 0) {
-		LOG("error: failed to set SO_REUSEPORT option\n");
-		return -1;
-	}
-#endif
-	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*)&yes, sizeof(yes));
-
-	if (bind(sock, (struct sockaddr*)&in_addr, sizeof(in_addr))) {
-		close(sock);
-		return -1;
-	}
-
-	/* join multicast group */
-	mc.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
-	mc.imr_interface.s_addr = htonl(INADDR_ANY);
-	if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mc,
-					sizeof(mc)) < 0) {
-		LOG("error: failed to join multicast group\n");
-		return -1;
-	}
-	/* set other IP-level options */
-	if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, (unsigned char *)&ttl,
-					sizeof(ttl)) < 0) {
-		LOG("error: failed to set multicast TTL\n");
-		return -1;
-	}
-#if defined(IP_MULTICAST_LOOP) && !defined(LOOPBACK)
-	if (setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, (char *)&no,
-					sizeof(no)) < 0) {
-		LOG("error: failed to unset IP_MULTICAST_LOOP option\n");
-		return -1;
-	}
-#endif
-
-	if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
-		LOG("error: failed to put socket in non-blocking mode\n");
-		return -1;
-	}
-	return sock;
 }
 
 static int send_message(struct mdns_message *m, int sock, short port)
@@ -870,7 +811,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 
 	ipaddr_to_inaddrarpa(htonl(ipaddr), in_addr_arpa);
 
-	mc_sock = m_socket();
+	mc_sock = mdns_socket_mcast(inet_addr("224.0.0.251"), htons(5353));
 	if (mc_sock < 0) {
 		LOG("error: unable to open multicast socket\n");
 		return 1;
