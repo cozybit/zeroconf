@@ -31,13 +31,16 @@ static void reset_fqdn(void)
 	dname_put_label(p, domname);
 }
 
+/* return the amount of tail room in the message m */
+#define TAILROOM(m) ((m)->end - (m)->cur + 1)
+
 /* ensure that message m has at least l bytes of room left */
-#define CHECK_TAILROOM(m, l) \
-	do { \
-		if (m->cur + l - 1 > m->end) { \
+#define CHECK_TAILROOM(m, l)										  \
+	do {															  \
+		if (TAILROOM(m) < l) {										  \
 			DBG("Warning: truncated mdns message (%d).\n", __LINE__); \
-			return -1; \
-		} \
+			return -1;												  \
+		}															  \
 	} while (0)
 
 /* return the number of valid bytes in message m's buffer */
@@ -881,7 +884,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	if (ret == -1)
 		return MDNS_TOOBIG;
 
-	if (max_probe_growth(num_services) > tx_message.end - tx_message.cur + 1) {
+	if (max_probe_growth(num_services) > TAILROOM(&tx_message)) {
 		LOG("Insufficient space for host name and service names\n");
 		return MDNS_TOOBIG;
 	}
@@ -960,7 +963,7 @@ void message_parse_tests(void)
 	FAIL_UNLESS(ret == 0, "Failed to create probe packet");
 	DBG("Created probe:\n");
 	debug_print_message(&rx_message);
-	FAIL_UNLESS(max_probe_growth(0) > rx_message.end - rx_message.cur + 1,
+	FAIL_UNLESS(max_probe_growth(0) <= TAILROOM(&rx_message),
 				"Insufficient tail room after creating probe");
 	memcpy(tx_message.data, rx_message.data, sizeof(rx_message.data));
 	ret = mdns_parse_message(&tx_message, sizeof(tx_message.data));
