@@ -1,0 +1,9 @@
+Releasing
+---------
+
+$ ./scripts/release.sh
+
+If a new release version is desired:
+
+$ ./scripts/release.sh -n 1.23
+Note that this will create a new Git release tag of the format v1.23
