@@ -11,7 +11,10 @@ export CFLAGS
 
 all: mdns linux
 
-mdns:
+mdns/version.h:
+	./scripts/version.sh
+
+mdns: mdns/version.h
 	$(MAKE) -C mdns
 
 linux:
@@ -20,3 +23,4 @@ linux:
 clean:
 	$(MAKE) -C examples/linux clean
 	$(MAKE) -C mdns clean
+	- rm mdns/version.h
