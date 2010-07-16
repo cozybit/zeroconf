@@ -5,9 +5,17 @@ import time
 # test.  At this time it is just hard coded to launch mdns on a linux host over
 # ssh.  In the future, we should query the config variable targettype from the
 # test config.
+class NoSuchTargetType(Exception):
+    "Unsupported test target type"
+    pass
+
 class mdns_subject:
 
 	def __init__(self, conf):
+		targettype = conf.get("target", "targettype")
+		if targettype != "linuxssh":
+			raise NoSuchTargetType
+
 		self.session = pxssh.pxssh()
 		self.session.login(conf.get("target", "ipaddr"), "root")
 		self.conf = conf

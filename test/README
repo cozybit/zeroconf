@@ -1,8 +1,11 @@
 Quick Start
 ===========
 
-The tests are expected to run on a PC running ubuntu linux.  They may work on
-similar platforms with minor tweaking.
+The tests are expected to run on a development PC running ubuntu linux.  They
+may work on similar platforms with minor tweaking.  They run against a target
+under test, which is on the same network as the development PC.  The tests
+control the target under test via an ssh connection (see Adding new targets if
+your target does not have ssh).
 
 1: Install dependencies
 
@@ -15,9 +18,23 @@ similar platforms with minor tweaking.
 3: Build and deploy the mdns program for your target.  This step varies
    depending on your target.
 
-4: Run the tests
+4: Run the unit tests on the target if you built mdns with MDNS_TEST enabled.
+   This step varies depending on your target, but in all cases it amounts to
+   calling the mdns_test function somehow.  See mdns.h for details.
+
+5: Run the system tests
 
    $ nosetests
+
+Adding new test targets
+=======================
+
+The test framework needs a way to configure mdns.  More specifically, it needs
+a way to invoke mdns_launch with various arguments on the target.  The code
+that does this is fairly minimal and is consolidated in mdns_subject.py.  To
+add a new test target (such as a custom device with a serial console, or
+whatever you need), create a new targettype in your test.conf file, and
+implement the start, ready, and stop functions.
 
 Notes
 =====
