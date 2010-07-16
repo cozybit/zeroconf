@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) cozybit, Inc. 2007-2010. All Rights Reserved.
+ *
+ * Use and redistribution subject to licensing terms.
+ */
 #include "mdns.h"
 #include "mdns_private.h"
 #include "mdns_port.h"

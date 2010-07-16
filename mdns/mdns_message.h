@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) cozybit, Inc. 2007-2010. All Rights Reserved.
+ *
+ * Use and redistribution subject to licensing terms.
+ */
 #ifndef MDNS_MESSAGE_H
 #define MDNS_MESSAGE_H
 
