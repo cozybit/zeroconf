@@ -49,7 +49,10 @@ void debug_print_name(struct mdns_message *m, char *name);
 #define set_uint32(p, v) (*((uint32_t*)(p)) = htonl((v)))
 
 /* helpers for handling dns names */
+char *dname_put_label(char *dst, char *label);
+int dname_size(char *dname);
 int dname_increment(char *name);
+int dname_cmp(char *p1, char *n1, char *p2, char *n2);
 
 #ifdef MDNS_TESTS
 

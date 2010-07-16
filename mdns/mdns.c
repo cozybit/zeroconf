@@ -22,52 +22,13 @@ static int mdns_enabled;
 static struct mdns_message tx_message;
 static struct mdns_message rx_message;
 
-/* Find the length of a DNS name.  A DNS name may be one of:
- *	- a series of labels terminated by a NULL byte
- *	- a series of labels terminated by a pointer
- *	- a pointer
- *
- * return -1 if the name is invalid, or the length of the name.
- */
-int mdns_name_length(char *name)
-{
-	char *start = name;
-	while (*name != 0x00) {
-		if (*name & 0xC0) { /* pointer */
-			name++;
-			break;
-		}
-
-		if (*name  > MDNS_MAX_LABEL_LEN)
-			return -1;
-
-		/* we've found a valid label length */
-		name += *name + 1;
-	}
-	return name - start + 1;
-}
-
-/* write the normal c string "name" to "dst" with appropriate dns length and
- * null termination.
- */
-static char *put_name(char *dst, char *name)
-{
-	int len;
-	char *p = dst;
-
-	len = (uint8_t)strlen(name);
-	*p++ = len;
-	strcpy(p, name);
-	return p + len;
-}
-
 /* reset the fqdn to hostname.domain.
  */
 static void reset_fqdn(void)
 {
 	char *p;
-	p = put_name(fqdn, hname);
-	put_name(p, dname);
+	p = dname_put_label(fqdn, hname);
+	dname_put_label(p, dname);
 }
 
 #define CHECK_TAILROOM(m, l) \
@@ -111,7 +72,7 @@ static int mdns_parse_message(struct mdns_message *m, int mlen)
 	for(i = 0; i < m->num_questions; i++) {
 		/* get qname */
 		m->questions[i].qname = m->cur;
-		len = mdns_name_length(m->cur);
+		len = dname_size(m->cur);
 		if (len == 0) {
 			DBG("Warning: invalid name in question %d\n", i);
 			return -1;
@@ -146,7 +107,7 @@ static int mdns_parse_message(struct mdns_message *m, int mlen)
 	}
 	for(i = 0; i < m->num_answers; i++) {
 		m->answers[i].name = m->cur;
-		len = mdns_name_length(m->cur);
+		len = dname_size(m->cur);
 		if (len == -1) {
 			DBG("Warning: invalid label in answer %d\n", i);
 			return -1;
@@ -214,7 +175,7 @@ static int mdns_response_init(struct mdns_message *m)
 static int __mdns_add_tuple(struct mdns_message *m, char *name, uint16_t type,
 							uint16_t class, uint32_t ttl)
 {
-	uint16_t len = (uint16_t)mdns_name_length(name);
+	uint16_t len = (uint16_t)dname_size(name);
 	int size = ttl == (uint32_t)-1 ? len + 2*sizeof(uint16_t) :
 		len + 2*sizeof(uint16_t) + sizeof(uint32_t);
 	CHECK_TAILROOM(m, size);
@@ -287,7 +248,7 @@ static int mdns_add_uint32(struct mdns_message *m, uint32_t i)
  */
 static int mdns_add_name(struct mdns_message *m, char *name)
 {
-	int len = mdns_name_length(name);
+	int len = dname_size(name);
 	CHECK_TAILROOM(m, len + sizeof(uint16_t));
 	set_uint16(m->cur, len);
 	m->cur += sizeof(uint16_t);
@@ -302,7 +263,7 @@ static int mdns_add_name(struct mdns_message *m, char *name)
 static int mdns_add_srv(struct mdns_message *m, uint16_t priority,
 						uint16_t weight, uint16_t port, char *target)
 {
-	int len = mdns_name_length(target);
+	int len = dname_size(target);
 	CHECK_TAILROOM(m, len + 3*sizeof(uint16_t));
 	set_uint16(m->cur, priority);
 	m->cur += sizeof(uint16_t);
@@ -475,14 +436,14 @@ static int mdns_prepare_response(struct mdns_message *rx,
 	for(i = 0; i < rx->num_questions; i++) {
 		q = &rx->questions[i];
 		if (q->qtype == T_ANY || q->qtype == T_A) {
-			if (strcmp(q->qname, fqdn) == 0) {
+			if (dname_cmp(rx->data, q->qname, NULL, fqdn) == 0) {
 				if (mdns_add_answer(tx, fqdn, T_A, C_FLUSH, 225) != 0 ||
 					mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
 					return -1;
 				ret = 1;
 			}
 		} else if (q->qtype == T_ANY || q->qtype == T_PTR) {
-			if (strcmp(q->qname, in_addr_arpa) == 0) {
+			if (dname_cmp(rx->data, q->qname, NULL, in_addr_arpa) == 0) {
 				if (mdns_add_answer(tx, in_addr_arpa, T_PTR, C_FLUSH, 225) != 0 ||
 					mdns_add_name(tx, fqdn) != 0)
 					return -1;
@@ -507,7 +468,7 @@ static int fix_response_conflicts(struct mdns_message *m)
 
 	for(i = 0; i < m->num_answers; i++) {
 		r = &m->answers[i];
-		if (r->type == T_A && strncmp(r->name, fqdn, sizeof(fqdn)) == 0) {
+		if (r->type == T_A && dname_cmp(m->data, r->name, NULL, fqdn) == 0) {
 			DBG("Detected conflict with this packet:\n");
 			debug_print_message(m);
 			DBG("\n");
