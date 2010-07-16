@@ -2,7 +2,7 @@
 
 #ifdef MDNS_DBG
 char *statenames[] = {
-	"INIT"
+	"INIT",
 	"FIRST_PROBE_SENT",
 	"SECOND_PROBE_SENT",
 	"THIRD_PROBE_SENT",
@@ -143,4 +143,5 @@ void debug_print_message(struct mdns_message *m)
 	for(i = 0; i < m->num_answers; i++)
 		debug_print_resource(m, &m->answers[i]);
 }
+
 #endif /* MDNS_DBG */

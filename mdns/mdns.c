@@ -623,6 +623,7 @@ static void do_mdns(void *data)
 
 		DBG("Got event %s in state %s\n",
 			eventnames[event], statenames[state]);
+		debug_print_message(&rx_message);
 		switch (state) {
 		case INIT:
 			if (event == EVENT_TIMEOUT) {
@@ -826,9 +827,28 @@ void mdns_halt(void)
 }
 
 #ifdef MDNS_TESTS
+/* This is a probe-like packet with a single query for foo.local and an
+ * authority ns with a name pointer to foo.local
+ */
+char pkt0[] = {0xE4, 0x53, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
+			   0x00, 0x03, 0x66, 0x6F, 0x6F, 0x05, 0x6C, 0x6F, 0x63, 0x61, 0x6C,
+			   0x00, 0x00, 0x01, 0x00, 0x01, 0xC0, 0x0C, 0x00, 0x01, 0x00, 0x01,
+			   0x00, 0x00, 0x00, 0xFF, 0x00, 0x04, 0xC0, 0xA8, 0x00, 0x07};
+
+void message_parse_tests(void)
+{
+	int ret;
+	test_title("mdns_parse_message");
+	memcpy(rx_message.data, pkt0, sizeof(pkt0) - 1);
+	ret = mdns_parse_message(&rx_message, sizeof(pkt0) - 1);
+	FAIL_UNLESS(ret == 0, "Failed to parse probe-like packet");
+	debug_print_message(&rx_message);
+}
+
 void mdns_tests(void)
 {
 	dname_tests();
+	message_parse_tests();
 }
 #else
 void mdns_tests(void)

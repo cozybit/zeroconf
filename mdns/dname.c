@@ -185,12 +185,6 @@ static int c_to_dname(char *dst, char *src)
 	return 0;
 }
 
-
-static void test_title(char *s)
-{
-	mdns_log("========= %s =========\n", s);
-}
-
 /* dname_length tests and test data */
 char p0[] = {3, 'f', 'o', 'o', 5, 'l', 'o', 'c', 'a', 'l', 0};
 

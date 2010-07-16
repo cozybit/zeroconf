@@ -67,6 +67,9 @@ int dname_cmp(char *p1, char *n1, char *p2, char *n2);
 		} \
 	} while (0)
 
+
+#define test_title(s) mdns_log("========= %s =========\n", s)
+
 #endif
 
 void dname_tests(void);
