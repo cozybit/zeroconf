@@ -12,7 +12,6 @@ if not os.path.exists(configfile):
 conf = ConfigParser.ConfigParser()
 conf.read(configfile)
 ipaddr = conf.get("target", "ipaddr")
-sniffip = conf.get("sniffer", "ipaddr")
 sniffdev = conf.get("sniffer","dev")
 
 # create the mdns unit under test
@@ -122,10 +121,10 @@ class mdnsTest(unittest.TestCase):
 		# first start sniffer
 		name = "testprobe"
 		s = mdns_tool.sniffer()
-		s.start(sniffip, sniffdev)
+		s.start(ipaddr, sniffdev)
 
 		# launch mdns
-		self.failIf(mdns.start("-b " + ipaddr + " -n " + name) != 0,
+		self.failIf(uut.start_and_wait("-b " + ipaddr + " -n " + name) != 0,
 			"Failed to launch mdns")
 
 		# Check packets
