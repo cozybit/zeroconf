@@ -3,7 +3,7 @@ Quick Start
 
 1: Install dependencies
 
-sudo apt-get install python-nose python-libpcap python-impacket
+sudo apt-get install python-pexpect python-nose python-libpcap python-impacket
 
 2: Create a configuration file for your tests.  See test.sample.conf for
    documentation and an example.
@@ -43,3 +43,11 @@ Notes
    return them until it has a full buffer.  Enabling the BIOCIMMEDIATE ioctl
    solves this.  In particular, one has to coment out some #ifdefs in pcap-bpf.c
    in order to force this to work. See pcap-immediate.patch
+
+-- On some systems, Linux hosts in particular, ethernet devices won't permit
+   sniffing without special permisions.  This is even though we're not using
+   promisicous mode.  To test this, you can run tcpdump:
+     derosier@derosier-u-vm:~$ tcpdump -p -i eth0
+     tcpdump: eth0: You don't have permission to capture on that device
+   If it gives the error above, you will need to run the tests as sudo.  No
+   error means you're good to go as a normal user.
