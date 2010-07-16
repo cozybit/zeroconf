@@ -1,16 +1,23 @@
 Quick Start
 ===========
 
+The tests are expected to run on a PC running ubuntu linux.  They may work on
+similar platforms with minor tweaking.
+
 1: Install dependencies
 
-sudo apt-get install python-pexpect python-nose python-libpcap python-impacket
+   $ sudo apt-get install python-pexpect python-nose python-libpcap \
+   python-impacket
 
 2: Create a configuration file for your tests.  See test.sample.conf for
    documentation and an example.
 
-3: Run the tests
+3: Build and deploy the mdns program for your target.  This step varies
+   depending on your target.
 
-$ nosetests
+4: Run the tests
+
+   $ nosetests
 
 Notes
 =====
@@ -27,27 +34,24 @@ Notes
    why we don't use the one available with your distro.
 
 -- The linux tests require that you can ssh into the remote target without a
-   password (i.e., your ssh-agent is set up properly).
+   password (i.e., your ssh-agent is set up properly and your public key is
+   installed on the remote target).
 
 -- If you use the "ControlMaster auto" option with your ssh client, you may get
-   some unexpected failures from pxssh.
+   some unexpected failures from pxssh.  If you don't know what this means,
+   you're probably not using it.
 
--- For some reason, avahi needs to run the host that executes the test
+-- For some reason, avahi needs to run on the host that executes the test
    framework. Perhaps the test framwork doesn't setup the multicast socket
-   properly.
+   properly.  This is a known issue.
 
--- Be sure to deploy the mdns executable to your device under test.  The test
-   framework doesn't do this automatically.
+-- If you get unexpected timeouts on tests that rely on sniffer capabilities,
+   and you're using MAC OS X, you may need to recompile libpcap with the
+   BIOCIMMEDIATE ioctl enabled.  See pcap-immediate.patch in this directory.
 
--- On some systems, in particular OS X, libpcap buffers packets and doesn't
-   return them until it has a full buffer.  Enabling the BIOCIMMEDIATE ioctl
-   solves this.  In particular, one has to coment out some #ifdefs in pcap-bpf.c
-   in order to force this to work. See pcap-immediate.patch
+-- If you get "Exception: socket: Operation not permitted" for some tests, it's
+   probably because you don't have sufficient permission to sniff packets.  You
+   can resolve this by either running the tests as root, or adding the
+   CAP_NET_RAW permission to python like so:
 
--- On some systems, Linux hosts in particular, ethernet devices won't permit
-   sniffing without special permisions.  This is even though we're not using
-   promisicous mode.  To test this, you can run tcpdump:
-     derosier@derosier-u-vm:~$ tcpdump -p -i eth0
-     tcpdump: eth0: You don't have permission to capture on that device
-   If it gives the error above, you will need to run the tests as sudo.  No
-   error means you're good to go as a normal user.
+   $ sudo chmod --reference=/bin/ping `which python`
