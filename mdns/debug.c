@@ -60,10 +60,8 @@ void debug_print_name(struct mdns_message *m, char *name)
 /* print question (query) data */
 void debug_print_question(struct mdns_message *m, struct mdns_question *q)
 {
-	DBG("--------------------------------------------------------\n"
-		"question: \"");
 	debug_print_name(m, q->qname);
-	DBG("\"\n(type %u, class %u)\n", q->qtype, q->qclass);
+	DBG(" (type %u, class %u)\n", q->qtype, q->qclass);
 }
 
 /* print resource (answer) and associated RR */
@@ -71,41 +69,33 @@ void debug_print_resource(struct mdns_message *m, struct mdns_resource *r)
 {
 	struct rr_srv *srv;
 
-	DBG("--------------------------------------------------------\n"
-		"resource \"");
 	debug_print_name(m, r->name);
-	DBG("\" (type %u, class %u%s)\n\tttl=%u, rdlength=%u\n",
-		r->type,
+	DBG(" (class %u%s, ttl=%u, len=%u) ",
 		r->class & 0x8000 ? r->class & ~(0x8000) : r->class,
 		r->class & 0x8000 ? " FLUSH" : "", r->ttl, r->rdlength);
 	switch(r->type) {
 	case T_A:
-		DBG("\tA type, IP=");
+		DBG("A ");
 		debug_print_ip(ntohl(*((uint32_t*)r->rdata)));
-		DBG("\n");
 		break;
 	case T_NS:
-		DBG("\tNS type, name=\"");
+		DBG("NS ");
 		debug_print_name(m, (char *)r->rdata);
-		DBG("\"\n");
 		break;
 	case T_CNAME:
-		DBG("\tCNAME type, name=\"");
+		DBG("CNAME ");
 		debug_print_name(m, (char *)r->rdata);
-		DBG("\"\n");
 		break;
 	case T_SRV:
-		DBG("\tSRV type, ");
+		DBG("SRV ");
 		srv = (struct rr_srv *)r->rdata;
-		DBG("priority: %u, weight: %u, port: %u, target: \"",
+		DBG("prior: %u, weight: %u, port: %u, target: \"",
 			ntohs(srv->priority), ntohs(srv->weight), ntohs(srv->port));
 		debug_print_name(m, srv->target);
-		DBG("\"\n");
 		break;
 	case T_PTR:
-		DBG("\tPTR type, name=\"");
+		DBG("PTR ");
 		debug_print_name(m, (char *)r->rdata);
-		DBG("\"\n");
 		break;
 	case T_TXT:
 		DBG("\tTXT type, data=\"");
@@ -113,15 +103,15 @@ void debug_print_resource(struct mdns_message *m, struct mdns_resource *r)
 		DBG("\"\n");
 		break;
 	default:
-		DBG("\tunknown RR type\n");
+		DBG("\tunknown\n");
 		break;
 	}
+	DBG("\n");
 }
 
 void debug_print_header(struct mdns_header *h)
 {
-	DBG("--------------------------------------------------------\n"
-		"header:\nID=%u, QR=%u, AA=%d OPCODE=%u\n"
+	DBG("ID=%u, QR=%u, AA=%d OPCODE=%u\n"
 		"QDCOUNT=%u, ANCOUNT=%u, NSCOUNT=%u, ARCOUNT=%u\n",
 		ntohs(h->id), h->flags.fields.qr,
 		h->flags.fields.aa, h->flags.fields.opcode,
@@ -135,13 +125,21 @@ void debug_print_message(struct mdns_message *m)
 	int i;
 
 	DBG("########################################################\n");
+	DBG("HEADER;\n");
 	debug_print_header(m->header);
 
+	DBG("QUESTION;\n");
 	for(i = 0; i < m->num_questions; i++)
 		debug_print_question(m, &m->questions[i]);
 
+	DBG("ANSWER;\n");
 	for(i = 0; i < m->num_answers; i++)
 		debug_print_resource(m, &m->answers[i]);
+
+	DBG("AUTHORITY;\n");
+	for(i = 0; i < m->num_authorities; i++)
+		debug_print_resource(m, &m->authorities[i]);
+	DBG("########################################################\n");
 }
 
 #endif /* MDNS_DBG */
