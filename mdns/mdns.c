@@ -649,6 +649,17 @@ static void do_mdns(void *data)
 				LOG("Warning: failed to get control message\n");
 			} else {
 				if (msg == MDNS_CTRL_HALT) {
+					/* Send the goodbye packet.  This is same as announcement,
+					 * but with a TTL of 0
+					 */
+					mdns_response_init(&tx_message);
+					if (mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 0) != 0 ||
+						mdns_add_uint32(&tx_message, my_ipaddr) != 0) {
+						/* This is highly unlikely */
+						break;
+					}
+					send_message(&tx_message, mc_sock, 5353);
+
 					LOG("mdns done.\n");
 					mdns_enabled = 0;
 					break;

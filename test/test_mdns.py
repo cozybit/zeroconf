@@ -191,6 +191,44 @@ class mdnsTest(unittest.TestCase):
 		# cleanup
 		s.stop()
 
+	def test_Goodbye(self):
+		# Simple test to see that we get the expected probe packets
+		# first start sniffer
+		name = "testgoodbye"
+
+		# launch mdns
+		self.failIf(uut.start_and_wait("-b " + ipaddr + " -n " + name) != 0,
+			"Failed to launch mdns")
+
+		time.sleep(1)
+
+		# Check packets
+		s = mdns_tool.sniffer()
+		s.start(ipaddr, sniffdev)
+
+		# Stop the mdns service
+		uut.stop()
+
+		# Check for goodbye
+		Amsg = None
+		try:
+			Amsg = s.read(0.250)
+		except:
+			pass
+
+		self.failIf( Amsg == None, "Failed to get A" )
+		self.failIf( Amsg.opcode() != dns.opcode.QUERY, "A was not a QUERY")
+		self.failIf( Amsg.rcode() != dns.rcode.NOERROR, "A rcode was error")
+		self.failIf( Amsg.flags & dns.flags.QR != dns.flags.QR, "QR bit not set")
+		self.failIf( Amsg.flags & dns.flags.AA != dns.flags.AA, "AA bit not set")
+		self.failIf( str(Amsg.answer).find(name) == -1,
+		             "A didn't have correct name")
+		# Most importaint test is that ttl is 0:
+		self.failIf( Amsg.answer[0].ttl != 0, "TTL of goodbye is not 0")
+
+		# cleanup
+		s.stop()
+
 	def test_AnswerOneProbe(self):
 		ret = uut.start("-b " + ipaddr + " -n foo")
 		self.failIf(ret != 0, "Failed to launch mdns")
