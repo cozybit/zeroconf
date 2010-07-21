@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <sys/time.h>
+#include <time.h>
 
 #include "mdns.h"
 
@@ -29,7 +30,7 @@
 
 /* TODO: Use system-independent log function */
 #define LOG printf
-char *logfile = NULL;
+char *logfile = "/tmp/mdns.log";
 
 static void linux_mdns_signal(int sig)
 {
@@ -112,6 +113,9 @@ void *mdns_thread_create(mdns_thread_entry entry, void *data)
 		signal(SIGHUP, linux_mdns_signal);
 		signal(SIGTERM, linux_mdns_signal);
 
+		/* initalize the random number generator */
+		srand(time(0));
+
 		/* launch the entry function */
 		entry(data);
 		return NULL;
@@ -145,6 +149,12 @@ uint32_t mdns_time_ms(void)
     if (gettimeofday(&t, NULL) != 0)
         printf("Warning: Failed to get time.\n");
     return (uint32_t)(t.tv_sec * 1000 + t.tv_usec/1000);
+}
+
+int mdns_rand_range(int X)
+{
+	int R = rand();
+	return R / (RAND_MAX / X + 1);
 }
 
 int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port)

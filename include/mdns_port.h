@@ -100,6 +100,18 @@ void mdns_log(const char *fmt, ...);
  */
 uint32_t mdns_time_ms(void);
 
+/*
+ * mdns_rand_range: get random number between 0 and X
+ *
+ * The mdns daemon needs to generate random numbers for various timeout ranges.
+ * This function is needed to return a random number between 0 and X. It should
+ * provide a uniform random field.
+ *
+ * The program must initalize the random number generator before starting the
+ * mdns thread.
+ */
+int mdns_rand_range(int X);
+
 /* mdns_socket_mcast: create a multicast socket
  *
  * More specifically, this function must create a non-blocking socket bound to

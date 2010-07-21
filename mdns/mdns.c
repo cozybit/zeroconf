@@ -616,13 +616,14 @@ static void do_mdns(void *data)
 	int state = INIT;
 	int event;
 	uint32_t start_wait, stop_wait;
-
+	int rand_time = 0;
 	mdns_enabled = 1;
 
-	/* TODO: wait a random amount of time before first probe per
-	 * specification
+	/* Per specification, section 8.1, wait a random ammount of time between
+	 * 0 and 250 ms before the first probe.
 	 */
-	SET_TIMEOUT(&probe_wait_time, 0);
+	rand_time = mdns_rand_range(250);
+	SET_TIMEOUT(&probe_wait_time, rand_time);
 	timeout = &probe_wait_time;
 
 	while (mdns_enabled) {
