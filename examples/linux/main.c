@@ -30,7 +30,7 @@
 
 /* TODO: Use system-independent log function */
 #define LOG printf
-char *logfile = "/tmp/mdns.log";
+char *logfile = NULL;
 
 static void linux_mdns_signal(int sig)
 {
