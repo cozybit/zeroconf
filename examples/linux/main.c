@@ -151,10 +151,10 @@ uint32_t mdns_time_ms(void)
     return (uint32_t)(t.tv_sec * 1000 + t.tv_usec/1000);
 }
 
-int mdns_rand_range(int X)
+int mdns_rand_range(int n)
 {
-	int R = rand();
-	return R / (RAND_MAX / X + 1);
+	int r = rand();
+	return r / (RAND_MAX / n + 1);
 }
 
 int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port)
