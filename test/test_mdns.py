@@ -43,6 +43,25 @@ class mdnsTest(unittest.TestCase):
 		except dns.exception.Timeout:
 			self.failIf(1, "Timed out waiting for mdns response.")
 
+	# launch mdns with "args" and wait to see the first probe
+	def waitForFirstProbe(self, args):
+		# fire up the sniffer
+		s = mdns_tool.sniffer()
+		s.start(ipaddr, sniffdev)
+
+		# launch mdns
+		ret = uut.start(args)
+		self.failIf(ret != 0, "Failed to launch mdns")
+
+		# Wait for first probe
+		p = None
+		try:
+			p = s.read(0.250)
+		except:
+			pass
+		self.failIf(p == None, "Failed to find first probe")
+		s.stop()
+
 	def setUp(self):
 		uut.stop()
 
@@ -230,8 +249,7 @@ class mdnsTest(unittest.TestCase):
 		s.stop()
 
 	def test_AnswerOneProbe(self):
-		ret = uut.start("-b " + ipaddr + " -n foo")
-		self.failIf(ret != 0, "Failed to launch mdns")
+		# create a response to a probe
 		q = dns.message.make_query("foo.local", dns.rdatatype.A,
 								   dns.rdataclass.IN)
 		r = dns.message.make_response(q)
@@ -239,7 +257,10 @@ class mdnsTest(unittest.TestCase):
 		r.find_rrset(r.answer, dns.name.Name(["foo", "local", ""]),
 					 dns.rdataclass.FLUSH, dns.rdatatype.A,
 					 create=True, force_unique=True)
-		time.sleep(0.050) # wait for first probe to go out
+
+		self.waitForFirstProbe("-b " + ipaddr + " -n foo")
+
+		# respond to probe
 		mdns_tool.inject(r, '224.0.0.251')
 		time.sleep(2) # device should rename itself foo-2
 		q = dns.message.make_query("foo-2.local", dns.rdatatype.A,
@@ -247,8 +268,6 @@ class mdnsTest(unittest.TestCase):
 		self.queryAndVerify(q)
 
 	def test_SimultaneousGreaterProbe(self):
-		ret = uut.start("-b " + ipaddr + " -n foo")
-		self.failIf(ret != 0, "Failed to launch mdns")
 		p = dns.message.make_query("foo.local", dns.rdatatype.ANY,
 								   dns.rdataclass.IN)
 		myip = socket.ntohl(struct.unpack('L', socket.inet_aton(ipaddr))[0])
@@ -257,7 +276,8 @@ class mdnsTest(unittest.TestCase):
 		rr = dns.rrset.from_text("foo.local.", 255, dns.rdataclass.IN,
 								 dns.rdatatype.A, myip)
 		p.authority = [rr]
-		time.sleep(0.050) # wait for first probe to go out
+
+		self.waitForFirstProbe("-b " + ipaddr + " -n foo")
 		mdns_tool.inject(p, '224.0.0.251')
 		time.sleep(2) # device should rename itself foo-2
 		q = dns.message.make_query("foo-2.local", dns.rdatatype.A,
