@@ -285,8 +285,6 @@ class mdnsTest(unittest.TestCase):
 		self.queryAndVerify(q)
 
 	def test_SimultaneousLesserProbe(self):
-		ret = uut.start("-b " + ipaddr + " -n foo")
-		self.failIf(ret != 0, "Failed to launch mdns")
 		p = dns.message.make_query("foo.local", dns.rdatatype.ANY,
 								   dns.rdataclass.IN)
 		myip = socket.ntohl(struct.unpack('L', socket.inet_aton(ipaddr))[0])
@@ -295,7 +293,7 @@ class mdnsTest(unittest.TestCase):
 		rr = dns.rrset.from_text("foo.local.", 255, dns.rdataclass.IN,
 								 dns.rdatatype.A, myip)
 		p.authority = [rr]
-		time.sleep(0.050) # wait for first probe to go out
+		self.waitForFirstProbe("-b " + ipaddr + " -n foo")
 		mdns_tool.inject(p, '224.0.0.251')
 		time.sleep(2) # device should not rename itself
 		q = dns.message.make_query("foo.local", dns.rdatatype.A,
