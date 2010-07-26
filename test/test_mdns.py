@@ -270,8 +270,8 @@ class mdnsTest(unittest.TestCase):
 	def test_SimultaneousGreaterProbe(self):
 		p = dns.message.make_query("foo.local", dns.rdatatype.ANY,
 								   dns.rdataclass.IN)
-		myip = socket.ntohl(struct.unpack('L', socket.inet_aton(ipaddr))[0])
-		myip = struct.pack('L', socket.htonl(myip + 1))
+		myip = socket.ntohl(struct.unpack('I', socket.inet_aton(ipaddr))[0])
+		myip = struct.pack('I', socket.htonl(myip + 1))
 		myip = socket.inet_ntoa(myip)
 		rr = dns.rrset.from_text("foo.local.", 255, dns.rdataclass.IN,
 								 dns.rdatatype.A, myip)
@@ -289,8 +289,8 @@ class mdnsTest(unittest.TestCase):
 		self.failIf(ret != 0, "Failed to launch mdns")
 		p = dns.message.make_query("foo.local", dns.rdatatype.ANY,
 								   dns.rdataclass.IN)
-		myip = socket.ntohl(struct.unpack('L', socket.inet_aton(ipaddr))[0])
-		myip = struct.pack('L', socket.htonl(myip - 1))
+		myip = socket.ntohl(struct.unpack('I', socket.inet_aton(ipaddr))[0])
+		myip = struct.pack('I', socket.htonl(myip - 1))
 		myip = socket.inet_ntoa(myip)
 		rr = dns.rrset.from_text("foo.local.", 255, dns.rdataclass.IN,
 								 dns.rdatatype.A, myip)
