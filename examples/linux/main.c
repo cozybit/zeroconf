@@ -23,12 +23,13 @@
 #include <stdarg.h>
 #include <sys/time.h>
 #include <time.h>
+#include <limits.h>
 
 #include "mdns.h"
 
 #define MDNS_PIDFILE "/var/run/mdns.pid"
+#define MAX_SERVICES 16
 
-/* TODO: Use system-independent log function */
 #define LOG printf
 char *logfile = NULL;
 
@@ -212,6 +213,81 @@ int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port)
 	return sock;
 }
 
+static int parse_service(struct mdns_service *service, char *str)
+{
+	char *token, *p = str, *e, *k;
+	int port, num_keys, i;
+
+	token = strsep(&p, ":");
+	if (token == NULL || *token == 0) {
+		printf("error: no service name specified: %s\n", str);
+		return -1;
+	}
+	service->servname = token;
+
+	token = strsep(&p, ":");
+	if (token == NULL || *token == 0) {
+		printf("error: no service type specified: %s\n", str);
+		return -2;
+	}
+	service->servtype = token;
+
+	token = strsep(&p, ":");
+	if (token == NULL || *token == 0) {
+		printf("error: no service port specified: %s\n", str);
+		return -3;
+	}
+	port = strtol(token, &e, 10);
+	if ((errno == ERANGE && (port == LONG_MAX || port == LONG_MIN)) ||
+		port > UINT16_MAX || port < 0)
+	{
+		printf("error: invalid port number.\n");
+		return -4;
+	}
+	service->port = port;
+
+	token = strsep(&p, ":");
+	if (token == NULL || *token == 0) {
+		printf("error: no service protocol specified: %s\n", str);
+		return -5;
+	}
+	if (strcmp(token, "tcp") == 0) {
+		service->proto = MDNS_PROTO_TCP;
+	} else if (strcmp(token, "tcp") == 0) {
+		service->proto = MDNS_PROTO_UDP;
+	} else {
+		printf("error: unexpected protocol %s\n", token);
+		return -6;
+	}
+
+	token = strsep(&p, ":");
+	if (token == NULL || *token == 0)
+		/* no key/value pairs.  We're done */
+		return 0;
+
+	num_keys = 1;
+	k = strchr(p, ':');
+	while (k != NULL) {
+		num_keys++;
+		k = strchr(k + 1, ':');
+	}
+	service->keyvals = malloc(num_keys*sizeof(char *));
+	if (service->keyvals == NULL) {
+		printf("error: failed to allocate array for key/value pairs\n");
+		return -7;
+	}
+	memset(service->keyvals, 0, num_keys*sizeof(char *) + 1);
+	service->keyvals[0] = token;
+	for (i = 1; i < num_keys; i++) {
+		service->keyvals[i] = strsep(&p, ":");
+		if (service->keyvals[i] == NULL || *service->keyvals[i] == 0) {
+			printf("error: failed to parse key/value pair\n");
+			return -8;
+		}
+	}
+	return 0;
+}
+
 #define HELP_TEXT \
 "Usage: mdns [options] <command>\n\n" \
 "command can be one of the following:\n" \
@@ -224,7 +300,15 @@ int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port)
 "-b <ipaddr>    ipaddress to bind to\n" \
 "-d <domain>    domain to resolve (default is 'local')\n" \
 "-n <hostname>  hostname to resolve (default is 'node')\n" \
-"-l <logfile>   logfile for daemon (default is /dev/null)\n"
+"-l <logfile>   logfile for daemon (default is /dev/null)\n" \
+"-s <name:type:port:proto[:key1=val1:key2=val2]>\n" \
+"               advertise a service with the specified name\n" \
+"               (e.g., mywebpage, or \"My Website\"), type (e.g., http),\n" \
+"               port (e.g., 80), proto (e.g., tcp), and key/value pairs\n" \
+"               (e.g., path=/index.html).  Multiple -s options may be\n" \
+"               supplied.  Colons may not appear in any of these fields.\n"
+
+static struct mdns_service *services[MAX_SERVICES + 1];
 
 int main(int argc, char **argv)
 {
@@ -234,8 +318,11 @@ int main(int argc, char **argv)
 	char *cmd;
 	char *domain = NULL;
 	char *hostname = "node";
+	int num_services = 0, i;
 
-	while ((opt = getopt(argc, argv, "hb:d:n:l:")) != -1) {
+	memset(services, 0, sizeof(services));
+
+	while ((opt = getopt(argc, argv, "hb:d:n:l:s:")) != -1) {
 		switch (opt) {
 		case 'h':
 			printf(HELP_TEXT);
@@ -252,6 +339,24 @@ int main(int argc, char **argv)
 		case 'l':
 			logfile = optarg;
 			break;
+		case 's':
+			if (num_services == MAX_SERVICES) {
+				printf("Warning: Only first %d services will be advertised.\n",
+					   MAX_SERVICES);
+				break;
+			}
+			services[num_services] = malloc(sizeof(struct mdns_service));
+			if (!services[num_services]) {
+				printf("Failed to allocate service structure.\n");
+				ret = -1;
+				goto done;
+			}
+			memset(services[num_services], 0, sizeof(struct mdns_service));
+			ret = parse_service(services[num_services], optarg);
+			if (ret != 0)
+				goto done;
+			num_services++;
+			break;
 		default:
 			printf("Unexpected option %c\n", opt);
 			return -1;
@@ -265,7 +370,7 @@ int main(int argc, char **argv)
 
 	cmd = argv[optind];
 	if (strcmp(cmd, "launch") == 0) {
-		ret = mdns_launch(ipaddr, domain, hostname, NULL);
+		ret = mdns_launch(ipaddr, domain, hostname, services);
 
 	} else if (strcmp(cmd, "halt") == 0) {
 		mdns_halt();
@@ -278,6 +383,15 @@ int main(int argc, char **argv)
 	} else {
 		printf("No such command: %s\n", cmd);
 		return -1;
+	}
+
+done:
+	for (i = 0; i < MAX_SERVICES; i++) {
+		if (services[i] == NULL)
+			break;
+		if (services[i]->keyvals)
+			free(services[i]->keyvals);
+		free(services[i]);
 	}
 	return ret;
 }

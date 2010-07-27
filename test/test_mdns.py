@@ -20,7 +20,7 @@ uut = mdns_subject.mdns_subject(conf)
 class mdnsTest(unittest.TestCase):
 
 	def expectEqual(self, a, b):
-		self.failIf(a != b, "Expected " + a + " but got " + b)
+		self.failIf(a != b, "Expected " + str(a) + " but got " + str(b))
 
 	def compareQandA(self, q, r):
 		assert r.id == q.id
@@ -299,3 +299,26 @@ class mdnsTest(unittest.TestCase):
 		q = dns.message.make_query("foo.local", dns.rdatatype.A,
 								   dns.rdataclass.FLUSH)
 		self.queryAndVerify(q)
+
+	def test_ServiceParser(self):
+		# service args are "name:type:port:proto[:key1=val1:key2=val2]"
+		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp launch')
+		self.expectEqual(0, ret)
+		uut.stop()
+		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp -s printer:printer:555:tcp launch')
+		self.expectEqual(0, ret)
+		uut.stop()
+		ret = uut.start("-b " + ipaddr + ' -s :::: launch')
+		self.expectEqual(-1 & 0xff, ret)
+		ret = uut.start("-b " + ipaddr + ' -s website launch')
+		self.expectEqual(-2 & 0xff, ret)
+		ret = uut.start("-b " + ipaddr + ' -s website:http launch')
+		self.expectEqual(-3 & 0xff, ret)
+		ret = uut.start("-b " + ipaddr + ' -s website:http:9999980 launch')
+		self.expectEqual(-4 & 0xff, ret)
+		ret = uut.start("-b " + ipaddr + ' -s website:http:80 launch')
+		self.expectEqual(-5 & 0xff, ret)
+		ret = uut.start("-b " + ipaddr + ' -s website:http:80:foo launch')
+		self.expectEqual(-6 & 0xff, ret)
+		ret = uut.start("-b " + ipaddr + ' -s website:http:80:tcp:u=uname:p=passwd launch')
+		self.expectEqual(0, ret)
