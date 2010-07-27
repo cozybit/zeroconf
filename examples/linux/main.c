@@ -28,7 +28,6 @@
 #include "mdns.h"
 
 #define MDNS_PIDFILE "/var/run/mdns.pid"
-#define MAX_SERVICES 16
 
 #define LOG printf
 char *logfile = NULL;
@@ -308,7 +307,7 @@ static int parse_service(struct mdns_service *service, char *str)
 "               (e.g., path=/index.html).  Multiple -s options may be\n" \
 "               supplied.  Colons may not appear in any of these fields.\n"
 
-static struct mdns_service *services[MAX_SERVICES + 1];
+static struct mdns_service *services[MDNS_MAX_SERVICES + 1];
 
 int main(int argc, char **argv)
 {
@@ -340,9 +339,9 @@ int main(int argc, char **argv)
 			logfile = optarg;
 			break;
 		case 's':
-			if (num_services == MAX_SERVICES) {
+			if (num_services == MDNS_MAX_SERVICES) {
 				printf("Warning: Only first %d services will be advertised.\n",
-					   MAX_SERVICES);
+					   MDNS_MAX_SERVICES);
 				break;
 			}
 			services[num_services] = malloc(sizeof(struct mdns_service));
@@ -386,7 +385,7 @@ int main(int argc, char **argv)
 	}
 
 done:
-	for (i = 0; i < MAX_SERVICES; i++) {
+	for (i = 0; i < MDNS_MAX_SERVICES; i++) {
 		if (services[i] == NULL)
 			break;
 		if (services[i]->keyvals)

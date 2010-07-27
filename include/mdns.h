@@ -43,6 +43,15 @@
  */
 #define MDNS_CTRL_PORT 12345
 
+/* Maximum number of services
+ *
+ * Internally, mdns can only advertise so many services.  This eliminates the
+ * need for dynamic memory allocation.  Developers may wish to reduce this
+ * number to save memory, or to increase this number if more services are
+ * required.
+ */
+#define MDNS_MAX_SERVICES 16
+
 /* Maximum length of labels
  *
  * A label is one segment of a DNS name.  For example, "foo" is a label in the
