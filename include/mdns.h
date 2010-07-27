@@ -90,18 +90,14 @@
  * proto: Either MDNS_PROTO_TCP or MDNS_PROTO_UDP depending on what protocol
  * clients should use to connect to the service servtype.
  *
- * keys: NULL-terminated array of key strings.  These are the keys of the TXT
- * key/value pairs for a service type.  For example, the servtype is "http"
+ * keyvals: NULL-terminated array of key/value strings.  Each element in the
+ * array is of the form "key=val".  These are the key/value pairs for the TXT
+ * record associated with a service type.  For example, the servtype is "http"
  * defines the TXT keys "u", "p", and "path" for the username, password, and
- * path to a document.  If you supplied all of these, the keys array would be
- * {"u", "p", "path", NULL}.  For each element of keys, there must be a value
- * in values.  If keys is NULL, no TXT keys will be advertised.  If keys is
- * {NULL}, a TXT record will appear, but it will not contain any key/value
- * pairs.
- *
- * values: NULL-terminated array of value strings associated with keys.  In the
- * example above, an array something like {"myusername", "mypassword",
- * "/index.html", NULL} would be passed in.
+ * path to a document.  If you supplied all of these, the keyvals array would
+ * be {"u=myusername", "p=mypassword", "path=/index.html", NULL}.  If keyvals
+ * is NULL, no TXT keys will be advertised.  If keyvals is {NULL}, a TXT record
+ * will appear, but it will not contain any key/value pairs.
  */
 struct mdns_service
 {
@@ -109,8 +105,7 @@ struct mdns_service
     char *servtype;
     uint16_t port;
     int proto;
-    char **keys;
-    char **values;
+    char **keyvals;
 };
 
 /* protocol values for the proto member of the mdns_service descriptor */
