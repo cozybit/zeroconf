@@ -57,6 +57,13 @@
  */
 #define MDNS_MAX_NAME_LEN	255	/* defined by the standard */
 
+/* Maximum length of key/value pair
+ *
+ * TXT records associated with a service are populated with key/value pairs.
+ * These key/value pairs must not exceed this length.
+ */
+#define MDNS_MAX_KEYVAL_LEN	255	/* defined by the standard */
+
 /* return codes */
 #define MDNS_SUCCESS	0
 #define MDNS_INVAL		1	/* invalid argument */
@@ -90,14 +97,24 @@
  * proto: Either MDNS_PROTO_TCP or MDNS_PROTO_UDP depending on what protocol
  * clients should use to connect to the service servtype.
  *
- * keyvals: NULL-terminated array of key/value strings.  Each element in the
- * array is of the form "key=val".  These are the key/value pairs for the TXT
- * record associated with a service type.  For example, the servtype is "http"
- * defines the TXT keys "u", "p", and "path" for the username, password, and
- * path to a document.  If you supplied all of these, the keyvals array would
- * be {"u=myusername", "p=mypassword", "path=/index.html", NULL}.  If keyvals
- * is NULL, no TXT keys will be advertised.  If keyvals is {NULL}, a TXT record
- * will appear, but it will not contain any key/value pairs.
+ * keyvals: NULL-terminated string of colon-separated key=value pairs.  These
+ * are the key/value pairs for the TXT record associated with a service type.
+ * For example, the servtype "http" defines the TXT keys "u", "p", and "path"
+ * for the username, password, and path to a document.  If you supplied all of
+ * these, the keyvals string would be:
+ *
+ * "u=myusername:p=mypassword:path=/index.html"
+ *
+ * If keyvals is NULL, no TXT record will be advertised.  If keyvals is ":", a
+ * TXT record will appear, but it will not contain any key/value pairs.  The
+ * key must be present (i.e., two contiguous ':' characters should never appear
+ * in the keyvals string.)  A key may appear with no value.  The interpretation
+ * of this depends on the nature of the service.  The length of a single
+ * key/value pair cannot exceed MDNS_MAX_KEYVAL_LEN bytes.
+ *
+ * Note that the keyvals string WILL be modified by mdns, and therefore must
+ * not be const (e.g., in ROM).  Further, it should not be dereferenced after
+ * being passed to mdns_launch.
  */
 struct mdns_service
 {
@@ -105,13 +122,14 @@ struct mdns_service
     char *servtype;
     uint16_t port;
     int proto;
-    char **keyvals;
+    char *keyvals;
 
 	/* The following members are for internal use only and should not be
 	 * dereferenced by the user.
 	 */
 	char fqsn[MDNS_MAX_NAME_LEN];
 	char *ptrname;
+	uint16_t kvlen;
 };
 
 /* protocol values for the proto member of the mdns_service descriptor */
@@ -142,7 +160,7 @@ struct mdns_service
  * or a name composed of the supplied labels exceeded MDNS_MAX_NAME_LEN.
  *
  * MDNS_BADSRV: one of the service descriptors in the services list was
- * invalid.
+ * invalid.  Perhaps one of the key/val pairs exceeded MDNS_MAX_KEYVAL_LEN.
  *
  * MDNS_TOOBIG: The combination of name information and service descriptors
  * does not fit in a single packet, which is required by this implementation.

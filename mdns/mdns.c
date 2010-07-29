@@ -309,7 +309,7 @@ static int mdns_add_uint32(struct mdns_message *m, uint32_t i)
 }
 
 /* add a dns name containing name to the message m.  This is used for cname,
- * txt, ns, and ptr.
+ * ns, and ptr.
  */
 static int mdns_add_name(struct mdns_message *m, char *name)
 {
@@ -318,6 +318,21 @@ static int mdns_add_name(struct mdns_message *m, char *name)
 	set_uint16(m->cur, len);
 	m->cur += sizeof(uint16_t);
 	memcpy(m->cur, name, len);
+	m->cur += len;
+	return 0;
+}
+
+/* add a txt string containing txt to the message m.  This is nearly identical
+ * to mdns_add_name, but it doesn't have the trailing 0.  That is implied by the
+ * length of the record.
+ */
+static int mdns_add_txt(struct mdns_message *m, char *txt, uint16_t len)
+{
+	DBG("Adding txt of len %d\n", len);
+	CHECK_TAILROOM(m, len + sizeof(uint16_t));
+	set_uint16(m->cur, len);
+	m->cur += sizeof(uint16_t);
+	memcpy(m->cur, txt, len);
 	m->cur += len;
 	return 0;
 }
@@ -469,7 +484,11 @@ static int mdns_prepare_response(struct mdns_message *rx,
 					mdns_add_answer(tx, (*s)->ptrname, T_PTR, C_FLUSH, 255);
 					mdns_add_name(tx, (*s)->fqsn);
 
-					/* TODO: add any associated TXT records */
+					/* ...then the TXT record */
+					if ((*s)->keyvals) {
+						mdns_add_answer(tx, (*s)->fqsn, T_TXT, C_FLUSH, 255);
+						mdns_add_txt(tx, (*s)->keyvals, (*s)->kvlen);
+					}
 
 					/* ...and finally add the SRV record */
 					mdns_add_answer(tx, (*s)->fqsn, T_SRV, C_FLUSH, 255);
@@ -845,6 +864,7 @@ static void ipaddr_to_inaddrarpa(uint32_t ipaddr, char *out)
 static int validate_service(struct mdns_service *s)
 {
 	int maxlen;
+	char *src, *dest;
 
 	if (!valid_label(s->servname)) {
 		LOG("Invalid service name: %s\n", s->servname);
@@ -869,6 +889,50 @@ static int validate_service(struct mdns_service *s)
 	maxlen += 1; /* and we need a terminating 0 */
 	if (maxlen > MDNS_MAX_NAME_LEN)
 		return MDNS_TOOBIG;
+
+	/* Our TXT basically look like dnames but without the terminating \0.
+	 * Instead of depending on this \0 to find the end, we record the length.
+	 * This allows us to use that \0 space from the user to accomodate the
+	 * leading length.
+	 */
+	if (s->keyvals != NULL) {
+
+		/* now change all of the colons to lengths starting from the last
+		 * char
+		 */
+		dest = s->keyvals + strlen(s->keyvals);
+		src = dest - 1;
+		s->kvlen = 0;
+		maxlen = 0;
+
+		while (1) {
+			if (*src == ':' && maxlen == 0)
+				return MDNS_BADSRV;
+
+			if (dest == s->keyvals || *src == ':' ) {
+				/* This is the beginning of a key/val.  Update its length and
+				 * start looking at the next one.
+				 */
+				*dest = maxlen;
+
+				if (UINT16_MAX - s->kvlen < maxlen)
+					return MDNS_TOOBIG;
+
+				s->kvlen += maxlen + 1;
+				maxlen = 0;
+
+				if (dest == s->keyvals)
+					break;
+				dest--;
+				src--;
+				continue;
+			}
+			/* move the char down */
+			*dest-- = *src--;
+			maxlen++;
+		}
+	}
+
 	return 0;
 }
 

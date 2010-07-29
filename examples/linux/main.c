@@ -214,8 +214,8 @@ int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port)
 
 static int parse_service(struct mdns_service *service, char *str)
 {
-	char *token, *p = str, *e, *k;
-	int port, num_keys, i;
+	char *token, *p = str, *e;
+	int port;
 
 	token = strsep(&p, ":");
 	if (token == NULL || *token == 0) {
@@ -259,31 +259,16 @@ static int parse_service(struct mdns_service *service, char *str)
 		return -6;
 	}
 
-	token = strsep(&p, ":");
-	if (token == NULL || *token == 0)
+	if (p == NULL)
 		/* no key/value pairs.  We're done */
 		return 0;
 
-	num_keys = 1;
-	k = strchr(p, ':');
-	while (k != NULL) {
-		num_keys++;
-		k = strchr(k + 1, ':');
-	}
-	service->keyvals = malloc(num_keys*sizeof(char *));
+	service->keyvals = malloc(strlen(p) + 1); /* room for trailing \0! */
 	if (service->keyvals == NULL) {
-		printf("error: failed to allocate array for key/value pairs\n");
+		printf("error: failed to allocate string for key/value pairs\n");
 		return -7;
 	}
-	memset(service->keyvals, 0, num_keys*sizeof(char *) + 1);
-	service->keyvals[0] = token;
-	for (i = 1; i < num_keys; i++) {
-		service->keyvals[i] = strsep(&p, ":");
-		if (service->keyvals[i] == NULL || *service->keyvals[i] == 0) {
-			printf("error: failed to parse key/value pair\n");
-			return -8;
-		}
-	}
+	strcpy(service->keyvals, p);
 	return 0;
 }
 

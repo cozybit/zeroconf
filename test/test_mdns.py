@@ -48,13 +48,15 @@ class mdnsTest(unittest.TestCase):
 		r = self.sendQuery(q)
 		self.compareARecord(q, r)
 
-	# ensure that the response r contains a PTR record for the fully qualifid
+	# ensure that the response r contains a PTR record for the fully qualified
 	# service type fqst that points to the SRV with the supplied fully
 	# qualified service name fqsn on port.  Also ensure that the SRV record
-	# points to the fully qualified domain name fqdn
-	def verifySRVPTRRecord(self, r, fqst, fqsn, port, fqdn):
+	# points to the fully qualified domain name fqdn.  If txt is not None, it's
+	# an array of expected values in the TXT record.
+	def verifySRVPTRRecord(self, r, fqst, fqsn, port, fqdn, txt=None):
 		foundPTR = False
 		foundSRV = False
+		foundTXT = False
 		for a in r.answer:
 			if a == dns.rrset.from_text(fqst, 255, dns.rdataclass.FLUSH,
 										dns.rdatatype.PTR, fqsn):
@@ -66,8 +68,20 @@ class mdnsTest(unittest.TestCase):
 			if a == rr:
 				foundSRV = True
 
+			if txt != None:
+				if txt == "":
+					rr = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+											 dns.rdatatype.TXT, "\"\"")
+				else:
+					rr = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+											 dns.rdatatype.TXT, txt)					
+				if a == rr:
+					foundTXT = True
+
 		self.failIf(foundPTR == False, "Failed to find PTR record for " + fqst)
 		self.failIf(foundSRV == False, "Failed to find SRV record for " + fqsn)
+		self.failIf(txt != None and foundTXT == False,
+					"Failed to find expected TXT record")
 
 	# ensure that an A record is present with ipaddr and fqdn
 	def verifyARecord(self, r, ipaddr, fqdn):
@@ -339,25 +353,25 @@ class mdnsTest(unittest.TestCase):
 
 	def test_ServiceParser(self):
 		# service args are "name:type:port:proto[:key1=val1:key2=val2]"
-		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp launch')
+		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp')
 		self.expectEqual(0, ret)
 		uut.stop()
-		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp -s printer:printer:555:tcp launch')
+		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp -s printer:printer:555:tcp')
 		self.expectEqual(0, ret)
 		uut.stop()
-		ret = uut.start("-b " + ipaddr + ' -s :::: launch')
+		ret = uut.start("-b " + ipaddr + ' -s ::::')
 		self.expectEqual(-1 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website launch')
+		ret = uut.start("-b " + ipaddr + ' -s website')
 		self.expectEqual(-2 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http launch')
+		ret = uut.start("-b " + ipaddr + ' -s website:http')
 		self.expectEqual(-3 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http:9999980 launch')
+		ret = uut.start("-b " + ipaddr + ' -s website:http:999980')
 		self.expectEqual(-4 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http:80 launch')
+		ret = uut.start("-b " + ipaddr + ' -s website:http:80')
 		self.expectEqual(-5 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http:80:foo launch')
+		ret = uut.start("-b " + ipaddr + ' -s website:http:80:foo')
 		self.expectEqual(-6 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http:80:tcp:u=uname:p=passwd launch')
+		ret = uut.start("-b " + ipaddr + ' -s website:http:80:tcp:u=uname:p=passwd')
 		self.expectEqual(0, ret)
 
 	def test_SimpleSRV(self):
@@ -371,7 +385,7 @@ class mdnsTest(unittest.TestCase):
 								"node.local.")
 
 	def test_MultiSRV(self):
-		ret = uut.start_and_wait("-b " + ipaddr + ' -s "my foo":foo:80:tcp -s mybar:bar:555:udp launch')
+		ret = uut.start_and_wait("-b " + ipaddr + ' -s "my foo":foo:80:tcp -s mybar:bar:555:udp')
 		self.expectEqual(0, ret)
 
 		q = dns.message.make_query("_foo._tcp.local", dns.rdatatype.PTR,
@@ -395,3 +409,26 @@ class mdnsTest(unittest.TestCase):
 		r = self.sendQuery(q)
 		self.verifySRVPTRRecord(r, "_fooserv._tcp.local.",
 								"myfoo._fooserv._tcp.local.", 1234, "foo.local.")
+
+	def test_SRVWithTXT(self):
+		ret = uut.start_and_wait("-b " + ipaddr +
+			' -s mybar:bar:555:udp:a=b:somevar=someval')
+		self.expectEqual(0, ret)
+
+		q = dns.message.make_query("_bar._tcp.local", dns.rdatatype.PTR,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, "_bar._udp.local.",
+								"mybar._bar._udp.local.", 555,
+								"node.local.", "a=b somevar=someval")
+
+	def test_SRVWithEmptyTXT(self):
+		ret = uut.start_and_wait("-b " + ipaddr + ' -s mybaz:baz:555:udp:')
+		self.expectEqual(0, ret)
+
+		q = dns.message.make_query("_baz._tcp.local", dns.rdatatype.PTR,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, "_baz._udp.local.",
+								"mybaz._baz._udp.local.", 555,
+								"node.local.", "")
