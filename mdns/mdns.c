@@ -14,18 +14,7 @@ static char fqdn[MDNS_MAX_NAME_LEN + 1];
 /* Our reverse name for the in-addr.arpa PTR record */
 static char in_addr_arpa[MDNS_INADDRARPA_LEN];
 static uint32_t my_ipaddr;
-
-/* The user passes us some info about services.  We generate other info that we
- * need and store it in internal_services.
- */
 struct mdns_service **user_services;
-struct __mdns_service {
-	unsigned valid;
-	struct mdns_service *service;
-	char fullname[MDNS_MAX_NAME_LEN]; /* A dname like foo._http._tcp.local */
-	char *ptrname; /* points to PTR part of fullname (e.g., _http._tcp.local) */
-};
-struct __mdns_service internal_services[MDNS_MAX_SERVICES];
 
 /* global mdns state */
 static void *mdns_thread;
@@ -48,26 +37,24 @@ static void reset_fqdn(void)
 	dname_put_label(p, domname);
 }
 
-/* reset the internal service names of ss to the values supplied by the user at
- * launch time.  Note that the service member of ss must be valid.
+/* reset the internal fully qualified service name of s to the values supplied
+ * by the user at launch time.
  */
-static void reset_service(struct __mdns_service *ss)
+static void reset_fqsn(struct mdns_service *s)
 {
 	char *p;
-	struct mdns_service *s = ss->service;
 
-	ss->ptrname = dname_put_label(ss->fullname, s->servname);
+	s->ptrname = dname_put_label(s->fqsn, s->servname);
 	/* we have to be a bit tricky when adding the service type, because we have
-	 * to append a leading '_'.
+	 * to append a leading '_' and adjust the length.
 	 */
-	p = dname_put_label(ss->ptrname + 1, s->servtype);
-	*ss->ptrname = *(ss->ptrname + 1) + 1;
-	*(ss->ptrname + 1) = '_';
+	p = dname_put_label(s->ptrname + 1, s->servtype);
+	*s->ptrname = *(s->ptrname + 1) + 1;
+	*(s->ptrname + 1) = '_';
 
 	p = dname_put_label(p, s->proto == MDNS_PROTO_TCP ? "_tcp" : "_udp");
 
 	dname_put_label(p, domname);
-	ss->valid = 1;
 }
 
 /* return the amount of tail room in the message m */
@@ -448,7 +435,7 @@ static int mdns_prepare_response(struct mdns_message *rx,
 {
 	int i, ret = 0;
 	struct mdns_question *q;
-	struct __mdns_service *ss;
+	struct mdns_service **s;
 
 	if (rx->header->flags.fields.qr != QUERY)
 		return 0;
@@ -473,17 +460,17 @@ static int mdns_prepare_response(struct mdns_message *rx,
 				ret = 1;
 			}
 			/* if the querier wants PTRs to services that we offer, add those */
-			for (ss = &internal_services[0]; ss->valid; ss++) {
-				if (dname_cmp(rx->data, q->qname, NULL, ss->ptrname) == 0) {
+			for (s = user_services; s != NULL && *s != NULL; s++) {
+				if (dname_cmp(rx->data, q->qname, NULL, (*s)->ptrname) == 0) {
 					/* first add the PTR record */
-					mdns_add_answer(tx, ss->ptrname, T_PTR, C_FLUSH, 255);
-					mdns_add_name(tx, ss->fullname);
+					mdns_add_answer(tx, (*s)->ptrname, T_PTR, C_FLUSH, 255);
+					mdns_add_name(tx, (*s)->fqsn);
 
 					/* TODO: add any associated TXT records */
 
 					/* ...and finally add the SRV record */
-					mdns_add_answer(tx, ss->fullname, T_SRV, C_FLUSH, 255);
-					mdns_add_srv(tx, 0, 0, ss->service->port, fqdn);
+					mdns_add_answer(tx, (*s)->fqsn, T_SRV, C_FLUSH, 255);
+					mdns_add_srv(tx, 0, 0, (*s)->port, fqdn);
 					ret = 1;
 				}
 			}
@@ -885,7 +872,7 @@ static int validate_service(struct mdns_service *s)
 int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 				struct mdns_service **services)
 {
-	int one = 1, ret, i;
+	int one = 1, ret;
 	struct sockaddr_in ctrl_listen;
 	int addr_len, num_services = 0;
 
@@ -912,23 +899,17 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	}
 
 	user_services = NULL;
-	memset(internal_services, 0, sizeof(internal_services));
+	num_services = 0;
 	if (services != NULL) {
 		user_services = services;
-		for (i=0; user_services[i] != NULL; i++) {
-			if (i == MDNS_MAX_SERVICES) {
-				LOG("error: maximum number of services exceeded.\n");
-				return MDNS_TOOBIG;
-			}
-
-			ret = validate_service(user_services[i]);
+		for (; *services != NULL; services++) {
+			ret = validate_service(*services);
 			if (ret != 0)
 				return ret;
-			internal_services[i].service = user_services[i];
-			reset_service(&internal_services[i]);
+			reset_fqsn(*services);
+			num_services++;
 		}
 	}
-	num_services = i;
 
 	/* check to make sure all of our names and services will fit */
 	ret = mdns_prepare_probe(&tx_message);

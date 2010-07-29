@@ -43,15 +43,6 @@
  */
 #define MDNS_CTRL_PORT 12345
 
-/* Maximum number of services
- *
- * Internally, mdns can only advertise so many services.  This eliminates the
- * need for dynamic memory allocation.  Developers may wish to reduce this
- * number to save memory, or to increase this number if more services are
- * required.
- */
-#define MDNS_MAX_SERVICES 16
-
 /* Maximum length of labels
  *
  * A label is one segment of a DNS name.  For example, "foo" is a label in the
@@ -115,6 +106,12 @@ struct mdns_service
     uint16_t port;
     int proto;
     char **keyvals;
+
+	/* The following members are for internal use only and should not be
+	 * dereferenced by the user.
+	 */
+	char fqsn[MDNS_MAX_NAME_LEN];
+	char *ptrname;
 };
 
 /* protocol values for the proto member of the mdns_service descriptor */
