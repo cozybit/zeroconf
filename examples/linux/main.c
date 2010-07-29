@@ -252,7 +252,7 @@ static int parse_service(struct mdns_service *service, char *str)
 	}
 	if (strcmp(token, "tcp") == 0) {
 		service->proto = MDNS_PROTO_TCP;
-	} else if (strcmp(token, "tcp") == 0) {
+	} else if (strcmp(token, "udp") == 0) {
 		service->proto = MDNS_PROTO_UDP;
 	} else {
 		printf("error: unexpected protocol %s\n", token);

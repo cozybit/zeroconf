@@ -22,7 +22,8 @@ class mdnsTest(unittest.TestCase):
 	def expectEqual(self, a, b):
 		self.failIf(a != b, "Expected " + str(a) + " but got " + str(b))
 
-	def compareQandA(self, q, r):
+	# expect a single A record in the response
+	def compareARecord(self, q, r):
 		assert r.id == q.id
 		assert r.id == q.id
 		assert dns.opcode.from_flags(r.flags) == dns.opcode.QUERY
@@ -36,12 +37,48 @@ class mdnsTest(unittest.TestCase):
 		assert len(r.answer[0]) == 1
 		self.expectEqual(ipaddr, r.answer[0][0].__str__())
 
-	def queryAndVerify(self, q):
+	def sendQuery(self, q):
 		try:
 			r = dns.query.udp(q, '224.0.0.251', port=5353, timeout=3)
-			self.compareQandA(q, r)
 		except dns.exception.Timeout:
 			self.failIf(1, "Timed out waiting for mdns response.")
+		return r
+
+	def queryAndVerifyARecord(self, q):
+		r = self.sendQuery(q)
+		self.compareARecord(q, r)
+
+	# ensure that the response r contains a PTR record for the fully qualifid
+	# service type fqst that points to the SRV with the supplied fully
+	# qualified service name fqsn on port.  Also ensure that the SRV record
+	# points to the fully qualified domain name fqdn
+	def verifySRVPTRRecord(self, r, fqst, fqsn, port, fqdn):
+		foundPTR = False
+		foundSRV = False
+		for a in r.answer:
+			if a == dns.rrset.from_text(fqst, 255, dns.rdataclass.FLUSH,
+										dns.rdatatype.PTR, fqsn):
+				foundPTR = True
+
+			rr = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+									 dns.rdatatype.SRV, "0 0 " + str(port) +
+									 " " + fqdn)
+			if a == rr:
+				foundSRV = True
+
+		self.failIf(foundPTR == False, "Failed to find PTR record for " + fqst)
+		self.failIf(foundSRV == False, "Failed to find SRV record for " + fqsn)
+
+	# ensure that an A record is present with ipaddr and fqdn
+	def verifyARecord(self, r, ipaddr, fqdn):
+		foundA = False
+		for a in r.answer:
+			rr = dns.rrset.from_text(fqdn, 255, dns.rdataclass.FLUSH,
+									 dns.rdatatype.A, str(ipaddr))
+			if a == rr:
+				foundA = True
+
+		self.failIf(foundA == False, "Failed to find A record for " + fqdn)
 
 	# launch mdns with "args" and wait to see the first probe
 	def waitForFirstProbe(self, args):
@@ -87,7 +124,7 @@ class mdnsTest(unittest.TestCase):
 								   dns.rdataclass.IN)
 		try:
 			r = dns.query.udp(q, '224.0.0.251', port=5353, timeout=5)
-			self.compareQandA(q, r)
+			self.verifyARecord(r, ipaddr, "http-andrey.local.")
 
 		except dns.exception.Timeout:
 			assert 0
@@ -100,7 +137,7 @@ class mdnsTest(unittest.TestCase):
 								   dns.rdataclass.IN)
 		try:
 			r = dns.query.udp(q, '224.0.0.251', port=5353, timeout=5)
-			self.compareQandA(q, r)
+			self.verifyARecord(r, ipaddr, "testme.foobar.")
 
 		except dns.exception.Timeout:
 			assert 0
@@ -265,7 +302,7 @@ class mdnsTest(unittest.TestCase):
 		time.sleep(2) # device should rename itself foo-2
 		q = dns.message.make_query("foo-2.local", dns.rdatatype.A,
 								   dns.rdataclass.FLUSH)
-		self.queryAndVerify(q)
+		self.queryAndVerifyARecord(q)
 
 	def test_SimultaneousGreaterProbe(self):
 		p = dns.message.make_query("foo.local", dns.rdatatype.ANY,
@@ -282,7 +319,7 @@ class mdnsTest(unittest.TestCase):
 		time.sleep(2) # device should rename itself foo-2
 		q = dns.message.make_query("foo-2.local", dns.rdatatype.A,
 								   dns.rdataclass.FLUSH)
-		self.queryAndVerify(q)
+		self.queryAndVerifyARecord(q)
 
 	def test_SimultaneousLesserProbe(self):
 		p = dns.message.make_query("foo.local", dns.rdatatype.ANY,
@@ -298,7 +335,7 @@ class mdnsTest(unittest.TestCase):
 		time.sleep(2) # device should not rename itself
 		q = dns.message.make_query("foo.local", dns.rdatatype.A,
 								   dns.rdataclass.FLUSH)
-		self.queryAndVerify(q)
+		self.queryAndVerifyARecord(q)
 
 	def test_ServiceParser(self):
 		# service args are "name:type:port:proto[:key1=val1:key2=val2]"
@@ -322,3 +359,39 @@ class mdnsTest(unittest.TestCase):
 		self.expectEqual(-6 & 0xff, ret)
 		ret = uut.start("-b " + ipaddr + ' -s website:http:80:tcp:u=uname:p=passwd launch')
 		self.expectEqual(0, ret)
+
+	def test_SimpleSRV(self):
+		ret = uut.start_and_wait("-b " + ipaddr + " -s mydev:fakeserv:80:tcp")
+		self.expectEqual(0, ret)
+		q = dns.message.make_query("_fakeserv._tcp.local", dns.rdatatype.PTR,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, "_fakeserv._tcp.local.",
+								"mydev._fakeserv._tcp.local.", 80,
+								"node.local.")
+
+	def test_MultiSRV(self):
+		ret = uut.start_and_wait("-b " + ipaddr + ' -s "my foo":foo:80:tcp -s mybar:bar:555:udp launch')
+		self.expectEqual(0, ret)
+
+		q = dns.message.make_query("_foo._tcp.local", dns.rdatatype.PTR,
+								   dns.rdataclass.IN)
+		q2 = dns.rrset.from_text("_bar._udp.local.", 0, dns.rdataclass.IN,
+								 dns.rdatatype.PTR)
+		q.question.append(q2)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, "_foo._tcp.local.",
+								"my\ foo._foo._tcp.local.", 80,
+								"node.local.")
+		self.verifySRVPTRRecord(r, "_bar._udp.local.",
+								"mybar._bar._udp.local.", 555,
+								"node.local.")
+
+	def test_AnySRV(self):
+		ret = uut.start_and_wait("-b " + ipaddr + " -n foo -s myfoo:fooserv:1234:tcp")
+		self.expectEqual(0, ret)
+		q = dns.message.make_query("_fooserv._tcp.local", dns.rdatatype.ANY,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, "_fooserv._tcp.local.",
+								"myfoo._fooserv._tcp.local.", 1234, "foo.local.")

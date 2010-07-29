@@ -445,16 +445,19 @@ static int mdns_prepare_response(struct mdns_message *rx,
 
 	for(i = 0; i < rx->num_questions; i++) {
 		q = &rx->questions[i];
+
 		if (q->qtype == T_ANY || q->qtype == T_A) {
 			if (dname_cmp(rx->data, q->qname, NULL, fqdn) == 0) {
-				if (mdns_add_answer(tx, fqdn, T_A, C_FLUSH, 225) != 0 ||
+				if (mdns_add_answer(tx, fqdn, T_A, C_FLUSH, 255) != 0 ||
 					mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
 					return -1;
 				ret = 1;
 			}
-		} else if (q->qtype == T_ANY || q->qtype == T_PTR) {
+		}
+
+		if (q->qtype == T_ANY || q->qtype == T_PTR) {
 			if (dname_cmp(rx->data, q->qname, NULL, in_addr_arpa) == 0) {
-				if (mdns_add_answer(tx, in_addr_arpa, T_PTR, C_FLUSH, 225) != 0 ||
+				if (mdns_add_answer(tx, in_addr_arpa, T_PTR, C_FLUSH, 255) != 0 ||
 					mdns_add_name(tx, fqdn) != 0)
 					return -1;
 				ret = 1;
@@ -694,7 +697,7 @@ static void do_mdns(void *data)
 					 */
 					mdns_response_init(&tx_message);
 					if (mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 0) != 0 ||
-						mdns_add_uint32(&tx_message, my_ipaddr) != 0) {
+						mdns_add_uint32(&tx_message, htonl(my_ipaddr)) != 0) {
 						/* This is highly unlikely */
 						break;
 					}
@@ -770,8 +773,8 @@ static void do_mdns(void *data)
 			if (event == EVENT_TIMEOUT) {
 				/* Okay.  We now own our name.  Announce it. */
 				mdns_response_init(&tx_message);
-				if (mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 225) != 0 ||
-					mdns_add_uint32(&tx_message, my_ipaddr) != 0) {
+				if (mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 255) != 0 ||
+					mdns_add_uint32(&tx_message, htonl(my_ipaddr)) != 0) {
 					/* This is highly unlikely */
 					break;
 				}
