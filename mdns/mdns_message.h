@@ -62,6 +62,12 @@ BEGIN_PACK struct mdns_header {
 #define DNS_OPCODE_NOTIFY 3
 #define DNS_OPCODE_UPDATE 5
 
+/* internal section numbers */
+#define MDNS_SECTION_QUESTIONS 0
+#define MDNS_SECTION_ANSWERS 1
+#define MDNS_SECTION_AUTHORITIES 2
+#define MDNS_SECTION_ADDITIONALS 3
+
 /* mDNS question (query) representation */
 struct mdns_question {
 	char *qname;

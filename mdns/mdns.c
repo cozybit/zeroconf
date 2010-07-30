@@ -358,6 +358,38 @@ static int mdns_add_srv(struct mdns_message *m, uint16_t priority,
 	return 0;
 }
 
+/* add all of the required RRs that represent the service s to the specified
+ * section of the message m.  Return 0 for success or -1 for error.
+ */
+int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
+						 int section)
+{
+	int (*f)(struct mdns_message *m, char *name, uint16_t type, uint16_t class,
+			 uint32_t ttl);
+	if (section == MDNS_SECTION_ANSWERS)
+		f = mdns_add_answer;
+	else if (section == MDNS_SECTION_AUTHORITIES)
+		f = mdns_add_authority;
+	else
+		return -1;
+
+	/* first add the PTR record */
+	f(m, s->ptrname, T_PTR, C_FLUSH, 255);
+	mdns_add_name(m, s->fqsn);
+
+	/* ...then the TXT record */
+	if (s->keyvals) {
+		f(m, s->fqsn, T_TXT, C_FLUSH, 255);
+		mdns_add_txt(m, s->keyvals, s->kvlen);
+	}
+
+	/* ...and finally add the SRV record */
+	f(m, s->fqsn, T_SRV, C_FLUSH, 255);
+	mdns_add_srv(m, 0, 0, s->port, fqdn);
+
+	return 0;
+}
+
 static int send_message(struct mdns_message *m, int sock, short port)
 {
 	struct sockaddr_in to;
@@ -480,19 +512,9 @@ static int mdns_prepare_response(struct mdns_message *rx,
 			/* if the querier wants PTRs to services that we offer, add those */
 			for (s = user_services; s != NULL && *s != NULL; s++) {
 				if (dname_cmp(rx->data, q->qname, NULL, (*s)->ptrname) == 0) {
-					/* first add the PTR record */
-					mdns_add_answer(tx, (*s)->ptrname, T_PTR, C_FLUSH, 255);
-					mdns_add_name(tx, (*s)->fqsn);
-
-					/* ...then the TXT record */
-					if ((*s)->keyvals) {
-						mdns_add_answer(tx, (*s)->fqsn, T_TXT, C_FLUSH, 255);
-						mdns_add_txt(tx, (*s)->keyvals, (*s)->kvlen);
-					}
-
-					/* ...and finally add the SRV record */
-					mdns_add_answer(tx, (*s)->fqsn, T_SRV, C_FLUSH, 255);
-					mdns_add_srv(tx, 0, 0, (*s)->port, fqdn);
+					ret = mdns_add_srv_ptr_txt(tx, *s, MDNS_SECTION_ANSWERS);
+					if (ret != 0)
+						ret = -1;
 					ret = 1;
 				}
 			}
