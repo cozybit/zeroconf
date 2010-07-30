@@ -362,31 +362,51 @@ static int mdns_add_srv(struct mdns_message *m, uint16_t priority,
  * section of the message m.  Return 0 for success or -1 for error.
  */
 int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
-						 int section)
+						 int section, uint32_t ttl)
 {
-	int (*f)(struct mdns_message *m, char *name, uint16_t type, uint16_t class,
-			 uint32_t ttl);
-	if (section == MDNS_SECTION_ANSWERS)
-		f = mdns_add_answer;
-	else if (section == MDNS_SECTION_AUTHORITIES)
-		f = mdns_add_authority;
-	else
+
+	if (section == MDNS_SECTION_ANSWERS) {
+		/* If we're populating the answer section, we put all of the data */
+		if (mdns_add_answer(m, s->ptrname, T_PTR, C_FLUSH, ttl) != 0 ||
+			mdns_add_name(m, s->fqsn) != 0)
+			return -1;
+		if (s->keyvals) {
+			if (mdns_add_answer(m, s->fqsn, T_TXT, C_FLUSH, ttl) != 0 ||
+				mdns_add_txt(m, s->keyvals, s->kvlen) != 0)
+				return -1;
+		}
+		if (mdns_add_answer(m, s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
+			mdns_add_srv(m, 0, 0, s->port, fqdn) != 0)
+			return -1;
+
+	} else if (section == MDNS_SECTION_AUTHORITIES) {
+		/* For the authority section , we only need the fqsn */
+		if (mdns_add_authority(m, s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
+			mdns_add_srv(m, 0, 0, s->port, fqdn) != 0)
+			return -1;
+
+	} else if (section == MDNS_SECTION_QUESTIONS) {
+		/* we only add SRV records to the question section when we are probing.
+		 * And in this case we just add the fqsn.
+		 */
+		return mdns_add_question(m, s->fqsn, T_ANY, C_IN);
+	} else {
 		return -1;
-
-	/* first add the PTR record */
-	f(m, s->ptrname, T_PTR, C_FLUSH, 255);
-	mdns_add_name(m, s->fqsn);
-
-	/* ...then the TXT record */
-	if (s->keyvals) {
-		f(m, s->fqsn, T_TXT, C_FLUSH, 255);
-		mdns_add_txt(m, s->keyvals, s->kvlen);
 	}
 
-	/* ...and finally add the SRV record */
-	f(m, s->fqsn, T_SRV, C_FLUSH, 255);
-	mdns_add_srv(m, 0, 0, s->port, fqdn);
+	return 0;
+}
 
+/* add all of the services that we have to the specified section of the message
+ * m.  Return 0 for success or -1 for error.
+ */
+int mdns_add_all_services(struct mdns_message *m, int section, uint32_t ttl)
+{
+	struct mdns_service **s;
+
+	for (s = user_services; s != NULL && *s != NULL; s++)
+		if (mdns_add_srv_ptr_txt(m, *s, section, ttl) != 0)
+			return -1;
 	return 0;
 }
 
@@ -445,10 +465,13 @@ static int mdns_prepare_probe(struct mdns_message *m)
 	mdns_query_init(m);
 	if (mdns_add_question(m, fqdn, T_ANY, C_IN) != 0 ||
 		mdns_add_question(m, in_addr_arpa, T_ANY, C_IN) != 0 ||
+		mdns_add_all_services(m, MDNS_SECTION_QUESTIONS, 0) != 0 ||
 		mdns_add_authority(m, fqdn, T_A, C_IN, 255) != 0 ||
 		mdns_add_uint32(m, htonl(my_ipaddr)) != 0 ||
 		mdns_add_authority(m, in_addr_arpa, T_PTR, C_FLUSH, 255) != 0 ||
-		mdns_add_name(m, fqdn) != 0) {
+		mdns_add_name(m, fqdn) != 0 ||
+		mdns_add_all_services(m, MDNS_SECTION_AUTHORITIES, 255) != 0)
+	{
 		LOG("Resource records don't fit into probe packet.\n");
 		return -1;
 	}
@@ -512,7 +535,7 @@ static int mdns_prepare_response(struct mdns_message *rx,
 			/* if the querier wants PTRs to services that we offer, add those */
 			for (s = user_services; s != NULL && *s != NULL; s++) {
 				if (dname_cmp(rx->data, q->qname, NULL, (*s)->ptrname) == 0) {
-					ret = mdns_add_srv_ptr_txt(tx, *s, MDNS_SECTION_ANSWERS);
+					ret = mdns_add_srv_ptr_txt(tx, *s, MDNS_SECTION_ANSWERS, 255);
 					if (ret != 0)
 						ret = -1;
 					ret = 1;
@@ -738,7 +761,9 @@ static void do_mdns(void *data)
 					 */
 					mdns_response_init(&tx_message);
 					if (mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 0) != 0 ||
-						mdns_add_uint32(&tx_message, htonl(my_ipaddr)) != 0) {
+						mdns_add_uint32(&tx_message, htonl(my_ipaddr)) != 0 ||
+						mdns_add_all_services(&tx_message,
+											  MDNS_SECTION_ANSWERS, 0) != 0) {
 						/* This is highly unlikely */
 						break;
 					}
@@ -815,7 +840,9 @@ static void do_mdns(void *data)
 				/* Okay.  We now own our name.  Announce it. */
 				mdns_response_init(&tx_message);
 				if (mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 255) != 0 ||
-					mdns_add_uint32(&tx_message, htonl(my_ipaddr)) != 0) {
+					mdns_add_uint32(&tx_message, htonl(my_ipaddr)) != 0 ||
+					mdns_add_all_services(&tx_message,
+										  MDNS_SECTION_ANSWERS, 255) != 0) {
 					/* This is highly unlikely */
 					break;
 				}
