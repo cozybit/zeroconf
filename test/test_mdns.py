@@ -485,3 +485,21 @@ class mdnsTest(unittest.TestCase):
 
 		# cleanup
 		s.stop()
+
+	def test_PacketSize(self):
+		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp -s printer:printer:555:tcp launch')
+		self.expectEqual(0, ret)
+		uut.stop()
+		crazyname = '0bcdefghijklmnopqrstuvwxyz1bcdefghijklmnopqrstuvwxyz'
+		ret = uut.start("-b " + ipaddr +
+		                ' -s ' + crazyname + '0:http:80:tcp' +
+		                ' -s ' + crazyname + '1:http:8080:tcp' +
+		                ' -s ' + crazyname + '2:ssh:22:tcp' +
+		                ' -s ' + crazyname + '3:https:443:tcp' +
+		                ' -s ' + crazyname + '0:http:81:tcp' +
+		                ' -s ' + crazyname + '1:http:8081:tcp' +
+		                ' -s ' + crazyname + '2:ssh:221:tcp' +
+		                ' -s ' + crazyname + '3:https:4431:tcp' +
+		                ' launch')
+		self.expectEqual(3, ret)
+		uut.stop()

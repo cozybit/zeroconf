@@ -93,14 +93,18 @@ struct rr_srv {
 	char target[0];
 };
 
+/* This defines the maximum size in bytes for the mDNS data.
+ * The maximum mDNS message is actually 9000 bytes including all lower-level 
+ * headers (Multicast DNS draft sec 18).  However, the same section advises 
+ * implementors to keep it under 1500 bytes, which is the Ethernet MTU.
+ * We subtract out 28 bytes for the IP and UDP headers, leaving 1472 bytes
+ * for the DNS portion of the packet.
+ */
+#define MDNS_DATA_MAX	1472
+
 /* mDNS message representation */
 struct mdns_message {
-	/* raw data for packet.  The maximum mDNS message is actually 9000 bytes
-	 * including all lower-level headers (Multicast DNS draft sec 18).
-	 * However, the same section advises implementors to keep it under 1500
-	 * bytes, which is the Ethernet MTU.
-	 */
-	char data[1500];
+	char data[MDNS_DATA_MAX]; /* raw data for packet. */
 	struct mdns_header *header;
 	char *cur; /* next byte to read or write */
 	char *end; /* end of message buffer */
