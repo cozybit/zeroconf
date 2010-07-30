@@ -367,6 +367,9 @@ int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
 
 	if (section == MDNS_SECTION_ANSWERS) {
 		/* If we're populating the answer section, we put all of the data */
+		if (mdns_add_answer(m, s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
+			mdns_add_srv(m, 0, 0, s->port, fqdn) != 0)
+			return -1;
 		if (mdns_add_answer(m, s->ptrname, T_PTR, C_FLUSH, ttl) != 0 ||
 			mdns_add_name(m, s->fqsn) != 0)
 			return -1;
@@ -375,9 +378,6 @@ int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
 				mdns_add_txt(m, s->keyvals, s->kvlen) != 0)
 				return -1;
 		}
-		if (mdns_add_answer(m, s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
-			mdns_add_srv(m, 0, 0, s->port, fqdn) != 0)
-			return -1;
 
 	} else if (section == MDNS_SECTION_AUTHORITIES) {
 		/* For the authority section , we only need the fqsn */

@@ -433,3 +433,55 @@ class mdnsTest(unittest.TestCase):
 		self.verifySRVPTRRecord(r, "_baz._udp.local.",
 								"mybaz._baz._udp.local.", 555,
 								"node.local.", "")
+
+	def test_ProbeHasSRV(self):
+		s = mdns_tool.sniffer()
+		s.start(ipaddr, sniffdev)
+
+		# launch mdns
+		ret = uut.start_and_wait("-b " + ipaddr + ' -s mybaz:baz:555:udp:tag=val')
+		self.expectEqual(0, ret)
+
+		fqsn = "mybaz._baz._udp.local."
+		fqdn = "node.local."
+		ptrname = "_baz._udp.local."
+		expectedProbe = self.makeBareProbe(fqdn)
+		srvQ = dns.rrset.from_text(fqsn, 0, dns.rdataclass.IN,
+								   dns.rdatatype.SRV)
+		srvQ.rdtype = dns.rdatatype.ANY
+		expectedProbe.question.append(srvQ)
+		expectedSRV = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+										  dns.rdatatype.SRV,
+										  "0 0 %d %s" % (555, fqdn))
+		expectedProbe.authority.append(expectedSRV)
+
+		# P0
+		P0msg = self.getNextPacket(s)
+		self.expectEqual(expectedProbe, P0msg)
+
+		# P1
+		P1msg = self.getNextPacket(s)
+		self.expectEqual(expectedProbe, P1msg)
+
+		# P2
+		P2msg = self.getNextPacket(s)
+		self.expectEqual(expectedProbe, P2msg)
+
+		# To create the announcement, we just move the authority RRs to the
+		# answer section and set some flags.  We also need to add some txt
+		# records if they exist
+		Amsg = self.getNextPacket(s)
+		expectedProbe.question = []
+		expectedProbe.answer = expectedProbe.authority
+		expectedProbe.authority = []
+		expectedProbe.flags = dns.flags.QR | dns.flags.AA
+		rr = dns.rrset.from_text(ptrname, 255, dns.rdataclass.FLUSH,
+								 dns.rdatatype.PTR, fqsn)
+		expectedProbe.answer.append(rr)
+		rr = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+								 dns.rdatatype.TXT, "tag=val")
+		expectedProbe.answer.append(rr)
+		self.expectEqual(expectedProbe, Amsg)
+
+		# cleanup
+		s.stop()
