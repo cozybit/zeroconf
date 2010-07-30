@@ -466,7 +466,7 @@ static int mdns_prepare_probe(struct mdns_message *m)
 	if (mdns_add_question(m, fqdn, T_ANY, C_IN) != 0 ||
 		mdns_add_question(m, in_addr_arpa, T_ANY, C_IN) != 0 ||
 		mdns_add_all_services(m, MDNS_SECTION_QUESTIONS, 0) != 0 ||
-		mdns_add_authority(m, fqdn, T_A, C_IN, 255) != 0 ||
+		mdns_add_authority(m, fqdn, T_A, C_FLUSH, 255) != 0 ||
 		mdns_add_uint32(m, htonl(my_ipaddr)) != 0 ||
 		mdns_add_authority(m, in_addr_arpa, T_PTR, C_FLUSH, 255) != 0 ||
 		mdns_add_name(m, fqdn) != 0 ||
@@ -482,6 +482,19 @@ static int mdns_prepare_probe(struct mdns_message *m)
 	mdns_parse_message(m, VALID_LENGTH(m));
 	m->end = m->data + sizeof(m->data) - 1;
 	return 0;
+}
+
+static int mdns_prepare_announcement(struct mdns_message *m, uint32_t ttl)
+{
+	mdns_response_init(m);
+	if (mdns_add_answer(m, fqdn, T_A, C_FLUSH, ttl) != 0 ||
+		mdns_add_uint32(m, htonl(my_ipaddr)) != 0 ||
+		mdns_add_answer(m, in_addr_arpa, T_PTR, C_FLUSH, ttl) != 0 ||
+		mdns_add_name(m, fqdn) != 0 ||
+		mdns_add_all_services(m, MDNS_SECTION_ANSWERS, ttl) != 0) {
+		/* This is highly unlikely */
+		return -1;
+	}
 }
 
 /* if we detect a conflict during probe time, we must grow our host name and
@@ -759,14 +772,9 @@ static void do_mdns(void *data)
 					/* Send the goodbye packet.  This is same as announcement,
 					 * but with a TTL of 0
 					 */
-					mdns_response_init(&tx_message);
-					if (mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 0) != 0 ||
-						mdns_add_uint32(&tx_message, htonl(my_ipaddr)) != 0 ||
-						mdns_add_all_services(&tx_message,
-											  MDNS_SECTION_ANSWERS, 0) != 0) {
-						/* This is highly unlikely */
+					ret = mdns_prepare_announcement(&tx_message, 0);
+					if (ret != 0)
 						break;
-					}
 					send_message(&tx_message, mc_sock, 5353);
 
 					LOG("mdns done.\n");
@@ -838,14 +846,9 @@ static void do_mdns(void *data)
 		case THIRD_PROBE_SENT:
 			if (event == EVENT_TIMEOUT) {
 				/* Okay.  We now own our name.  Announce it. */
-				mdns_response_init(&tx_message);
-				if (mdns_add_answer(&tx_message, fqdn, T_A, C_FLUSH, 255) != 0 ||
-					mdns_add_uint32(&tx_message, htonl(my_ipaddr)) != 0 ||
-					mdns_add_all_services(&tx_message,
-										  MDNS_SECTION_ANSWERS, 255) != 0) {
-					/* This is highly unlikely */
+				ret = mdns_prepare_announcement(&tx_message, 255);
+				if (ret != 0)
 					break;
-				}
 				send_message(&tx_message, mc_sock, 5353);
 				timeout = NULL;
 				state = IDLE;

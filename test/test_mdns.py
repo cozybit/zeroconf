@@ -19,6 +19,8 @@ uut = mdns_subject.mdns_subject(conf)
 
 class mdnsTest(unittest.TestCase):
 
+	#################### helper functions ####################
+
 	def expectEqual(self, a, b):
 		self.failIf(a != b, "Expected " + str(a) + " but got " + str(b))
 
@@ -113,6 +115,43 @@ class mdnsTest(unittest.TestCase):
 		self.failIf(p == None, "Failed to find first probe")
 		s.stop()
 
+	def getNextPacket(self, s):
+		try:
+			Pmsg = s.read(0.250)
+			return Pmsg
+		except:
+			self.failIf(1, "Failed to get packet from sniffer")
+
+	def verifyIsQuery(self, Pmsg):
+		self.failIf( Pmsg.opcode() != dns.opcode.QUERY,
+					 "P was not a QUERY")
+		self.failIf( Pmsg.rcode() != dns.rcode.NOERROR,
+					 "Expected error code NOERROR")
+
+	def reverseArpaName(self, ip):
+		myip = socket.ntohl(struct.unpack('I', socket.inet_aton(ip))[0])
+		myip = struct.pack('I', myip)
+		myip = socket.inet_ntoa(myip)
+		return myip + ".in-addr.arpa."
+
+	def makeBareProbe(self, fqdn):
+		bareProbe = dns.message.make_query(fqdn, dns.rdatatype.ANY,
+										   dns.rdataclass.IN)
+		bareProbe.id = 0
+		bareProbe.flags = 0
+		arpaQ = dns.rrset.from_text(self.reverseArpaName(ipaddr), 255,
+									dns.rdataclass.IN, dns.rdatatype.ANY)
+		bareProbe.question.append(arpaQ)
+		expectedA = dns.rrset.from_text(fqdn, 255, dns.rdataclass.FLUSH,
+										dns.rdatatype.A, ipaddr)
+		bareProbe.authority.append(expectedA)
+		arpaA = dns.rrset.from_text(self.reverseArpaName(ipaddr), 255,
+									dns.rdataclass.FLUSH, dns.rdatatype.PTR,
+									fqdn)
+		bareProbe.authority.append(arpaA)
+		return bareProbe
+
+	#################### unittest functions ####################
 	def setUp(self):
 		uut.stop()
 
@@ -198,66 +237,28 @@ class mdnsTest(unittest.TestCase):
 			"Failed to launch mdns")
 
 		# Check packets
+		expectedProbe = self.makeBareProbe(name + ".local.")
 
 		# P0
-		P0msg = None
-		try:
-			P0msg = s.read(0.250)
-		except:
-			pass
-
-		self.failIf( P0msg == None, "Failed to get P0" )
-		self.failIf( P0msg.opcode() != dns.opcode.QUERY, "P0 was not a QUERY")
-		self.failIf( P0msg.rcode() != dns.rcode.NOERROR, "P0 rcode was error")
-		self.failIf( str(P0msg.question).find(name) == -1,
-		             "P0 didn't have correct name")
-		self.failIf( str(P0msg.question).find("IN ANY") == -1,
-		             "P0 didn't have correct query type")
+		P0msg = self.getNextPacket(s)
+		self.expectEqual(expectedProbe, P0msg)
 
 		# P1
-		P1msg = None
-		try:
-			P1msg = s.read(0.250)
-		except:
-			pass
-
-		self.failIf( P1msg == None, "Failed to get P1" )
-		self.failIf( P1msg.opcode() != dns.opcode.QUERY, "P1 was not a QUERY")
-		self.failIf( P1msg.rcode() != dns.rcode.NOERROR, "P1 rcode was error")
-		self.failIf( str(P1msg.question).find(name) == -1,
-		             "P1 didn't have correct name")
-		self.failIf( str(P1msg.question).find("IN ANY") == -1,
-		             "P1 didn't have correct query type")
+		P1msg = self.getNextPacket(s)
+		self.expectEqual(expectedProbe, P1msg)
 
 		# P2
-		P2msg = None
-		try:
-			P2msg = s.read(0.250)
-		except:
-			pass
-
-		self.failIf( P2msg == None, "Failed to get P2" )
-		self.failIf( P2msg.opcode() != dns.opcode.QUERY, "P2 was not a QUERY")
-		self.failIf( P2msg.rcode() != dns.rcode.NOERROR, "P2 rcode was error")
-		self.failIf( str(P2msg.question).find(name) == -1,
-		             "P2 didn't have correct name")
-		self.failIf( str(P2msg.question).find("IN ANY") == -1,
-		             "P2 didn't have correct query type")
+		P2msg = self.getNextPacket(s)
+		self.expectEqual(expectedProbe, P2msg)
 
 		# Announce
-		Amsg = None
-		try:
-			Amsg = s.read(0.250)
-		except:
-			pass
+		Amsg = self.getNextPacket(s)
+		expectedProbe.question = []
+		expectedProbe.answer = expectedProbe.authority
+		expectedProbe.authority = []
+		expectedProbe.flags = dns.flags.QR | dns.flags.AA
+		self.expectEqual(expectedProbe, Amsg)
 
-		self.failIf( Amsg == None, "Failed to get A" )
-		self.failIf( Amsg.opcode() != dns.opcode.QUERY, "A was not a QUERY")
-		self.failIf( Amsg.rcode() != dns.rcode.NOERROR, "A rcode was error")
-		self.failIf( Amsg.flags & dns.flags.QR != dns.flags.QR, "QR bit not set")
-		self.failIf( Amsg.flags & dns.flags.AA != dns.flags.AA, "AA bit not set")
-		self.failIf( str(Amsg.answer).find(name) == -1,
-		             "A didn't have correct name")
 		# cleanup
 		s.stop()
 
