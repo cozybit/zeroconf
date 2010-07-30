@@ -80,8 +80,10 @@ class mdnsTest(unittest.TestCase):
 				if a == rr:
 					foundTXT = True
 
-		self.failIf(foundPTR == False, "Failed to find PTR record for " + fqst)
-		self.failIf(foundSRV == False, "Failed to find SRV record for " + fqsn)
+		self.failIf(foundPTR == False, "Failed to find PTR from " +
+					fqst + "to " + fqsn)
+		self.failIf(foundSRV == False, "Failed to find SRV record for " +
+					fqsn + " on " + fqdn)
 		self.failIf(txt != None and foundTXT == False,
 					"Failed to find expected TXT record")
 
@@ -115,9 +117,9 @@ class mdnsTest(unittest.TestCase):
 		self.failIf(p == None, "Failed to find first probe")
 		s.stop()
 
-	def getNextPacket(self, s):
+	def getNextPacket(self, s, tout=0.250):
 		try:
-			Pmsg = s.read(0.250)
+			Pmsg = s.read(tout)
 			return Pmsg
 		except:
 			self.failIf(1, "Failed to get packet from sniffer")
@@ -154,6 +156,9 @@ class mdnsTest(unittest.TestCase):
 	#################### unittest functions ####################
 	def setUp(self):
 		uut.stop()
+		s = mdns_tool.sniffer()
+		s.start(ipaddr, sniffdev)
+		s.stop()
 
 	def test_StartStop(self):
 		ret = uut.start_and_wait("-b " + ipaddr)
@@ -495,3 +500,118 @@ class mdnsTest(unittest.TestCase):
 		ret = uut.start("-b " + ipaddr + services)
 		self.expectEqual(3, ret)
 		uut.stop()
+
+	def test_AnswerOneSRVProbe(self):
+		# create a response to a probe
+		fqsn = "myserv._serv._udp.local."
+		fqdn = "mynode.local."
+		fqst = "_serv._udp.local."
+
+		q = dns.message.make_query(fqsn,
+								   dns.rdatatype.PTR,
+								   dns.rdataclass.IN)
+		r = dns.message.make_response(q)
+		r.question = []
+		srv = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+								  dns.rdatatype.SRV,
+								  "0 0 %d %s" % (555, fqdn))
+		r.answer.append(srv)
+		self.waitForFirstProbe("-b " + ipaddr + " -s myserv:serv:555:udp")
+
+		# respond to probe
+		mdns_tool.inject(r, '224.0.0.251')
+		time.sleep(2) # device should rename it's service to myserv-2
+		q = dns.message.make_query("_serv._udp.local", dns.rdatatype.PTR,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, "myserv-2." + fqst, 555, "node.local.")
+
+	def test_AnswerFiveSRVProbes(self):
+		s = mdns_tool.sniffer()
+		s.start(ipaddr, sniffdev)
+
+		ret = uut.start("-b " + ipaddr + " -s myserv:serv:555:udp")
+		self.failIf(ret != 0, "Failed to launch mdns")
+
+		# create a response to a probe
+		for i in range(1, 5):
+			if i == 1:
+				sn = "myserv"
+			else:
+				sn = "myserv-%d" % (i)
+
+			fqsn = sn + "._serv._udp.local."
+			fqdn = "mynode.local."
+			fqst = "_serv._udp.local."
+
+			q = dns.message.make_query(fqsn,
+									   dns.rdatatype.PTR,
+									   dns.rdataclass.IN)
+			r = dns.message.make_response(q)
+			r.question = []
+			srv = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+									  dns.rdatatype.SRV,
+									  "0 0 %d %s" % (555, fqdn))
+			r.answer.append(srv)
+			p = self.getNextPacket(s)
+
+			# respond to probe
+			mdns_tool.inject(r, '224.0.0.251')
+
+			# device should rename it's service to myserv++ and send an updated
+			# probe
+
+		# now check to see if we got the expected name
+		time.sleep(2)
+		q = dns.message.make_query("_serv._udp.local", dns.rdatatype.PTR,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, "myserv-5." + fqst, 555, "node.local.")
+		s.stop()
+
+	def test_AnswerAllSRVProbes(self):
+		s = mdns_tool.sniffer()
+		s.start(ipaddr, sniffdev)
+
+		ret = uut.start("-b " + ipaddr + " -s newservice:servey:555:tcp")
+		self.failIf(ret != 0, "Failed to launch mdns")
+
+		# create a response to a probe
+		for i in range(1, 10):
+			if i == 1:
+				sn = "newservice"
+			else:
+				sn = "newservice-%d" % (i)
+
+			fqst = "_servey._tcp.local."
+			fqsn = sn + "." + fqst
+			fqdn = "myservey.local."
+
+			q = dns.message.make_query(fqsn,
+									   dns.rdatatype.PTR,
+									   dns.rdataclass.IN)
+			r = dns.message.make_response(q)
+			r.question = []
+			srv = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+									  dns.rdatatype.SRV,
+									  "0 0 %d %s" % (555, fqdn))
+			r.answer.append(srv)
+			p = self.getNextPacket(s)
+
+			# respond to probe
+			mdns_tool.inject(r, '224.0.0.251')
+
+			# device should rename it's service to myserv++ and send an updated
+			# probe
+
+		# now check to see if we went back to trying our original name.  This
+		# happens after 5 seconds, plus the time to claim the name
+		q = dns.message.make_query(fqst, dns.rdatatype.PTR, dns.rdataclass.IN)
+		p = self.getNextPacket(s, 10) # P0
+		p = self.getNextPacket(s) # P1
+		p = self.getNextPacket(s) # P2
+		p = self.getNextPacket(s) # Announce
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, "newservice." + fqst, 555,
+								"node.local.")
+		s.stop()

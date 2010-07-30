@@ -637,7 +637,8 @@ static int fix_response_conflicts(struct mdns_message *m,
 {
 	struct mdns_resource *r, *pr;
 	struct mdns_question *q;
-	int ret = 0, i;
+	struct mdns_service **s;
+	int ret = 0, i, len;
 
 	if (m->header->flags.fields.qr == QUERY && m->num_authorities > 0) {
 		/* is this a probe from somebody with conflicting records? */
@@ -666,15 +667,37 @@ static int fix_response_conflicts(struct mdns_message *m,
 	for(i = 0; i < m->num_answers; i++) {
 		r = &m->answers[i];
 		if (r->type == T_A && dname_cmp(m->data, r->name, NULL, fqdn) == 0) {
-			DBG("Detected conflict with this response:\n");
-			debug_print_message(m);
-			DBG("\n");
 			/* try a different name */
 			ret = 1;
 			if (dname_increment(fqdn) == -1)
 				ret = -1;
 		}
+		/* ensure that none of the service names conflict */
+		if (r->type == T_SRV) {
+			for (s = user_services; s != NULL && *s != NULL; s++) {
+				if (dname_cmp(m->data, r->name, NULL, (*s)->fqsn) == 0) {
+					/* try a different service name */
+					ret = 1;
+					len = dname_size((*s)->fqsn);
+					if (dname_increment((*s)->fqsn) == -1)
+						ret = -1;
+					/* remember that we must increment the pointer to the fully
+					 * qualified service type if we added bytes to the service
+					 * name.
+					 */
+					if (dname_size((*s)->fqsn) > len)
+						(*s)->ptrname += 2;
+				}
+			}
+		}
 	}
+
+	if (ret == 1) {
+		DBG("Detected conflict with this response:\n");
+		debug_print_message(m);
+		DBG("\n");
+	}
+
 	return ret;
 }
 
@@ -723,6 +746,7 @@ static int process_probe_resp(struct mdns_message *tx, struct mdns_message *rx,
 							  uint32_t start_wait, uint32_t stop_wait)
 {
 	int ret;
+	struct mdns_service **s;
 
 	ret = fix_response_conflicts(rx, tx);
 	if (ret == 1) {
@@ -736,8 +760,12 @@ static int process_probe_resp(struct mdns_message *tx, struct mdns_message *rx,
 		/* we've tried lots of names.  Reset to our original name, sleep for
 		 * 5s, then try again with our original name.
 		 */
+		DBG("Tried all possible names.  Resetting everything.\n");
 		SET_TIMEOUT(timeout, 5000);
 		reset_fqdn();
+		for (s = user_services; s != NULL && *s != NULL; s++) {
+			reset_fqsn(*s);
+		}
 		return INIT;
 	} else {
 		/* this was an unrelated message.  Remain in the same state.  Assume
