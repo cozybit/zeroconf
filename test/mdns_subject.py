@@ -11,6 +11,10 @@ class NoSuchTargetType(Exception):
 
 class mdns_subject:
 
+	# Set DEBUG to True if you want to see the commands and stdout between the
+	# subject and the host.
+	DEBUG = False
+
 	def __init__(self, conf):
 		targettype = conf.get("target", "targettype")
 		if targettype != "linuxssh":
@@ -23,10 +27,16 @@ class mdns_subject:
 
 	def start(self, args=""):
 		command = "mdns " + args + " -l /root/mdns.log launch"
+		if self.DEBUG:
+			print "Running Command " + command
 		self.session.sendline(command)
 		self.session.prompt()
+		if self.DEBUG:
+			print self.session.before
 		self.session.sendline("echo $?")
 		self.session.prompt()
+		if self.DEBUG:
+			print self.session.before
 		ret = int(self.session.before.split("\n")[-2])
 		if ret != 0:
 			return ret

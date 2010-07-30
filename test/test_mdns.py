@@ -487,19 +487,11 @@ class mdnsTest(unittest.TestCase):
 		s.stop()
 
 	def test_PacketSize(self):
-		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp -s printer:printer:555:tcp launch')
-		self.expectEqual(0, ret)
-		uut.stop()
-		crazyname = '0bcdefghijklmnopqrstuvwxyz1bcdefghijklmnopqrstuvwxyz'
-		ret = uut.start("-b " + ipaddr +
-		                ' -s ' + crazyname + '0:http:80:tcp' +
-		                ' -s ' + crazyname + '1:http:8080:tcp' +
-		                ' -s ' + crazyname + '2:ssh:22:tcp' +
-		                ' -s ' + crazyname + '3:https:443:tcp' +
-		                ' -s ' + crazyname + '0:http:81:tcp' +
-		                ' -s ' + crazyname + '1:http:8081:tcp' +
-		                ' -s ' + crazyname + '2:ssh:221:tcp' +
-		                ' -s ' + crazyname + '3:https:4431:tcp' +
-		                ' launch')
+		bigKV = "k"*100 + "=" + "v"*100
+		services = ""
+		for i in range(0, 10):
+			services += " -s webservice-%d:http:%d:tcp:%s" % \
+			(i, 80 + i, bigKV)
+		ret = uut.start("-b " + ipaddr + services)
 		self.expectEqual(3, ret)
 		uut.stop()

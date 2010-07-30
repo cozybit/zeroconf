@@ -10,8 +10,8 @@
 
 /* settings */
 #define MDNS_MAX_QUESTIONS		32
-#define MDNS_MAX_ANSWERS		10
-#define MDNS_MAX_AUTHORITIES	10
+#define MDNS_MAX_ANSWERS		32
+#define MDNS_MAX_AUTHORITIES	32
 #define MDNS_INADDRARPA_LEN	30 /* like .45.1.168.192.in-addr.arpa */
 
 /* class */

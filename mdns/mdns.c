@@ -328,7 +328,6 @@ static int mdns_add_name(struct mdns_message *m, char *name)
  */
 static int mdns_add_txt(struct mdns_message *m, char *txt, uint16_t len)
 {
-	DBG("Adding txt of len %d\n", len);
 	CHECK_TAILROOM(m, len + sizeof(uint16_t));
 	set_uint16(m->cur, len);
 	m->cur += sizeof(uint16_t);
@@ -495,6 +494,7 @@ static int mdns_prepare_announcement(struct mdns_message *m, uint32_t ttl)
 		/* This is highly unlikely */
 		return -1;
 	}
+	return 0;
 }
 
 /* if we detect a conflict during probe time, we must grow our host name and
@@ -547,10 +547,11 @@ static int mdns_prepare_response(struct mdns_message *rx,
 			}
 			/* if the querier wants PTRs to services that we offer, add those */
 			for (s = user_services; s != NULL && *s != NULL; s++) {
-				if (dname_cmp(rx->data, q->qname, NULL, (*s)->ptrname) == 0) {
+				if (dname_cmp(rx->data, q->qname, NULL, (*s)->ptrname) == 0 ||
+					dname_cmp(rx->data, q->qname, NULL, (*s)->fqsn) == 0) {
 					ret = mdns_add_srv_ptr_txt(tx, *s, MDNS_SECTION_ANSWERS, 255);
 					if (ret != 0)
-						ret = -1;
+						return -1;
 					ret = 1;
 				}
 			}
@@ -573,9 +574,12 @@ static int mdns_check_max_response(struct mdns_message *rx, struct mdns_message 
 		return -1;
 	}
 
-	rx->end = rx->data + sizeof(rx->data) - 1;
+	if (mdns_parse_message(rx, VALID_LENGTH(rx)) != 0)	{
+		LOG("Failed to parse biggest expected query.\n");
+		return -1;
+	}
 
-	if (mdns_prepare_response( rx, tx ) != 0) {
+	if (mdns_prepare_response(rx, tx) != 1) {
 		LOG("Resource records don't fit into response packet.\n");
 		return -1;
 	}
@@ -989,6 +993,10 @@ static int validate_service(struct mdns_service *s)
 				/* This is the beginning of a key/val.  Update its length and
 				 * start looking at the next one.
 				 */
+				if (maxlen > MDNS_MAX_KEYVAL_LEN) {
+					LOG("key/value exceeds MDNS_MAX_KEYVAL_LEN");
+					return MDNS_BADSRV;
+				}
 				*dest = maxlen;
 
 				if (UINT16_MAX - s->kvlen < maxlen)
