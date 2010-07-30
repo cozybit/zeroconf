@@ -546,6 +546,30 @@ static int mdns_prepare_response(struct mdns_message *rx,
 	return ret;
 }
 
+/* Build a response packet to check that everything will fit in the packet.
+ * First need to build the query and then will simulate the response.
+ */
+static int mdns_check_max_response(struct mdns_message *rx, struct mdns_message *tx)
+{
+	mdns_query_init(rx);
+	if (mdns_add_question(rx, fqdn, T_ANY, C_IN) != 0 ||
+		mdns_add_question(rx, in_addr_arpa, T_ANY, C_IN) != 0 ||
+		mdns_add_all_services(rx, MDNS_SECTION_QUESTIONS, 0) != 0 )
+	{
+		LOG("Resource records don't fit into query of response packet.\n");
+		return -1;
+	}
+
+	rx->end = rx->data + sizeof(rx->data) - 1;
+
+	if (mdns_prepare_response( rx, tx ) != 0) {
+		LOG("Resource records don't fit into response packet.\n");
+		return -1;
+	}
+
+	return 0;
+}
+
 /* find and return the authority with "name" from message "m".  "name" must be
  * a complete dname without any pointers.
  */
@@ -1034,6 +1058,12 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 
 	if (max_probe_growth(num_services) > TAILROOM(&tx_message)) {
 		LOG("Insufficient space for host name and service names\n");
+		return MDNS_TOOBIG;
+	}
+
+	ret = mdns_check_max_response(&rx_message, &tx_message);
+	if (ret == -1) {
+		LOG("Insufficient space for host name and service names in response\n");
 		return MDNS_TOOBIG;
 	}
 
