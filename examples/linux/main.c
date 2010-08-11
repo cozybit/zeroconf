@@ -204,11 +204,6 @@ int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port)
 		LOG("error: failed to set multicast TTL\n");
 		return -1;
 	}
-
-	if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
-		LOG("error: failed to put socket in non-blocking mode\n");
-		return -1;
-	}
 	return sock;
 }
 

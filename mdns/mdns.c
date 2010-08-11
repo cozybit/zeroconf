@@ -819,7 +819,7 @@ static void do_mdns(void *data)
 		 */
 		if (FD_ISSET(ctrl_sock, &fds)) {
 			DBG("Got control message.\n");
-			ret = recvfrom(ctrl_sock, &msg, sizeof(msg), 0,
+			ret = recvfrom(ctrl_sock, &msg, sizeof(msg), MSG_DONTWAIT,
 						   (struct sockaddr *)0, 0);
 			if (ret == -1) {
 				LOG("Warning: failed to get control message\n");
