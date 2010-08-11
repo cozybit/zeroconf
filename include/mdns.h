@@ -54,14 +54,14 @@
  * mdns uses two control sockets to communicate between the mdns threads and
  * any API calls.  This control socket is actually a UDP socket on the loopback
  * interface.  Developers who wish to specify certain ports for this control
- * socket can do so by changing MDNS_CTRL_PORT1 and MDNS_CTRL_PORT2.
+ * socket can do so by changing MDNS_CTRL_RESPONDER and MDNS_CTRL_QUERIER.
  */
-#ifndef MDNS_CTRL_PORT1
-#define MDNS_CTRL_PORT1 12345
+#ifndef MDNS_CTRL_RESPONDER
+#define MDNS_CTRL_RESPONDER 12345
 #endif
 
-#ifndef MDNS_CTRL_PORT2
-#define MDNS_CTRL_PORT2  (MDNS_CTRL_PORT1 + 1)
+#ifndef MDNS_CTRL_QUERIER
+#define MDNS_CTRL_QUERIER  (MDNS_CTRL_RESPONDER + 1)
 #endif
 
 #ifndef MDNS_SERVICE_CACHE_SIZE
@@ -100,6 +100,7 @@
 #define MDNS_TOOBIG		3	/* not enough room for everything */
 #define MDNS_NOIMPL		4	/* unimplemented feature */
 #define MDNS_NOMEM		5	/* insufficient memory */
+#define MDNS_INUSE		6	/* requested resource is in use */
 
 /* service descriptor
  *
@@ -325,10 +326,7 @@ typedef int (* mdns_query_cb)(void *data,
  *
  * fqst: Pointer to a null-terminated string specifying the fully-qualified
  * service type.  For example, "_http._tcp.local" would query for all http
- * servers in the ".local" domain.  Note that the mdns implementation WILL
- * modify the fqst, so it must not be allocated const, or in ROM.  Further, it
- * must not be dereferenced or deallocated until after it is passed to
- * mdns_query_unmonitor.
+ * servers in the ".local" domain.
  *
  * cb: an mdns_query_cb to be called when services matching the specified fqst
  * are discovered, are updated, or disappear.  cb will be passed the opaque
@@ -351,23 +349,23 @@ typedef int (* mdns_query_cb)(void *data,
  * this value must be increased, or a service must be unmonitored by calling
  * mdns_query_unmonitor.
  *
+ * MDNS_INUSE: The specified service type is already being monitored by another
+ * callback, and multiple callbacks per service are not supported.
+ *
  * Note: multiple calls to mdns_query_service_start are allowed.  This enables
- * the caller to query for more than just one service.
+ * the caller to query for more than just one service type.
  */
 int mdns_query_monitor(char *fqst, mdns_query_cb cb, void *data);
 
 /* mdns_query_unmonitor: stop monitoring a particular service
  *
- * fqst: The same pointer that was passed to mdns_query_monitor.  (A different
- * pointer with the same contents will not do!)
- *
- * cb: The same cb that was passed to mdns_query_monitor
+ * fqst: The service type to stop monitoring.
  *
  * Note: Suppose a service has just been discovered and is being processed
  * while the call to mdns_query_monitor is underway.  A callback may be
  * generated before the service is unmonitored.
  */
-void mdns_query_unmonitor(char *fqst, mdns_query_cb cb);
+void mdns_query_unmonitor(char *fqst);
 
 /* mdns_tests: run internal mdns tests
  *
