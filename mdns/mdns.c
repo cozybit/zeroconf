@@ -445,7 +445,7 @@ static int send_ctrl_msg(int msg)
 
 	memset((char *)&to, 0, sizeof(to));
 	to.sin_family = PF_INET;
-	to.sin_port = htons(MDNS_CTRL_PORT);
+	to.sin_port = htons(MDNS_CTRL_PORT1);
 	to.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 	ret = sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *)&to, sizeof(to));
@@ -1114,7 +1114,7 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	}
 	setsockopt(ctrl_sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one));
 	ctrl_listen.sin_family = PF_INET;
-	ctrl_listen.sin_port = htons(MDNS_CTRL_PORT);
+	ctrl_listen.sin_port = htons(MDNS_CTRL_PORT1);
 	ctrl_listen.sin_addr.s_addr = inet_addr("127.0.0.1");
 	addr_len = sizeof(struct sockaddr_in);
 

@@ -277,7 +277,15 @@ static int parse_service(struct mdns_service *service, char *str)
 "command can be one of the following:\n" \
 "launch        start mdns daemon\n" \
 "halt          stop mdns daemon\n" \
-"test          run internal tests." \
+"monitor <fqst> [outfile]\n" \
+"              send a query for the service specified by the\n" \
+"              fully-qualified service type <fqst> (e.g.,\n" \
+"              \"_printer._tcp.local\").  Expect the hostname,\n" \
+"              ip address, port, and the associated txt record (if any)\n" \
+"              to be printed to stdout or outfile if specified.\n" \
+"unmonitor <fqst>\n" \
+"              stop monitoring the specified service type\n" \
+"test          run internal tests.\n" \
 "\n" \
 "Options\n" \
 "-h             Print this help text\n" \

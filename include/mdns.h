@@ -19,6 +19,12 @@
  * For example, specify "MDNS_SYSTEM_LINUX" for a linux target.  Be sure to
  * ONLY define one MDNS_SYSTEM.
  *
+ * MDNS_QUERY_API: Developers who require the ability to query for services as
+ * opposed to just responding to such queries should define MDNS_QUERY_API.
+ * This enables the mdns_query_* functions described below.  These functions
+ * will return MDNS_UNIMPLEMENTED if the mdns library was built without
+ * MDNS_QUERY_API defined.
+ *
  * MDNS_CHECK_ARGS: define this to enable various error checking on the input.
  * Developers may wish to enable this during development to ensure that various
  * inputs such as host names are legal.  Then, if the inputs are not going to
@@ -29,19 +35,42 @@
  * MDNS_DBG: define this to include debug-level logging.  This has no effect if
  * MDNS_LOG is not defined.
  *
+ * MDNS_SERVICE_CACHE_SIZE: This is the maximum number of service instances
+ * that can be monitored.  It defaults to 16.  See the section below on "mdns
+ * query callback" for details on how to tune this value, and field
+ * implications of the value of this value.
+ *
+ * MDNS_MAX_SERVICE_MONITORS: This is the maximum number of service types that
+ * the system can monitor.  If an application only needs to monitor one type of
+ * service, this should be 1 to save memory.  The default is 4.
+ *
  * MDNS_TESTS: define this to compile the internal tests.  In this case, you
  * can invoke mdns_tests() to run the tests.  Expect test results to be printed
  * using mdns_log().
  */
 
-/* mdns control scoket port
+/* mdns control socket ports
  *
- * mdns uses a control socket to communicate between the mdns thread and any
- * API calls.  This control socket is actually a UDP socket on the loopback
- * interface.  Developers who wish to specify a certain port for this control
- * socket can do so by changing MDNS_CTRL_PORT.
+ * mdns uses two control sockets to communicate between the mdns threads and
+ * any API calls.  This control socket is actually a UDP socket on the loopback
+ * interface.  Developers who wish to specify certain ports for this control
+ * socket can do so by changing MDNS_CTRL_PORT1 and MDNS_CTRL_PORT2.
  */
-#define MDNS_CTRL_PORT 12345
+#ifndef MDNS_CTRL_PORT1
+#define MDNS_CTRL_PORT1 12345
+#endif
+
+#ifndef MDNS_CTRL_PORT2
+#define MDNS_CTRL_PORT2  (MDNS_CTRL_PORT1 + 1)
+#endif
+
+#ifndef MDNS_SERVICE_CACHE_SIZE
+#define MDNS_SERVICE_CACHE_SIZE 16
+#endif
+
+#ifndef MDNS_MAX_SERVICE_MONITORS
+#define MDNS_MAX_SERVICE_MONITORS 4
+#endif
 
 /* Maximum length of labels
  *
@@ -69,14 +98,21 @@
 #define MDNS_INVAL		1	/* invalid argument */
 #define MDNS_BADSRV		2	/* bad service descriptor */
 #define MDNS_TOOBIG		3	/* not enough room for everything */
+#define MDNS_NOIMPL		4	/* unimplemented feature */
+#define MDNS_NOMEM		5	/* insufficient memory */
 
 /* service descriptor
  *
  * Central to mdns is the notion of a service.  Hosts advertise service types
  * such as a website, a printer, some custom service, etc.  Network users can
  * use an mdns browser to discover services on the network.  Internally, this
- * mdns implementation uses the following struct to describe a service.  It has
- * the following members:
+ * mdns implementation uses the following struct to describe a service.  These
+ * structs can be created by a user, populated, and passed to mdns_launch to
+ * specify services that are to be advertised.  When a user starts a query for
+ * services, the discovered services are passed back to the user in this
+ * struct.
+ *
+ * The members include:
  *
  * servname: string that is the service instance name that will be advertised.
  * It could be something like "Brian's Website" or "Special Service on Device
@@ -112,9 +148,19 @@
  * of this depends on the nature of the service.  The length of a single
  * key/value pair cannot exceed MDNS_MAX_KEYVAL_LEN bytes.
  *
- * Note that the keyvals string WILL be modified by mdns, and therefore must
- * not be const (e.g., in ROM).  Further, it should not be dereferenced after
- * being passed to mdns_launch.
+ * Note that the keyvals string of any struct mdns_services passed to
+ * mdns_launch WILL be modified by mdns, and therefore must not be const (e.g.,
+ * in ROM).  Further, the keyvals member should not be dereferenced after being
+ * passed to mdns_launch.  On the contrary, struct mdns_services generated in
+ * response to queries may be dereferenced and will have the afore-described
+ * syntax.
+ *
+ * ipaddr: The IP address on which the service is available in network byte
+ * order.  Note that this member need not be populated for services passed to
+ * mdns_launch.  It is implied that these services are offered at the ip
+ * address supplied as an explicit argument to the mdns_launch call.  However,
+ * when a struct mdns_service is generated in response to a query, this member
+ * will be populated.
  */
 struct mdns_service
 {
@@ -123,6 +169,7 @@ struct mdns_service
     uint16_t port;
     int proto;
     char *keyvals;
+	uint32_t ipaddr;
 
 	/* The following members are for internal use only and should not be
 	 * dereferenced by the user.
@@ -145,8 +192,11 @@ struct mdns_service
  * be used.  The domain must not exceed MDNS_MAX_LABEL_LEN bytes.
  *
  * hostname: string that is the hostname to resolve.  This would be the "foo"
- * in "foo.local", for example.  This value must not be NULL.  The hostname
- * must not exceed MDNS_MAX_LABEL_LEN bytes.
+ * in "foo.local", for example.  The hostname must not exceed
+ * MDNS_MAX_LABEL_LEN bytes.  If hostname is NULL, the responder capability
+ * will not be launched, and the services array will be NULL; only query
+ * support will be enabled.  This is useful if only the query functionality is
+ * desired.
  *
  * services: A NULL-terminated list of pointers to services to advertise.  If
  * this value is NULL, no service will be advertized.  Only name resolution
@@ -158,6 +208,7 @@ struct mdns_service
  *
  * MDNS_INVAL: input was invalid.  Perhaps a label exceeded MDNS_MAX_LABEL_LEN,
  * or a name composed of the supplied labels exceeded MDNS_MAX_NAME_LEN.
+ * Perhaps hostname was NULL and the query capability is not compiled.
  *
  * MDNS_BADSRV: one of the service descriptors in the services list was
  * invalid.  Perhaps one of the key/val pairs exceeded MDNS_MAX_KEYVAL_LEN.
@@ -184,8 +235,139 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
                 struct mdns_service **services);
 
 /* halt the mdns thread
+ *
+ * Any services being monitored will be unmonitored.
  */
 void mdns_halt(void);
+
+/* mdns query callback
+ *
+ * A user initiates a query for services by calling the mdns_query_monitor
+ * function with a fully-qualified service type, an mdns_query_cb, and an
+ * opaque argument.  When a service instance is discovered, the query callback
+ * will be invoked with following arguments:
+ *
+ * data: a void * that was passed to mdns_query_monitor().  This can be
+ * anything that the user wants, such as pointer to a custom internal data
+ * structure.
+ *
+ * s: A pointer to the struct mdns_service that was discovered.  The struct
+ * mdns_service is only valid until the callback returns.  So if attributes of
+ * the service (such as IP address and port) are required by the user for later
+ * use, they must be copied and preserved elsewhere.
+ *
+ * status: A code that reports the status of the query.  It takes one of the
+ * following values:
+ *
+ * MDNS_DISCOVERED: The mdns_service s has just been discovered on the network
+ * and will be monitored by the mdns stack.
+ *
+ * MDNS_UPDATED: The mdns_service s, which is being monitored, has been updated
+ * in some way (e.g., it's IP address has changed, it's key/value pairs have
+ * changed.)
+ *
+ * MDNS_DISAPPEARED: The mdns_service has left the network.  This usually
+ * happens when a service has shut down, or when it has stopped responding
+ * queries.  Applications may also detect this condition by some means outside
+ * of mdns, such as a closed TCP connection.
+ *
+ * MDNS_CACHE_FULL: The mdns_service has been discovered.  However, the number
+ * of monitored service instances has exceeded MDNS_SERVICE_CACHE_SIZE.  See
+ * NOTES below on the implications of an MDNS_CACHE_FULL status.
+ *
+ * NOTES:
+ *
+ * The query callback should always return MDNS_SUCCESS.  In the future, other
+ * return codes may be developed to specify other conditions.
+ *
+ * Callback implementers must take care to not make any blocking calls, nor to
+ * call any mdns API functions from within callbacks.
+ *
+ * Suppose MDNS_SERVICE_CACHE_SIZE is 16 and that a user has invoked
+ * mdns_query_monitor to monitor services of type _http._tcp.local.  Further,
+ * suppose that this particular domain has 17 instances of this type.  The
+ * first 16 instances to be discovered will result in 16 callbacks with the
+ * status MDNS_DISCOVERED.  These instances will be cached and monitored for
+ * updates, disappearance, etc.  When the 17th instance is discovered, the
+ * callback will be called as usual, but the status will be MDNS_CACHE_FULL,
+ * and the service will not be monitored.  As a result, the callback may be
+ * called again if the 17th instance of the service announces itself on the
+ * network again.  If one of the other services disappears, the next
+ * announcement from the 17th instance will result in a callback with status
+ * MDNS_DISCOVERED, and from that point forward it will be monitored.
+ *
+ * So what's the "best" value for MDNS_SERVICE_CACHE_SIZE?  This depends on the
+ * application and on the field in which the application is deployed.  If a
+ * particular application knows that it will never see more than 6 instances of
+ * a service, then 6 is a fine value for MDNS_SERVICE_CACHE_SIZE.  In this
+ * case, callbacks with a status of MDNS_CACHE_FULL would represent a warning
+ * or error condition.  Similarly, if an application cannot handle any more
+ * than 10 instances of a service, then MDNS_SERVICE_CACHE_SIZE should be 10
+ * and callbacks with a status of MDNS_CACHE_FULL can be ignored.  If the
+ * maximum number of service instances is not known, and the application
+ * retains its own state for each instance of a service, it may be able to use
+ * that state to do the right thing when the callback status is
+ * MDNS_CACHE_FULL.
+ */
+typedef int (* mdns_query_cb)(void *data,
+							  const struct mdns_service *s,
+							  int status);
+
+#define MDNS_DISCOVERED		1
+#define MDNS_UPDATED		2
+#define MDNS_DISAPPEARED	3
+#define MDNS_CACHE_FULL		4
+
+/* mdns_query_monitor: query for and monitor instances of a service
+ *
+ * When instances of the specified service are discovered, the specified
+ * query callback is called as described above.
+ *
+ * fqst: Pointer to a null-terminated string specifying the fully-qualified
+ * service type.  For example, "_http._tcp.local" would query for all http
+ * servers in the ".local" domain.  Note that the mdns implementation WILL
+ * modify the fqst, so it must not be allocated const, or in ROM.  Further, it
+ * must not be dereferenced or deallocated until after it is passed to
+ * mdns_query_unmonitor.
+ *
+ * cb: an mdns_query_cb to be called when services matching the specified fqst
+ * are discovered, are updated, or disappear.  cb will be passed the opaque
+ * data argument described below, a struct mdns_service that represents the
+ * discovered service, and a status code.
+ *
+ * data: a void * that will passed to cb when services are discovered, are
+ * updated, or disappear.  This can be anything that the user wants, such as
+ * pointer to a custom internal data structure.
+ *
+ * Returns one of the following codes:
+ *
+ * MDNS_SUCCESS: the query was successfully launched.  The caller should expect
+ * the mdns_query_cb to be invoked as instances of the specified service are
+ * discovered.
+ *
+ * MDNS_INVAL: cb was NULL or fqst was not valid.
+ *
+ * MDNS_NOMEM: MDNS_MAX_SERVICE_MONITORS is already being monitored.  Either
+ * this value must be increased, or a service must be unmonitored by calling
+ * mdns_query_unmonitor.
+ *
+ * Note: multiple calls to mdns_query_service_start are allowed.  This enables
+ * the caller to query for more than just one service.
+ */
+int mdns_query_monitor(char *fqst, mdns_query_cb cb, void *data);
+
+/* mdns_query_unmonitor: stop monitoring a particular service
+ *
+ * fqst: The same pointer that was passed to mdns_query_monitor.  (A different
+ * pointer with the same contents will not do!)
+ *
+ * cb: The same cb that was passed to mdns_query_monitor
+ *
+ * Note: Suppose a service has just been discovered and is being processed
+ * while the call to mdns_query_monitor is underway.  A callback may be
+ * generated before the service is unmonitored.
+ */
+void mdns_query_unmonitor(char *fqst, mdns_query_cb cb);
 
 /* mdns_tests: run internal mdns tests
  *
