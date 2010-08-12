@@ -379,10 +379,15 @@ int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
 		}
 
 	} else if (section == MDNS_SECTION_AUTHORITIES) {
-		/* For the authority section , we only need the fqsn */
+		/* For the authority section , we only need srv and txt */
 		if (mdns_add_authority(m, s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
 			mdns_add_srv(m, 0, 0, s->port, fqdn) != 0)
 			return -1;
+		if (s->keyvals) {
+			if (mdns_add_authority(m, s->fqsn, T_TXT, C_FLUSH, ttl) != 0 ||
+				mdns_add_txt(m, s->keyvals, s->kvlen) != 0)
+				return -1;
+		}
 
 	} else if (section == MDNS_SECTION_QUESTIONS) {
 		/* we only add SRV records to the question section when we are probing.
@@ -587,45 +592,192 @@ static int mdns_check_max_response(struct mdns_message *rx, struct mdns_message 
 	return 0;
 }
 
-/* find and return the authority with "name" from message "m".  "name" must be
- * a complete dname without any pointers.
+/* find all of the authority records in the message m that have the specified
+ * name and return up to "size" of them sorted in order of increasing type.
+ * This allows us to compare them in lexicographically increasing order as
+ * required by the spec.  Return the number of valid records in the list.
+ * "name" must be a complete dname without any pointers.
  */
-static struct mdns_resource *find_authority(struct mdns_message *m, char *name)
+
+/* in practice, we only expect a subset of records.  So we just make an array
+ * of these to simplify the sorting.
+ */
+enum type_indicies {
+	A_INDEX = 0,
+	CNAME_INDEX,
+	PTR_INDEX,
+	TXT_INDEX,
+	SRV_INDEX,
+	MAX_INDEX,
+};
+
+static int find_authorities(struct mdns_message *m, char *name,
+							struct mdns_resource *results[MAX_INDEX])
 {
-	int i;
-	struct mdns_resource *r = NULL;
+	int i, n = 0;
+
+	for (i = 0; i < MAX_INDEX; i++)
+		results[i] = 0;
+
 	for(i = 0; i < m->num_authorities; i++) {
-		if (dname_cmp(m->data, m->authorities[i].name, NULL, name) == 0) {
-			r = &m->authorities[i];
+
+		if (dname_cmp(m->data, m->authorities[i].name, NULL, name) != 0)
+			continue;
+
+		/* okay.  The authority matches.  Add it to the results */
+		n++;
+		switch (m->authorities[i].type) {
+		case T_A:
+			results[A_INDEX] = &m->authorities[i];
 			break;
+		case T_CNAME:
+			results[CNAME_INDEX] = &m->authorities[i];
+			break;
+		case T_PTR:
+			results[PTR_INDEX] = &m->authorities[i];
+			break;
+		case T_TXT:
+			results[TXT_INDEX] = &m->authorities[i];
+			break;
+		case T_SRV:
+			results[SRV_INDEX] = &m->authorities[i];
+			break;
+		default:
+			LOG("Warning: unexpected record of type %d\n",
+				m->authorities[i].type);
+			n--;
 		}
 	}
-	return r;
+	return n;
 }
 
-/* is the resource a "lexicographically later" than b?
+/* is the resource a from message ma "lexicographically later" than b, earlier
+ * than b, or equal to b?  Return 1, 0, or -1 respectively.
  */
-static int rr_is_greater(struct mdns_resource *a, struct mdns_resource *b)
+static int rr_cmp(struct mdns_message *ma, struct mdns_resource *a,
+				  struct mdns_message *mb, struct mdns_resource *b)
 {
-	int min, i;
+	int min, i, ret = 0;
+	struct rr_srv *sa, *sb;
 
-	if ((a->class & ~0x8000) > (b->class & ~0x8000) ||
-		a->type > b->type)
+	/* check the fields in the order specified (class, type, then rdata).
+	 * Normally, we would start with the name of the resource, but by the time
+	 * we call this function, we know they are equal.
+	 */
+	if ((a->class & ~0x8000) > (b->class & ~0x8000))
 		return 1;
 
-	/* TODO: We only call this on an A record, so we can just compare bytes.
-	 * Other records may require more sophisticated parsing.
+	if ((a->class & ~0x8000) < (b->class & ~0x8000))
+		return -1;
+
+	if (a->type > b->type)
+		return 1;
+
+	if (a->type < b->type)
+		return -1;
+
+	/* Okay.  So far, everything is the same.  Now we must check the rdata.
+	 * This part depends on the record type because we have to decompress any
+	 * names.
 	 */
-	min = a->rdlength > b->rdlength ? b->rdlength : a->rdlength;
-	for (i = 0; i < min; i++) {
-		if (((char *)a->rdata)[i] == ((char *)b->rdata)[i])
-			continue;
-		return (((char *)a->rdata)[i] > ((char *)b->rdata)[i]);
+	switch (a->type) {
+	case T_A:
+		/* A record always contains a 4-byte IP address */
+		ret = memcmp(a->rdata, b->rdata, 4);
+		break;
+
+	case T_CNAME:
+	case T_PTR:
+	case T_TXT:
+		/* some records just have a dname */
+		return dname_cmp(ma->data, a->rdata, mb->data, b->rdata);
+		break;
+
+	case T_SRV:
+		/* first check the fixed part of the record */
+		ret = memcmp(a->rdata, b->rdata, sizeof(struct rr_srv));
+		if (ret != 0)
+			break;
+		sa = (struct rr_srv *)a->rdata;
+		sb = (struct rr_srv *)b->rdata;
+		return dname_cmp(ma->data, sa->target, mb->data, sb->target);
+		break;
+
+	default:
+		LOG("Warning: Unexpected RR type in rr_cmp: %d\n", a->type);
+		min = a->rdlength > b->rdlength ? b->rdlength : a->rdlength;
+		for (i = 0; i < min; i++) {
+			if (((unsigned char *)a->rdata)[i] > ((unsigned char *)b->rdata)[i])
+				return 1;
+			if (((unsigned char *)a->rdata)[i] > ((unsigned char *)b->rdata)[i])
+				return -1;
+		}
+		/* if we get all the way here, one rdata is a substring of the other.  The
+		 * longer one wins.
+		 */
+		if (a->rdlength > b->rdlength)
+			return 1;
+		if (a->rdlength < b->rdlength)
+			return -1;
 	}
-	/* if we get all the way here, one rdata is a substring of the other.  The
-	 * longer one wins.
+	ret = ret > 0 ? 1 : ret;
+	ret = ret < 0 ? -1 : ret;
+	return ret;
+}
+
+/* Is the authority record set in p1 with the specified name greater, equal, or
+ * lesser than the equivalent authority record set in p2?  Return 1, 0, or -1
+ * respectively.
+ */
+static int authority_set_cmp(struct mdns_message *p1, struct mdns_message *p2,
+							 char *name)
+{
+	struct mdns_resource *r1[MAX_INDEX], *r2[MAX_INDEX];
+	int ret = 0, i1 = 0, i2 = 0, n1, n2;
+
+	/* The spec says we have to check the records in increasing lexicographic
+	 * order.  So get a list sorted as such.
 	 */
-	return (a->rdlength > b->rdlength);
+	n1 = find_authorities(p1, name, r1);
+	n2 = find_authorities(p2, name, r2);
+	if (n1 == 0 && n2 == 0)
+		return 0;
+
+	/* now check them in order of increasing type */
+	while (1) {
+		/* advance to the next valid record */
+		while (i1 < MAX_INDEX && r1[i1] == NULL)
+			i1++;
+
+		while (i2 < MAX_INDEX && r2[i2] == NULL)
+			i2++;
+
+		if (i1 == MAX_INDEX && i2 == MAX_INDEX) {
+			/* The record sets are absolutely identical. */
+			return 0;
+		}
+
+		if (i1 == MAX_INDEX) {
+			/* we've gone through all of p1's records and p2 still has records.
+			 * This means p2 is greater.
+			 */
+			return -1;
+		}
+
+		if (i2 == MAX_INDEX) {
+			/* we've gone through all of p2's records and p1 still has records.
+			 * This means p1 is greater.
+			 */
+			return 1;
+		}
+
+		ret = rr_cmp(p1, r1[i1], p2, r2[i2]);
+		if (ret != 0)
+			return ret;
+		i1++;
+		i2++;
+	}
+	return ret;
 }
 
 /* does the incoming message m conflict with our probe p?  If so, alter the
@@ -635,32 +787,72 @@ static int rr_is_greater(struct mdns_resource *a, struct mdns_resource *b)
 static int fix_response_conflicts(struct mdns_message *m,
 								  struct mdns_message *p)
 {
-	struct mdns_resource *r, *pr;
+	struct mdns_resource *r;
 	struct mdns_question *q;
 	struct mdns_service **s;
-	int ret = 0, i, len;
+	int ret = 0, i, len, cmp;
 
 	if (m->header->flags.fields.qr == QUERY && m->num_authorities > 0) {
+		/* We only want to check the authorities of service names once because
+		 * it is quite costly.  So we use the SERVICE_CHECKED_FLAG to know if
+		 * we've already checked a service.  We start with the flag cleared.
+		 */
+		for (s = user_services; s != NULL && *s != NULL; s++)
+			(*s)->flags &= ~(SERVICE_CHECKED_FLAG);
+
 		/* is this a probe from somebody with conflicting records? */
 		for(i = 0; i < m->num_questions; i++) {
 			q = &m->questions[i];
-			if ((q->qtype == T_ANY || q->qtype == T_A) &&
-				dname_cmp(m->data, q->qname, NULL, fqdn) == 0) {
-				/* somebody want our hostname.  check the authorities. */
-				r = find_authority(m, fqdn);
-				pr = find_authority(p, fqdn);
-				if (r == NULL || pr == NULL)
-					continue;
-				if (rr_is_greater(r, pr)) {
-					/* they win */
-					ret = 1;
-					if (dname_increment(fqdn) == -1)
+
+			/* ignore PTR records.  Other people are allowed to have PTR records
+			 * with the same name as ours.
+			 */
+			if (q->qtype == T_PTR)
+				continue;
+
+			if (dname_cmp(m->data, q->qname, NULL, fqdn) == 0) {
+				/* somebody wants our hostname. Check the authorities. */
+				cmp = authority_set_cmp(m, p, fqdn);
+				if (cmp == 1) {
+					/* their authoritative RR is greater than ours */
+					if (ret == 0)
+						ret = 1;
+					if (dname_increment(fqdn) == -1) {
+						reset_fqdn();
 						ret = -1;
-					DBG("Found this conflicting probe:\n");
-					debug_print_message(m);
+					}
+				}
+			}
+
+			for (s = user_services; s != NULL && *s != NULL; s++) {
+
+				if ((*s)->flags & SERVICE_CHECKED_FLAG)
+					continue;
+
+				if (dname_cmp(m->data, q->qname, NULL, (*s)->fqsn) == 0) {
+					/* somebody wants one of our service names. */
+					cmp = authority_set_cmp(m, p, (*s)->fqsn);
+					if (cmp == 1) {
+						/* their authoritative RR is greater than ours */
+						if (ret == 0)
+							ret = 1;
+						len = dname_size((*s)->fqsn);
+						if (dname_increment((*s)->fqsn) == -1) {
+							reset_fqsn(*s);
+							ret = -1;
+						}
+						/* remember that we must increment the pointer to the fully
+						 * qualified service type if we added bytes to the service
+						 * name.
+						 */
+						if (dname_size((*s)->fqsn) > len)
+							(*s)->ptrname += 2;
+					}
+					(*s)->flags |= SERVICE_CHECKED_FLAG;
 				}
 			}
 		}
+		return ret;
 	}
 
 	/* otherwise, this is a response.  Is it a response to our probe? */
@@ -668,19 +860,25 @@ static int fix_response_conflicts(struct mdns_message *m,
 		r = &m->answers[i];
 		if (r->type == T_A && dname_cmp(m->data, r->name, NULL, fqdn) == 0) {
 			/* try a different name */
-			ret = 1;
-			if (dname_increment(fqdn) == -1)
+			if (ret == 0)
+				ret = 1;
+			if (dname_increment(fqdn) == -1) {
+				reset_fqdn();
 				ret = -1;
+			}
 		}
-		/* ensure that none of the service names conflict */
+		/* ensure that none of the service names conflict. */
 		if (r->type == T_SRV) {
 			for (s = user_services; s != NULL && *s != NULL; s++) {
 				if (dname_cmp(m->data, r->name, NULL, (*s)->fqsn) == 0) {
 					/* try a different service name */
-					ret = 1;
+					if (ret == 0)
+						ret = 1;
 					len = dname_size((*s)->fqsn);
-					if (dname_increment((*s)->fqsn) == -1)
+					if (dname_increment((*s)->fqsn) == -1) {
+						reset_fqsn(*s);
 						ret = -1;
+					}
 					/* remember that we must increment the pointer to the fully
 					 * qualified service type if we added bytes to the service
 					 * name.
@@ -746,7 +944,6 @@ static int process_probe_resp(struct mdns_message *tx, struct mdns_message *rx,
 							  uint32_t start_wait, uint32_t stop_wait)
 {
 	int ret;
-	struct mdns_service **s;
 
 	ret = fix_response_conflicts(rx, tx);
 	if (ret == 1) {
@@ -757,15 +954,11 @@ static int process_probe_resp(struct mdns_message *tx, struct mdns_message *rx,
 		return INIT;
 
 	} else if (ret == -1) {
-		/* we've tried lots of names.  Reset to our original name, sleep for
-		 * 5s, then try again with our original name.
+		/* we've tried lots of names.  Where applicable, we've reset original
+		 * names.  Sleep for 5s, then try again.
 		 */
-		DBG("Tried all possible names.  Resetting everything.\n");
+		DBG("Tried all possible names.  Resetting.\n");
 		SET_TIMEOUT(timeout, 5000);
-		reset_fqdn();
-		for (s = user_services; s != NULL && *s != NULL; s++) {
-			reset_fqsn(*s);
-		}
 		return INIT;
 	} else {
 		/* this was an unrelated message.  Remain in the same state.  Assume

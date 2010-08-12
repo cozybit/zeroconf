@@ -82,4 +82,7 @@ int dname_cmp(char *p1, char *n1, char *p2, char *n2);
 
 void dname_tests(void);
 
+/* internal flags for service data */
+#define SERVICE_CHECKED_FLAG	1
+
 #endif /* __MDNS_PRIVATE_H__ */

@@ -178,6 +178,7 @@ struct mdns_service
 	char fqsn[MDNS_MAX_NAME_LEN];
 	char *ptrname;
 	uint16_t kvlen;
+	uint32_t flags;
 };
 
 /* protocol values for the proto member of the mdns_service descriptor */

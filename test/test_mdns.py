@@ -153,6 +153,28 @@ class mdnsTest(unittest.TestCase):
 		bareProbe.authority.append(arpaA)
 		return bareProbe
 
+	def prepareConflictingProbe(self, fqdn, fqst, fqsn, txt=None):
+
+		q = dns.message.make_query(fqdn, dns.rdatatype.ANY, dns.rdataclass.IN)
+
+		q.find_rrset(q.question, dns.name.from_text(fqsn), dns.rdataclass.IN,
+					 dns.rdatatype.ANY, create=True, force_unique=True)
+
+		srv = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+								  dns.rdatatype.SRV,
+								  "0 0 %d %s" % (555, fqdn))
+		q.authority.append(srv)
+
+		ptr = dns.rrset.from_text(fqst, 255, dns.rdataclass.FLUSH,
+								  dns.rdatatype.PTR, fqsn)
+		q.authority.append(ptr)
+
+		if txt != None:
+			txt = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+									  dns.rdatatype.TXT, txt)
+			q.authority.append(txt)
+		return q
+
 	#################### unittest functions ####################
 	def setUp(self):
 		uut.stop()
@@ -421,7 +443,7 @@ class mdnsTest(unittest.TestCase):
 			' -s mybar:bar:555:udp:a=b:somevar=someval')
 		self.expectEqual(0, ret)
 
-		q = dns.message.make_query("_bar._tcp.local", dns.rdatatype.PTR,
+		q = dns.message.make_query("_bar._udp.local", dns.rdatatype.PTR,
 								   dns.rdataclass.IN)
 		r = self.sendQuery(q)
 		self.verifySRVPTRRecord(r, "_bar._udp.local.",
@@ -432,7 +454,7 @@ class mdnsTest(unittest.TestCase):
 		ret = uut.start_and_wait("-b " + ipaddr + ' -s mybaz:baz:555:udp:')
 		self.expectEqual(0, ret)
 
-		q = dns.message.make_query("_baz._tcp.local", dns.rdatatype.PTR,
+		q = dns.message.make_query("_baz._udp.local", dns.rdatatype.PTR,
 								   dns.rdataclass.IN)
 		r = self.sendQuery(q)
 		self.verifySRVPTRRecord(r, "_baz._udp.local.",
@@ -459,6 +481,9 @@ class mdnsTest(unittest.TestCase):
 										  dns.rdatatype.SRV,
 										  "0 0 %d %s" % (555, fqdn))
 		expectedProbe.authority.append(expectedSRV)
+		expectedTXT = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+										  dns.rdatatype.TXT, "tag=val")
+		expectedProbe.authority.append(expectedTXT)
 
 		# P0
 		P0msg = self.getNextPacket(s)
@@ -614,4 +639,124 @@ class mdnsTest(unittest.TestCase):
 		r = self.sendQuery(q)
 		self.verifySRVPTRRecord(r, fqst, "newservice." + fqst, 555,
 								"node.local.")
+		s.stop()
+
+	def test_ProbeConflictWithNoTXT(self):
+		fqst = "_fakeserv._tcp.local."
+		fqsn = "MyService" + "." + fqst
+		fqdn = "myname.local."
+
+		q = self.prepareConflictingProbe(fqdn, fqst, fqsn)
+
+		self.waitForFirstProbe("-b " + ipaddr + " -n yourname -s MyService:fakeserv:555:tcp")
+		mdns_tool.inject(q, '224.0.0.251')
+		time.sleep(2)
+		# because "yourname" is lexicographically later than "myname", device
+		# wins the name
+		q = dns.message.make_query("_fakeserv._tcp.local", dns.rdatatype.ANY,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, fqsn, 555, "yourname.local.")
+
+	def test_ProbeConflictWithIdenticalTXT(self):
+		fqst = "_fakeserv._tcp.local."
+		fqsn = "MyService" + "." + fqst
+		fqdn = "myname.local."
+
+		q = self.prepareConflictingProbe(fqdn, fqst, fqsn, '"k1=v1" "k2=v2"')
+
+		self.waitForFirstProbe("-b " + ipaddr + \
+							   " -n yourname -s MyService:fakeserv:555:tcp:k1=v1:k2=v2")
+		mdns_tool.inject(q, '224.0.0.251')
+		time.sleep(2)
+		# because "yourname" is lexicographically later than "myname", device
+		# wins the name
+		q = dns.message.make_query("_fakeserv._tcp.local", dns.rdatatype.ANY,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, fqsn, 555, "yourname.local.")
+
+	def test_ProbeConflictWithGreaterTXT(self):
+		fqst = "_fakeserv._tcp.local."
+		fqsn = "MyService" + "." + fqst
+		fqdn = "myname.local."
+
+		q = self.prepareConflictingProbe(fqdn, fqst, fqsn, '"k1=v1" "k2=v3"')
+
+		self.waitForFirstProbe("-b " + ipaddr + \
+							   " -n yourname -s MyService:fakeserv:555:tcp:k1=v1:k2=v2")
+		mdns_tool.inject(q, '224.0.0.251')
+		time.sleep(2)
+		# Even though "yourname" is lexicographically later than "myname", the
+		# myname TXT record is greater than the "yourname" TXT record.
+		# Accordingly, device must alter its service name.
+		q = dns.message.make_query("_fakeserv._tcp.local", dns.rdatatype.ANY,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, "MyService-2." + fqst, 555, "yourname.local.")
+
+	def test_ProbeConflictWithLesserTXT(self):
+		fqst = "_fakeserv._tcp.local."
+		fqsn = "MyService" + "." + fqst
+		fqdn = "myname.local."
+
+		q = self.prepareConflictingProbe(fqdn, fqst, fqsn, '"k1=v1" "k2=v1"')
+
+		self.waitForFirstProbe("-b " + ipaddr + \
+							   " -n yourname -s MyService:fakeserv:555:tcp:k1=v1:k2=v2")
+		mdns_tool.inject(q, '224.0.0.251')
+		time.sleep(2)
+		# Device should win this one
+		q = dns.message.make_query("_fakeserv._tcp.local", dns.rdatatype.ANY,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, "MyService." + fqst, 555, "yourname.local.")
+
+	def test_ProbeConflictWithSameTXTLesserName(self):
+		fqst = "_fakeserv._tcp.local."
+		fqsn = "MyService" + "." + fqst
+		fqdn = "myname.local."
+
+		q = self.prepareConflictingProbe(fqdn, fqst, fqsn, '"k1=v1" "k2=v2"')
+
+		self.waitForFirstProbe("-b " + ipaddr + \
+							   " -n aname -s MyService:fakeserv:555:tcp:k1=v1:k2=v2")
+		mdns_tool.inject(q, '224.0.0.251')
+		time.sleep(2)
+		# Device should lose this one
+		q = dns.message.make_query("_fakeserv._tcp.local", dns.rdatatype.ANY,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, "MyService-2." + fqst, 555, "aname.local.")
+
+	def test_ConflictWithFiveSRVProbes(self):
+		s = mdns_tool.sniffer()
+		s.start(ipaddr, sniffdev)
+
+		ret = uut.start("-b " + ipaddr + " -n anode -s myserv:serv:555:udp")
+		self.failIf(ret != 0, "Failed to launch mdns")
+
+		# create a response to a probe
+		for i in range(1, 5):
+			if i == 1:
+				sn = "myserv"
+			else:
+				sn = "myserv-%d" % (i)
+
+			fqsn = sn + "._serv._udp.local."
+			fqdn = "mynode.local."
+			fqst = "_serv._udp.local."
+			q = self.prepareConflictingProbe(fqdn, fqst, fqsn)
+			p = self.getNextPacket(s)
+			mdns_tool.inject(q, '224.0.0.251')
+
+			# Our probe is always greater than the device because our name is
+			# greater.  So the device should increment its name each time.
+
+		# now check to see if we got the expected name
+		time.sleep(2)
+		q = dns.message.make_query("_serv._udp.local", dns.rdatatype.PTR,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVPTRRecord(r, fqst, "myserv-5." + fqst, 555, "anode.local.")
 		s.stop()
