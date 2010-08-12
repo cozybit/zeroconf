@@ -65,9 +65,9 @@ static int label_cmp(char *l1, char *l2)
 	p2 = l2 + 1;
 
 	for (i = 0; i < min; i++) {
-		if (*l1 > *l2)
+		if (*p1 > *p2)
 			return 1;
-		if (*l2 > *l1)
+		if (*p2 > *p1)
 			return -1;
 		p1++;
 		p2++;
@@ -115,7 +115,7 @@ int dname_cmp(char *p1, char *n1, char *p2, char *n2)
 			/* we're done with n2 and n1 still has chars */
 			return -1;
 
-		if (*n1 == 0 && *n2 != 0)
+		if (*n1 == 0 && *n2 == 0)
 			/* we arrived at the end of both strings and they're still the
 			 * same
 			 */
@@ -210,6 +210,10 @@ char p2[] = {64, 't', 'h', 'i', 's', 'n', 'a', 'm', 'e', 'i', 's', 't', 'h',
 
 char p3[] = {5, 'f', 'o', 'o', '-', '2', 5, 'l', 'o', 'c', 'a', 'l', 0};
 
+char p4[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '3', 0};
+
+char p5[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '2', 0};
+
 static void dname_size_tests(void)
 {
 	int ret;
@@ -237,11 +241,18 @@ static void dname_cmp_tests(void)
 	FAIL_UNLESS(ret == 0,
 				"Failed to cmp identical dnames, one indirect one direct.");
 	ret = dname_cmp(p1, &p1[27], NULL, p3);
-	FAIL_UNLESS(ret < 0,
+	FAIL_UNLESS(ret == -1,
 				"foo-2.local should be greater than foo.local");
 	ret = dname_cmp(NULL, p3, p1, &p1[27]);
-	FAIL_UNLESS(ret > 0,
+	FAIL_UNLESS(ret == 1,
 				"foo-2.local should be greater than foo.local");
+	ret = dname_cmp(NULL, p4, NULL, p5);
+	FAIL_UNLESS(ret == 1,
+				"k1=v1.k2=v3 should be greater than k1=v1.k2=v2");
+
+	ret = dname_cmp(NULL, p5, NULL, p4);
+	FAIL_UNLESS(ret == -1,
+				"k1=v1.k2=v3 should be less than k1=v1.k2=v2");
 }
 
 static void increment_name_tests(void)

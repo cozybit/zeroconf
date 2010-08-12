@@ -34,27 +34,31 @@ void debug_print_txt(char *txt, uint16_t len)
 {
 	uint16_t i;
 	for(i = 0; i < len; i++)
-		DBG("%c", txt[i]);
+		if (txt[i] < ' ')
+			DBG("\\%d", txt[i]);
+		else
+			DBG("%c", txt[i]);
 }
 
 /* print a RFC-1035 format domain name */
 void debug_print_name(struct mdns_message *m, char *name)
 {
 	char *s = name;
-	uint8_t ptr = 0;
+	int first = 1;
 
 	while(*s) {
 		if(*s & 0xC0) { /* pointer */
-			if(ptr != 0 || m == NULL)
+			if(m == NULL)
 				break;
 			/* go print at start of message+offset */
 			s = (char *)m->header+((uint8_t)(((*s & ~(0xC0))<<8) | *(s+1)));
-			ptr = 1;
 			continue;
 		}
 		else { /* label */
-			if (s != name)
+			if (!first) {
 				DBG(".");
+			}
+			first = 0;
 			debug_print_txt(s+1, *s); /* print label text */
 			s += *s;
 		}
@@ -97,13 +101,14 @@ void debug_print_resource(struct mdns_message *m, struct mdns_resource *r)
 		DBG("prior: %u, weight: %u, port: %u, target: \"",
 			ntohs(srv->priority), ntohs(srv->weight), ntohs(srv->port));
 		debug_print_name(m, srv->target);
+		DBG("\"\n");
 		break;
 	case T_PTR:
 		DBG("PTR ");
 		debug_print_name(m, (char *)r->rdata);
 		break;
 	case T_TXT:
-		DBG("\tTXT type, data=\"");
+		DBG("TXT \"");
 		debug_print_txt((char *)r->rdata, r->rdlength);
 		DBG("\"\n");
 		break;
