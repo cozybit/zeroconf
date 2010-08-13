@@ -444,9 +444,11 @@ static int send_ctrl_msg(int msg)
 	struct sockaddr_in to;
 	int s;
 
-	s = socket(PF_INET, SOCK_DGRAM, 0);
-	if (s < 0)
+	s = mdns_socket_loopback(htons(MDNS_CTRL_RESPONDER), 0);
+	if (s < 0) {
+		LOG("error: failed to create loopback socket\n");
 		return -1;
+	}
 
 	memset((char *)&to, 0, sizeof(to));
 	to.sin_family = PF_INET;
@@ -457,6 +459,7 @@ static int send_ctrl_msg(int msg)
 	if (ret != -1)
 		ret = 0;
 
+	mdns_socket_close(s);
 	return ret;
 }
 
@@ -1035,7 +1038,7 @@ static void do_mdns(void *data)
 
 		if (FD_ISSET(mc_sock, &fds)) {
 			len = recvfrom(mc_sock, rx_message.data, sizeof(rx_message.data),
-						   0, (struct sockaddr*)&from, &in_size);
+						   MSG_DONTWAIT, (struct sockaddr*)&from, &in_size);
 			if (len < 0) {
 				LOG("failed to recv packet\n");
 				continue;
@@ -1244,9 +1247,8 @@ static int validate_service(struct mdns_service *s)
 int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 				struct mdns_service **services)
 {
-	int one = 1, ret;
-	struct sockaddr_in ctrl_listen;
-	int addr_len, num_services = 0;
+	int ret;
+	int num_services = 0;
 
 	my_ipaddr = ipaddr;
 
@@ -1299,22 +1301,12 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 		return MDNS_TOOBIG;
 	}
 
-	/* create control socket */
-	ctrl_sock = socket(PF_INET, SOCK_DGRAM, 0);
-	if (ctrl_sock < 0) {
-		LOG("Failed to create control socket.\n");
-		return -1;
-	}
-	setsockopt(ctrl_sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one));
-	ctrl_listen.sin_family = PF_INET;
-	ctrl_listen.sin_port = htons(MDNS_CTRL_RESPONDER);
-	ctrl_listen.sin_addr.s_addr = inet_addr("127.0.0.1");
-	addr_len = sizeof(struct sockaddr_in);
+	/* create both ends of the control socket */
+	ctrl_sock = mdns_socket_loopback(htons(MDNS_CTRL_RESPONDER), 1);
 
-	/* bind control socket */
-	ret = bind(ctrl_sock, (struct sockaddr *)&ctrl_listen, addr_len);
-	if (ret < 0) {
-		LOG("Failed to bind control socket\n");
+	socket(PF_INET, SOCK_DGRAM, 0);
+	if (ctrl_sock < 0) {
+		LOG("Failed to listening create control socket: %d\n", ctrl_sock);
 		return -1;
 	}
 
@@ -1339,8 +1331,8 @@ void mdns_halt(void)
 		LOG("Warning: failed to halt mdns.  Forcing.\n");
 
 	mdns_thread_delete(mdns_thread);
-	close(ctrl_sock);
-	close(mc_sock);
+	mdns_socket_close(ctrl_sock);
+	mdns_socket_close(mc_sock);
 	mdns_enabled = 0;
 }
 

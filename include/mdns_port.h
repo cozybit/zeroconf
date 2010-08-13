@@ -126,8 +126,42 @@ int mdns_rand_range(int n);
  * Returns the socket descriptor suitable for use with FD_SET, select,
  * recvfrom, etc.  Returns -1 on error.
  *
- * Note: if available, the SO_REUSEADDR sockopt should be enabled.
+ * Note: if available, the SO_REUSEADDR sockopt should be enabled.  This allows
+ * for the stopping and restarting of mdns without waiting for the socket
+ * timeout.
+ *
+ * Note: when recvfrom is called on this socket, the MSG_DONTWAIT flag will be
+ * passed.  This may be sufficient to ensure non-blocking behavior.
  */
 int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port);
+
+/* mdns_socket_loopback: create a loopback datagram (e.g., UDP) socket
+ *
+ * port: desired port in network byte order.
+ *
+ * listen: boolean value.  1 indicates that the socket should be a listening
+ * socket.  Accordingly, it should be bound to the specified port on the
+ * loopback address.  0 indicates that the socket will be used to send packets
+ * to a listening loopback socket.
+ *
+ * Returns the socket descriptor.  If listen is 1, the socket should be
+ * suitable for use with FD_SET, select, recvfrom, etc.  Otherwise, the socket
+ * should be suitable for calls to sendto.  Returns -1 on error.
+ *
+ * Note: if available, the SO_REUSEADDR sockopt should be enabled if listen is
+ * 1.  This allows for the stopping and restarting of mdns without waiting for
+ * the socket timeout.
+ *
+ * Note: when recvfrom is called on this socket, the MSG_DONTWAIT flag will be
+ * passed.  This may be sufficient to ensure non-blocking behavior.
+ */
+int mdns_socket_loopback(uint16_t port, int listen);
+
+/* mdns_socket_close: close a socket
+ *
+ * s: non-negative control socket returned from either mdns_socket_mcast or
+ * mdns_socket_loopback.
+ */
+void mdns_socket_close(int s);
 
 #endif /* __MDNS_PORT_H__ */

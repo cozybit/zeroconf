@@ -207,6 +207,39 @@ int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port)
 	return sock;
 }
 
+int mdns_socket_loopback(uint16_t port, int listen)
+{
+	int s, one = 1, addr_len, ret;
+	struct sockaddr_in addr;
+
+	s = socket(PF_INET, SOCK_DGRAM, 0);
+	if (s < 0) {
+		LOG("error: Failed to create loopback socket.\n");
+		return -1;
+	}
+
+	if (listen) {
+		/* bind loopback socket */
+		memset((char *)&addr, 0, sizeof(addr));
+		addr.sin_family = PF_INET;
+		addr.sin_port = port;
+		addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+		addr_len = sizeof(struct sockaddr_in);
+		setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one));
+		ret = bind(s, (struct sockaddr *)&addr, addr_len);
+		if (ret < 0) {
+			LOG("Failed to bind control socket\n");
+			return -1;
+		}
+	}
+	return s;
+}
+
+void mdns_socket_close(int s)
+{
+	close(s);
+}
+
 static int parse_service(struct mdns_service *service, char *str)
 {
 	char *token, *p = str, *e;
