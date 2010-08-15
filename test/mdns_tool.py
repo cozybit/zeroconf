@@ -106,18 +106,20 @@ class sniffer_thread(Thread):
 # 3. call read() to get mdns packets
 # 4. call stop()
 class sniffer:
-	def __init__(self):
-		pass
-
-	def start(self, srcIP, dev='eth0', filter_extra=' and port mdns'):
+	def __init__(self, srcIP, dev='eth0', filter_extra=' and port mdns'):
 		self.filter = 'src host ' + srcIP + filter_extra
 		self.dev = dev
 		self.mySniffer = sniffer_thread(self.dev,self.filter)
-		clearPacketQueue()
 		self.mySniffer.start()
 		time.sleep(1) # this gives libpcap a moment to get started.
 		              # it can miss the first packet if mdns is started
 		              # immedately
+
+	def __del__(self):
+		self.stop()
+
+	def start(self):
+		clearPacketQueue()
 
 	def stop(self):
 		self.mySniffer.stop()

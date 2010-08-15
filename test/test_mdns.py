@@ -17,6 +17,9 @@ sniffdev = conf.get("sniffer","dev")
 # create the mdns unit under test
 uut = mdns_subject.mdns_subject(conf)
 
+# Setup the sniffer
+test_sniffer = mdns_tool.sniffer(ipaddr, sniffdev)
+
 class mdnsTest(unittest.TestCase):
 
 	#################### helper functions ####################
@@ -101,8 +104,7 @@ class mdnsTest(unittest.TestCase):
 	# launch mdns with "args" and wait to see the first probe
 	def waitForFirstProbe(self, args):
 		# fire up the sniffer
-		s = mdns_tool.sniffer()
-		s.start(ipaddr, sniffdev)
+		test_sniffer.start()
 
 		# launch mdns
 		ret = uut.start(args)
@@ -111,18 +113,18 @@ class mdnsTest(unittest.TestCase):
 		# Wait for first probe
 		p = None
 		try:
-			p = s.read(0.250)
+			p = test_sniffer.read(1)
 		except:
 			pass
 		self.failIf(p == None, "Failed to find first probe")
-		s.stop()
 
-	def getNextPacket(self, s, tout=0.250):
+	def getNextPacket(self, s, tout=0.500):
 		try:
 			Pmsg = s.read(tout)
 			return Pmsg
 		except:
-			self.failIf(1, "Failed to get packet from sniffer")
+			(type, value, traceback) = sys.exc_info()
+			self.failIf(1, "Failed to get packet from sniffer %s" % type)
 
 	def verifyIsQuery(self, Pmsg):
 		self.failIf( Pmsg.opcode() != dns.opcode.QUERY,
@@ -178,9 +180,6 @@ class mdnsTest(unittest.TestCase):
 	#################### unittest functions ####################
 	def setUp(self):
 		uut.stop()
-		s = mdns_tool.sniffer()
-		s.start(ipaddr, sniffdev)
-		s.stop()
 
 	def test_StartStop(self):
 		ret = uut.start_and_wait("-b " + ipaddr)
@@ -256,8 +255,7 @@ class mdnsTest(unittest.TestCase):
 		# Simple test to see that we get the expected probe packets
 		# first start sniffer
 		name = "testprobe"
-		s = mdns_tool.sniffer()
-		s.start(ipaddr, sniffdev)
+		test_sniffer.start()
 
 		# launch mdns
 		self.failIf(uut.start_and_wait("-b " + ipaddr + " -n " + name) != 0,
@@ -267,27 +265,24 @@ class mdnsTest(unittest.TestCase):
 		expectedProbe = self.makeBareProbe(name + ".local.")
 
 		# P0
-		P0msg = self.getNextPacket(s)
+		P0msg = self.getNextPacket(test_sniffer)
 		self.expectEqual(expectedProbe, P0msg)
 
 		# P1
-		P1msg = self.getNextPacket(s)
+		P1msg = self.getNextPacket(test_sniffer)
 		self.expectEqual(expectedProbe, P1msg)
 
 		# P2
-		P2msg = self.getNextPacket(s)
+		P2msg = self.getNextPacket(test_sniffer)
 		self.expectEqual(expectedProbe, P2msg)
 
 		# Announce
-		Amsg = self.getNextPacket(s)
+		Amsg = self.getNextPacket(test_sniffer)
 		expectedProbe.question = []
 		expectedProbe.answer = expectedProbe.authority
 		expectedProbe.authority = []
 		expectedProbe.flags = dns.flags.QR | dns.flags.AA
 		self.expectEqual(expectedProbe, Amsg)
-
-		# cleanup
-		s.stop()
 
 	def test_Goodbye(self):
 		# Simple test to see that we get the expected probe packets
@@ -301,8 +296,7 @@ class mdnsTest(unittest.TestCase):
 		time.sleep(1)
 
 		# Check packets
-		s = mdns_tool.sniffer()
-		s.start(ipaddr, sniffdev)
+		test_sniffer.start()
 
 		# Stop the mdns service
 		uut.stop()
@@ -310,7 +304,7 @@ class mdnsTest(unittest.TestCase):
 		# Check for goodbye
 		Amsg = None
 		try:
-			Amsg = s.read(0.250)
+			Amsg = test_sniffer.read(0.300)
 		except:
 			pass
 
@@ -323,9 +317,6 @@ class mdnsTest(unittest.TestCase):
 		             "A didn't have correct name")
 		# Most importaint test is that ttl is 0:
 		self.failIf( Amsg.answer[0].ttl != 0, "TTL of goodbye is not 0")
-
-		# cleanup
-		s.stop()
 
 	def test_AnswerOneProbe(self):
 		# create a response to a probe
@@ -462,8 +453,7 @@ class mdnsTest(unittest.TestCase):
 								"node.local.", "")
 
 	def test_ProbeHasSRV(self):
-		s = mdns_tool.sniffer()
-		s.start(ipaddr, sniffdev)
+		test_sniffer.start()
 
 		# launch mdns
 		ret = uut.start_and_wait("-b " + ipaddr + ' -s mybaz:baz:555:udp:tag=val')
@@ -486,21 +476,21 @@ class mdnsTest(unittest.TestCase):
 		expectedProbe.authority.append(expectedTXT)
 
 		# P0
-		P0msg = self.getNextPacket(s)
+		P0msg = self.getNextPacket(test_sniffer)
 		self.expectEqual(expectedProbe, P0msg)
 
 		# P1
-		P1msg = self.getNextPacket(s)
+		P1msg = self.getNextPacket(test_sniffer)
 		self.expectEqual(expectedProbe, P1msg)
 
 		# P2
-		P2msg = self.getNextPacket(s)
+		P2msg = self.getNextPacket(test_sniffer)
 		self.expectEqual(expectedProbe, P2msg)
 
 		# To create the announcement, we just move the authority RRs to the
 		# answer section and set some flags.  We also need to add some txt
 		# records if they exist
-		Amsg = self.getNextPacket(s)
+		Amsg = self.getNextPacket(test_sniffer)
 		expectedProbe.question = []
 		expectedProbe.answer = expectedProbe.authority
 		expectedProbe.authority = []
@@ -512,9 +502,6 @@ class mdnsTest(unittest.TestCase):
 								 dns.rdatatype.TXT, "tag=val")
 		expectedProbe.answer.append(rr)
 		self.expectEqual(expectedProbe, Amsg)
-
-		# cleanup
-		s.stop()
 
 	def test_PacketSize(self):
 		bigKV = "k"*100 + "=" + "v"*100
@@ -552,8 +539,7 @@ class mdnsTest(unittest.TestCase):
 		self.verifySRVPTRRecord(r, fqst, "myserv-2." + fqst, 555, "node.local.")
 
 	def test_AnswerFiveSRVProbes(self):
-		s = mdns_tool.sniffer()
-		s.start(ipaddr, sniffdev)
+		test_sniffer.start()
 
 		ret = uut.start("-b " + ipaddr + " -s myserv:serv:555:udp")
 		self.failIf(ret != 0, "Failed to launch mdns")
@@ -578,7 +564,7 @@ class mdnsTest(unittest.TestCase):
 									  dns.rdatatype.SRV,
 									  "0 0 %d %s" % (555, fqdn))
 			r.answer.append(srv)
-			p = self.getNextPacket(s)
+			p = self.getNextPacket(test_sniffer)
 
 			# respond to probe
 			mdns_tool.inject(r, '224.0.0.251')
@@ -592,11 +578,9 @@ class mdnsTest(unittest.TestCase):
 								   dns.rdataclass.IN)
 		r = self.sendQuery(q)
 		self.verifySRVPTRRecord(r, fqst, "myserv-5." + fqst, 555, "node.local.")
-		s.stop()
 
 	def test_AnswerAllSRVProbes(self):
-		s = mdns_tool.sniffer()
-		s.start(ipaddr, sniffdev)
+		test_sniffer.start()
 
 		ret = uut.start("-b " + ipaddr + " -s newservice:servey:555:tcp")
 		self.failIf(ret != 0, "Failed to launch mdns")
@@ -621,7 +605,7 @@ class mdnsTest(unittest.TestCase):
 									  dns.rdatatype.SRV,
 									  "0 0 %d %s" % (555, fqdn))
 			r.answer.append(srv)
-			p = self.getNextPacket(s)
+			p = self.getNextPacket(test_sniffer,0.250)
 
 			# respond to probe
 			mdns_tool.inject(r, '224.0.0.251')
@@ -632,14 +616,13 @@ class mdnsTest(unittest.TestCase):
 		# now check to see if we went back to trying our original name.  This
 		# happens after 5 seconds, plus the time to claim the name
 		q = dns.message.make_query(fqst, dns.rdatatype.PTR, dns.rdataclass.IN)
-		p = self.getNextPacket(s, 10) # P0
-		p = self.getNextPacket(s) # P1
-		p = self.getNextPacket(s) # P2
-		p = self.getNextPacket(s) # Announce
+		p = self.getNextPacket(test_sniffer, 10) # P0
+		p = self.getNextPacket(test_sniffer) # P1
+		p = self.getNextPacket(test_sniffer) # P2
+		p = self.getNextPacket(test_sniffer) # Announce
 		r = self.sendQuery(q)
 		self.verifySRVPTRRecord(r, fqst, "newservice." + fqst, 555,
 								"node.local.")
-		s.stop()
 
 	def test_ProbeConflictWithNoTXT(self):
 		fqst = "_fakeserv._tcp.local."
@@ -730,8 +713,7 @@ class mdnsTest(unittest.TestCase):
 		self.verifySRVPTRRecord(r, fqst, "MyService-2." + fqst, 555, "aname.local.")
 
 	def test_ConflictWithFiveSRVProbes(self):
-		s = mdns_tool.sniffer()
-		s.start(ipaddr, sniffdev)
+		test_sniffer.start()
 
 		ret = uut.start("-b " + ipaddr + " -n anode -s myserv:serv:555:udp")
 		self.failIf(ret != 0, "Failed to launch mdns")
@@ -747,7 +729,7 @@ class mdnsTest(unittest.TestCase):
 			fqdn = "mynode.local."
 			fqst = "_serv._udp.local."
 			q = self.prepareConflictingProbe(fqdn, fqst, fqsn)
-			p = self.getNextPacket(s)
+			p = self.getNextPacket(test_sniffer)
 			mdns_tool.inject(q, '224.0.0.251')
 
 			# Our probe is always greater than the device because our name is
@@ -759,4 +741,3 @@ class mdnsTest(unittest.TestCase):
 								   dns.rdataclass.IN)
 		r = self.sendQuery(q)
 		self.verifySRVPTRRecord(r, fqst, "myserv-5." + fqst, 555, "anode.local.")
-		s.stop()
