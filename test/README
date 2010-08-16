@@ -26,6 +26,10 @@ your target does not have ssh).
 
    $ nosetests
 
+6: To run a single test, say something like:
+
+   $ nosetests -w ./test -s -v test_mdns:mdnsTest.test_AnswerAllSRVProbes
+
 Adding new test targets
 =======================
 
