@@ -906,7 +906,7 @@ static int fix_response_conflicts(struct mdns_message *m,
 #define SET_TIMEOUT(t, ms)								\
 	do {												\
 		(t)->tv_sec = (ms)/1000;						\
-		(t)->tv_usec = ((ms) - (ms)/1000) * 1000;		\
+		(t)->tv_usec = ((ms)%1000) * 1000;				\
 	} while (0)
 
 /* calculate the interval between the start and stop timestamps accounting for
