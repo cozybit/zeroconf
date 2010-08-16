@@ -518,18 +518,23 @@ static int max_probe_growth(int num_services)
 	return 2*3 + 2*2*num_services;
 }
 
-/* prepare a response to the message rx.  Put it in tx.  Return -1 for error, 0
- * for no need to respond, or 1 for send response.
+/* prepare a response to the message rx.  Put it in tx.
+ * Return RS_ERROR (-1) for error
+ *        RS_NO_SEND (0) for nothing to send
+ *        or bit 0 (RS_SEND) set if a response needs to be sent
+ *        and/or bit 1 (RS_SEND_DELAY) set if the response needs to be sent
+ *        with a delay
  */
 static int mdns_prepare_response(struct mdns_message *rx,
-								 struct mdns_message *tx)
+                                 struct mdns_message *tx)
 {
-	int i, ret = 0;
+	int i, srv_ret = 0;
+	int ret = RS_NO_SEND;
 	struct mdns_question *q;
 	struct mdns_service **s;
 
 	if (rx->header->flags.fields.qr != QUERY)
-		return 0;
+		return RS_NO_SEND;
 
 	mdns_response_init(tx);
 	tx->header->id = rx->header->id;
@@ -541,8 +546,8 @@ static int mdns_prepare_response(struct mdns_message *rx,
 			if (dname_cmp(rx->data, q->qname, NULL, fqdn) == 0) {
 				if (mdns_add_answer(tx, fqdn, T_A, C_FLUSH, 255) != 0 ||
 					mdns_add_uint32(tx, htonl(my_ipaddr)) != 0)
-					return -1;
-				ret = 1;
+					return RS_ERROR;
+				ret |= RS_SEND;
 			}
 		}
 
@@ -550,17 +555,17 @@ static int mdns_prepare_response(struct mdns_message *rx,
 			if (dname_cmp(rx->data, q->qname, NULL, in_addr_arpa) == 0) {
 				if (mdns_add_answer(tx, in_addr_arpa, T_PTR, C_FLUSH, 255) != 0 ||
 					mdns_add_name(tx, fqdn) != 0)
-					return -1;
-				ret = 1;
+					return RS_ERROR;
+				ret |= RS_SEND;
 			}
 			/* if the querier wants PTRs to services that we offer, add those */
 			for (s = user_services; s != NULL && *s != NULL; s++) {
 				if (dname_cmp(rx->data, q->qname, NULL, (*s)->ptrname) == 0 ||
 					dname_cmp(rx->data, q->qname, NULL, (*s)->fqsn) == 0) {
-					ret = mdns_add_srv_ptr_txt(tx, *s, MDNS_SECTION_ANSWERS, 255);
-					if (ret != 0)
-						return -1;
-					ret = 1;
+					srv_ret = mdns_add_srv_ptr_txt(tx, *s, MDNS_SECTION_ANSWERS, 255);
+					if (srv_ret != 0)
+						return RS_ERROR;
+					ret |= RS_SEND_DELAY;
 				}
 			}
 		}
@@ -587,7 +592,7 @@ static int mdns_check_max_response(struct mdns_message *rx, struct mdns_message 
 		return -1;
 	}
 
-	if (mdns_prepare_response(rx, tx) != 1) {
+	if (mdns_prepare_response(rx, tx) < RS_SEND) {
 		LOG("Resource records don't fit into response packet.\n");
 		return -1;
 	}
@@ -1103,7 +1108,7 @@ static void do_mdns(void *data)
 					break;
 				send_message(&tx_message, mc_sock, 5353);
 				timeout = NULL;
-				state = IDLE;
+				state = READY_TO_RESPOND;
 
 			} else if (event == EVENT_RX) {
 				state = process_probe_resp(&tx_message, &rx_message, state,
@@ -1113,15 +1118,64 @@ static void do_mdns(void *data)
 			}
 			break;
 
-		case IDLE:
+		case READY_TO_RESPOND:
 			if (event == EVENT_RX) {
 				/* prepare a response if necessary */
 				ret = mdns_prepare_response(&rx_message, &tx_message);
-				if (ret <= 0)
+				if (ret <= RS_NO_SEND)
 					break;
-				DBG("responding to query:\n");
-				debug_print_message(&rx_message);
-				send_message(&tx_message, mc_sock, from.sin_port);
+
+				if (ret & RS_SEND_DELAY) {
+					/* Implment random delay from 20-120msec */
+					DBG("delaying response\n");
+					rand_time = mdns_rand_range(100);
+					SET_TIMEOUT(&probe_wait_time, (rand_time+20));
+					timeout = &probe_wait_time;
+					state = READY_TO_SEND;
+				} else if (ret & RS_SEND) {
+					/* We send immedately */
+					DBG("responding to query:\n");
+					debug_print_message(&rx_message);
+					send_message(&tx_message, mc_sock, from.sin_port);
+				}
+			}
+			break;
+
+		case READY_TO_SEND:
+			/* We send, no matter if triggered by timeout or RX */
+			DBG("responding to query:\n");
+			debug_print_message(&rx_message);
+			send_message(&tx_message, mc_sock, from.sin_port);
+
+			if (event == EVENT_TIMEOUT) {
+				/* Here due to timeout, so we're done, go back to RTR */
+				timeout = NULL;
+				state = READY_TO_RESPOND;
+			} else if (event == EVENT_RX) {
+				/* prepare a response if necessary */
+				ret = mdns_prepare_response(&rx_message, &tx_message);
+
+				if (ret <= RS_NO_SEND) {
+					/* Error or otherwise no response, go back to RTR */
+					timeout = NULL;
+					state = READY_TO_RESPOND;
+				} else if (ret & RS_SEND_DELAY) {
+					/* Implment random delay from 20-120msec */
+					DBG("delaying response\n");
+					rand_time = mdns_rand_range(100);
+					SET_TIMEOUT(&probe_wait_time, (rand_time+20));
+					timeout = &probe_wait_time;
+					state = READY_TO_SEND;
+				} else if (ret & RS_SEND) {
+					/* We send immedately */
+					DBG("responding to query:\n");
+					debug_print_message(&rx_message);
+					send_message(&tx_message, mc_sock, from.sin_port);
+
+					/* No longer have a message queued up, so go back to RTR */
+					timeout = NULL;
+					state = READY_TO_RESPOND;
+				}
 			}
 			break;
 		}

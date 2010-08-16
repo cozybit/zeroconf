@@ -13,7 +13,8 @@ enum mdns_status_t {
 	FIRST_PROBE_SENT,	/* wait a random amount of time and probe */
 	SECOND_PROBE_SENT,	/* wait 250ms and probe */
 	THIRD_PROBE_SENT,	/* wait 250ms and probe */
-	IDLE,				/* we have claimed our name */
+	READY_TO_RESPOND,	/* we have claimed our name */
+	READY_TO_SEND,		/* response prepared, waiting to send */
 };
 
 enum mdns_event_t {
@@ -21,6 +22,12 @@ enum mdns_event_t {
 	EVENT_CTRL,		/* recieved a control message */
 	EVENT_TIMEOUT,	/* timed out waiting for DNS packet */
 };
+
+/* Return values from mdns_prepare_response */
+#define RS_ERROR		-1		/* error in querry or response prep */
+#define RS_NO_SEND		0		/* nothing to send */
+#define RS_SEND			0x01	/* send */
+#define RS_SEND_DELAY	0x02	/* this is a service query, delay 20-120ms */
 
 #ifdef MDNS_DBG
 extern char *statenames[];
