@@ -518,6 +518,28 @@ static int max_probe_growth(int num_services)
 	return 2*3 + 2*2*num_services;
 }
 
+/* if we detect a conflict during probe time, we must grow our host name and
+ * service names with -2, or -3, etc.  Report the maximum number of extra bytes
+ * that we would need to do this.
+ */
+static int max_response_growth(int num_services)
+{
+	/* We need 2 bytes for each instance of the host name that appears in the:
+	 * Query part:
+	 * +2 A record q
+	 * +2 * num services
+	 *
+	 * Answer part:
+	 * +2 A record a
+	 * +2 inaddrarpa PTR
+	 * +2 * num services SRV
+	 * +2 * num services SRV PTR
+	 * +2 * num services TX
+	 */
+
+	return 2*3 + 4*2*num_services;
+}
+
 /* prepare a response to the message rx.  Put it in tx.
  * Return RS_ERROR (-1) for error
  *        RS_NO_SEND (0) for nothing to send
@@ -1352,6 +1374,11 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	ret = mdns_check_max_response(&rx_message, &tx_message);
 	if (ret == -1) {
 		LOG("Insufficient space for host name and service names in response\n");
+		return MDNS_TOOBIG;
+	}
+
+	if (max_response_growth(num_services) > TAILROOM(&tx_message)) {
+		LOG("Insufficient growth for host name and service names in response\n");
 		return MDNS_TOOBIG;
 	}
 

@@ -513,6 +513,16 @@ class mdnsTest(unittest.TestCase):
 		self.expectEqual(3, ret)
 		uut.stop()
 
+	def test_ResponseGrowth(self):
+		bigKV = "k"*100 + "=" + "v"*85
+		services = ""
+		for i in range(0, 4):
+			services += " -s webservice-%d:http:%d:tcp:%s" % \
+			(i, 80 + i, bigKV)
+		ret = uut.start("-b " + ipaddr + services)
+		self.expectEqual(3, ret)
+		uut.stop()
+
 	def test_AnswerOneSRVProbe(self):
 		# create a response to a probe
 		fqsn = "myserv._serv._udp.local."
