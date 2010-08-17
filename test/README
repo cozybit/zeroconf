@@ -10,7 +10,7 @@ your target does not have ssh).
 1: Install dependencies
 
    $ sudo apt-get install python-pexpect python-nose python-libpcap \
-   python-impacket
+   python-impacket python-avahi
 
 2: Create a configuration file for your tests.  See test.sample.conf for
    documentation and an example.
@@ -76,3 +76,8 @@ Notes
    CAP_NET_RAW permission to python like so:
 
    $ sudo chmod --reference=/bin/ping `which python`
+
+-- The DBUS API for avahi is undocumented.  Your best bet if you need to
+   understand it is to look in the dbus introspection file for the EntryGroup,
+   which can probably be found at
+   /usr/share/avahi/introspection/EntryGroup.introspect.

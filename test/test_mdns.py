@@ -180,6 +180,7 @@ class mdnsTest(unittest.TestCase):
 	#################### unittest functions ####################
 	def setUp(self):
 		uut.stop()
+		mdns_tool.unpublishAll()
 
 	def test_StartStop(self):
 		ret = uut.start_and_wait("-b " + ipaddr)
@@ -751,3 +752,9 @@ class mdnsTest(unittest.TestCase):
 								   dns.rdataclass.IN)
 		r = self.sendQuery(q)
 		self.verifySRVPTRRecord(r, fqst, "myserv-5." + fqst, 555, "anode.local.")
+
+	def test_launchTestService(self):
+		s = mdns_tool.service("My Test Website", "local", "_http._tcp", 80,
+							  "foobar", ipaddr="5.5.5.5")
+		s.publish()
+		time.sleep(2)

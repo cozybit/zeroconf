@@ -7,6 +7,7 @@ import string
 import Queue
 from impacket import ImpactPacket
 import dns.message
+import dbus, avahi
 
 def inject(q, where, port=5353, source=None, source_port=0):
 	pkt = q.to_wire()
@@ -147,3 +148,57 @@ class sniffer:
 		offset += udp_pkt.get_header_size()
 		dnsmsg = dns.message.from_wire(data[offset:])
 		return dnsmsg
+
+allServices = []
+
+class service:
+	"""
+	Create an mdns service with the given name, domain, type, and port.  You
+	may optionally specify a hostname.  In this case, the hostname.domain will
+	be associated with the service.  If you also provide an ipaddr, avahi will
+	resolve hostname.domain to ipaddr.  Note that ipaddr must not be a real
+	ipaddr on your system, or you'll get a 'Local name collision'.  However, it
+	need not be a real live IP address.
+	"""
+	def __init__(self, name, domain, type, port, hostname="", txt = "",
+				 ipaddr = None):
+		self.name = name
+		self.domain = domain
+		self.type = type
+		self.port = port
+		self.txt = txt
+		self.hostname = hostname
+		self.ipaddr = ipaddr
+		self.fqdn = ""
+		if hostname != "":
+			self.fqdn = self.hostname + "." + self.domain
+		bus = dbus.SystemBus()
+		server = dbus.Interface(bus.get_object(avahi.DBUS_NAME,
+											   avahi.DBUS_PATH_SERVER),
+								avahi.DBUS_INTERFACE_SERVER)
+		self.a = dbus.Interface(bus.get_object(avahi.DBUS_NAME,
+											   server.EntryGroupNew()),
+								avahi.DBUS_INTERFACE_ENTRY_GROUP)
+
+	def publish(self):
+		self.a.AddService(avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, dbus.UInt32(0),
+						  self.name, self.type, self.domain, self.fqdn,
+						  dbus.UInt16(self.port), self.txt)
+
+		if self.ipaddr != None and self.hostname != "":
+			self.a.AddAddress(avahi.IF_UNSPEC, avahi.PROTO_UNSPEC,
+							  dbus.UInt32(0), self.fqdn, self.ipaddr)
+
+		allServices.append(self)
+		self.a.Commit()
+
+	def unpublish(self):
+		allServices.remove(self)
+		self.a.Reset()
+
+	def __del__(self):
+		self.a.Reset()
+
+def unpublishAll():
+	for s in allServices:
+		s.unpublish()
