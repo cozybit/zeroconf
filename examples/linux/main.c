@@ -319,7 +319,7 @@ static int parse_service(struct mdns_service *service, char *str)
 "-h             Print this help text\n" \
 "-b <ipaddr>    ipaddress to bind to\n" \
 "-d <domain>    domain to resolve (default is 'local')\n" \
-"-n <hostname>  hostname to resolve (default is 'node')\n" \
+"-n <hostname>  hostname to resolve (default is NULL)\n" \
 "-l <logfile>   logfile for daemon (default is /dev/null)\n" \
 "-s <name:type:port:proto[:key1=val1:key2=val2]>\n" \
 "               advertise a service with the specified name\n" \
@@ -341,7 +341,7 @@ int main(int argc, char **argv)
 	in_addr_t ipaddr = 0;
 	char *cmd;
 	char *domain = NULL;
-	char *hostname = "node";
+	char *hostname = NULL;
 	int num_services = 0, i;
 
 	memset(services, 0, sizeof(services));

@@ -1320,8 +1320,8 @@ static int validate_service(struct mdns_service *s)
 	return 0;
 }
 
-int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
-				struct mdns_service **services)
+static int responder_launch(uint32_t ipaddr, char *domain, char *hostname,
+							struct mdns_service **services)
 {
 	int ret;
 	int num_services = 0;
@@ -1397,11 +1397,10 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 	return 0;
 }
 
-void mdns_halt(void)
+void resolver_halt(void)
 {
 	int ret;
 
-	LOG("Halting mdns.\n");
 	ret = send_ctrl_msg(MDNS_CTRL_HALT);
 	if (ret != 0) {
 		LOG("Warning: failed to send HALT message to mdns: %d\n", errno);
@@ -1415,6 +1414,26 @@ void mdns_halt(void)
 	mdns_socket_close(ctrl_sock);
 	mdns_socket_close(mc_sock);
 	mdns_enabled = 0;
+}
+
+int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
+				struct mdns_service **services)
+{
+	int ret;
+
+	hname = NULL;
+	if (hostname) {
+		ret = responder_launch(ipaddr, domain, hostname, services);
+		if (ret != 0)
+			return ret;
+	}
+	return 0;
+}
+
+void mdns_halt(void)
+{
+	LOG("Halting mdns.\n");
+	resolver_halt();
 }
 
 #ifdef MDNS_TESTS

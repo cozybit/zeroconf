@@ -183,16 +183,16 @@ class mdnsTest(unittest.TestCase):
 		mdns_tool.unpublishAll()
 
 	def test_StartStop(self):
-		ret = uut.start_and_wait("-b " + ipaddr)
+		ret = uut.start_and_wait("-n node -b " + ipaddr)
 		self.failIf(ret != 0, "Failed to launch mdns")
 		uut.stop()
-		ret = uut.start_and_wait("-b " + ipaddr)
+		ret = uut.start_and_wait("-n node -b " + ipaddr)
 		self.failIf(ret != 0, "Failed to launch mdns")
 
 	def test_StartStart(self):
-		ret = uut.start_and_wait("-b " + ipaddr)
+		ret = uut.start_and_wait("-n node -b " + ipaddr)
 		self.failIf(ret != 0, "Failed to launch mdns")
-		ret = uut.start_and_wait("-b " + ipaddr)
+		ret = uut.start_and_wait("-n node -b " + ipaddr)
 		self.failIf(ret == 0, "Started mdns twice!")
 
 	def test_SimpleNameQuery(self):
@@ -223,7 +223,7 @@ class mdnsTest(unittest.TestCase):
 			assert 0
 
 	def test_InvalidLaunch(self):
-		ret = uut.start_and_wait("-b " + ipaddr + " -d foo.")
+		ret = uut.start_and_wait("-n node -b " + ipaddr + " -d foo.")
 		self.failIf(ret != 1, "Failed to detect invalid input for -d")
 		ret = uut.start_and_wait("-b " + ipaddr + " -n foo.")
 		self.failIf(ret != 1, "Failed to detect invalid input for -n")
@@ -373,29 +373,29 @@ class mdnsTest(unittest.TestCase):
 
 	def test_ServiceParser(self):
 		# service args are "name:type:port:proto[:key1=val1:key2=val2]"
-		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp')
+		ret = uut.start("-n node -b " + ipaddr + ' -s "my website":http:80:tcp')
 		self.expectEqual(0, ret)
 		uut.stop()
-		ret = uut.start("-b " + ipaddr + ' -s "my website":http:80:tcp -s printer:printer:555:tcp')
+		ret = uut.start("-n node -b " + ipaddr + ' -s "my website":http:80:tcp -s printer:printer:555:tcp')
 		self.expectEqual(0, ret)
 		uut.stop()
-		ret = uut.start("-b " + ipaddr + ' -s ::::')
+		ret = uut.start("-n node -b " + ipaddr + ' -s ::::')
 		self.expectEqual(-1 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website')
+		ret = uut.start("-n node -b " + ipaddr + ' -s website')
 		self.expectEqual(-2 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http')
+		ret = uut.start("-n node -b " + ipaddr + ' -s website:http')
 		self.expectEqual(-3 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http:999980')
+		ret = uut.start("-n node -b " + ipaddr + ' -s website:http:999980')
 		self.expectEqual(-4 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http:80')
+		ret = uut.start("-n node -b " + ipaddr + ' -s website:http:80')
 		self.expectEqual(-5 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http:80:foo')
+		ret = uut.start("-n node -b " + ipaddr + ' -s website:http:80:foo')
 		self.expectEqual(-6 & 0xff, ret)
-		ret = uut.start("-b " + ipaddr + ' -s website:http:80:tcp:u=uname:p=passwd')
+		ret = uut.start("-n node -b " + ipaddr + ' -s website:http:80:tcp:u=uname:p=passwd')
 		self.expectEqual(0, ret)
 
 	def test_SimpleSRV(self):
-		ret = uut.start_and_wait("-b " + ipaddr + " -s mydev:fakeserv:80:tcp")
+		ret = uut.start_and_wait("-n node -b " + ipaddr + " -s mydev:fakeserv:80:tcp")
 		self.expectEqual(0, ret)
 		q = dns.message.make_query("_fakeserv._tcp.local", dns.rdatatype.PTR,
 								   dns.rdataclass.IN)
@@ -405,7 +405,7 @@ class mdnsTest(unittest.TestCase):
 								"node.local.")
 
 	def test_MultiSRV(self):
-		ret = uut.start_and_wait("-b " + ipaddr + ' -s "my foo":foo:80:tcp -s mybar:bar:555:udp')
+		ret = uut.start_and_wait("-n node -b " + ipaddr + ' -s "my foo":foo:80:tcp -s mybar:bar:555:udp')
 		self.expectEqual(0, ret)
 
 		q = dns.message.make_query("_foo._tcp.local", dns.rdatatype.PTR,
@@ -431,7 +431,7 @@ class mdnsTest(unittest.TestCase):
 								"myfoo._fooserv._tcp.local.", 1234, "foo.local.")
 
 	def test_SRVWithTXT(self):
-		ret = uut.start_and_wait("-b " + ipaddr +
+		ret = uut.start_and_wait("-n node -b " + ipaddr +
 			' -s mybar:bar:555:udp:a=b:somevar=someval')
 		self.expectEqual(0, ret)
 
@@ -443,7 +443,7 @@ class mdnsTest(unittest.TestCase):
 								"node.local.", "a=b somevar=someval")
 
 	def test_SRVWithEmptyTXT(self):
-		ret = uut.start_and_wait("-b " + ipaddr + ' -s mybaz:baz:555:udp:')
+		ret = uut.start_and_wait("-n node -b " + ipaddr + ' -s mybaz:baz:555:udp:')
 		self.expectEqual(0, ret)
 
 		q = dns.message.make_query("_baz._udp.local", dns.rdatatype.PTR,
@@ -457,7 +457,7 @@ class mdnsTest(unittest.TestCase):
 		test_sniffer.start()
 
 		# launch mdns
-		ret = uut.start_and_wait("-b " + ipaddr + ' -s mybaz:baz:555:udp:tag=val')
+		ret = uut.start_and_wait("-n node -b " + ipaddr + ' -s mybaz:baz:555:udp:tag=val')
 		self.expectEqual(0, ret)
 
 		fqsn = "mybaz._baz._udp.local."
@@ -510,7 +510,7 @@ class mdnsTest(unittest.TestCase):
 		for i in range(0, 10):
 			services += " -s webservice-%d:http:%d:tcp:%s" % \
 			(i, 80 + i, bigKV)
-		ret = uut.start("-b " + ipaddr + services)
+		ret = uut.start("-n node -b " + ipaddr + services)
 		self.expectEqual(3, ret)
 		uut.stop()
 
@@ -520,7 +520,7 @@ class mdnsTest(unittest.TestCase):
 		for i in range(0, 4):
 			services += " -s webservice-%d:http:%d:tcp:%s" % \
 			(i, 80 + i, bigKV)
-		ret = uut.start("-b " + ipaddr + services)
+		ret = uut.start("-n node -b " + ipaddr + services)
 		self.expectEqual(3, ret)
 		uut.stop()
 
@@ -539,7 +539,7 @@ class mdnsTest(unittest.TestCase):
 								  dns.rdatatype.SRV,
 								  "0 0 %d %s" % (555, fqdn))
 		r.answer.append(srv)
-		self.waitForFirstProbe("-b " + ipaddr + " -s myserv:serv:555:udp")
+		self.waitForFirstProbe("-n node -b " + ipaddr + " -s myserv:serv:555:udp")
 
 		# respond to probe
 		mdns_tool.inject(r, '224.0.0.251')
@@ -552,7 +552,7 @@ class mdnsTest(unittest.TestCase):
 	def test_AnswerFiveSRVProbes(self):
 		test_sniffer.start()
 
-		ret = uut.start("-b " + ipaddr + " -s myserv:serv:555:udp")
+		ret = uut.start("-n node -b " + ipaddr + " -s myserv:serv:555:udp")
 		self.failIf(ret != 0, "Failed to launch mdns")
 
 		# create a response to a probe
@@ -593,7 +593,7 @@ class mdnsTest(unittest.TestCase):
 	def test_AnswerAllSRVProbes(self):
 		test_sniffer.start()
 
-		ret = uut.start("-b " + ipaddr + " -s newservice:servey:555:tcp")
+		ret = uut.start("-n node -b " + ipaddr + " -s newservice:servey:555:tcp")
 		self.failIf(ret != 0, "Failed to launch mdns")
 
 		# create a response to a probe
@@ -758,3 +758,7 @@ class mdnsTest(unittest.TestCase):
 							  "foobar", ipaddr="5.5.5.5")
 		s.publish()
 		time.sleep(2)
+
+	def test_StartStopNullHostAndIP(self):
+		ret = uut.start_and_wait("")
+		self.failIf(ret != 0, "Failed to launch mdns without hostname and ip")

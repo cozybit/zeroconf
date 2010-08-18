@@ -68,7 +68,7 @@ void *mdns_thread_create(mdns_thread_entry entry, void *data);
 /*
  * mdns_thread_delete: Delete a thread
  *
- * t: pointer to thread to be deleted
+ * t: pointer to thread to be deleted.  If NULL, no action is taken.
  *
  */
 void mdns_thread_delete(void *t);
