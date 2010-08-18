@@ -383,7 +383,7 @@ class mdnsTest(unittest.TestCase):
 		self.expectEqual(-1 & 0xff, ret)
 		ret = uut.start("-n node -b " + ipaddr + ' -s website')
 		self.expectEqual(-2 & 0xff, ret)
-		ret = uut.start("-n node -b " + ipaddr + ' -s website:http')
+		ret = uut.start("-n node -b " + ipaddr + ' -s websit:http')
 		self.expectEqual(-3 & 0xff, ret)
 		ret = uut.start("-n node -b " + ipaddr + ' -s website:http:999980')
 		self.expectEqual(-4 & 0xff, ret)

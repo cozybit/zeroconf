@@ -27,6 +27,13 @@ class mdns_subject:
 
 	def start(self, args=""):
 		command = "mdns " + args + " -l /root/mdns.log launch"
+		# TODO: Okay.  Here's a mystery.  If the command is 69 chars long,
+		# pxssh chokes on whatever it sees over ssh and all subsequent tests
+		# fail.  Amazing!  If it's longer, or shorter, everything works fine.
+		# But the magic number 69 breaks the command flow.  Why?  Could it be
+		# that the prompt "[PEXPECT]# " is 11 chars, and 69 + 11 is 80, and
+		# there's a line discipline problem somewhere?  If you figure it out
+		# you'll be my hero.
 		if self.DEBUG:
 			print "Running Command " + command
 		self.session.sendline(command)
