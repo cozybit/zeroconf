@@ -19,6 +19,14 @@ class mdns_subject:
 		targettype = conf.get("target", "targettype")
 		if targettype != "linuxssh":
 			raise NoSuchTargetType
+		try:
+			self.mdnspath = conf.get("target", "mdnspath")
+		except:
+			self.mdnspath = 'mdns'
+		try:
+			self.mdnslog = conf.get("target", "mdnslog")
+		except:
+			self.mdnslog = '/root/mdns.log'
 
 		self.session = pxssh.pxssh()
 		self.session.login(conf.get("target", "ipaddr"), "root")
@@ -26,7 +34,7 @@ class mdns_subject:
 		self.stop()
 
 	def start(self, args=""):
-		command = "mdns " + args + " -l /root/mdns.log launch"
+		command = self.mdnspath + " " + args + " -l " + self.mdnslog + " launch"
 		# TODO: Okay.  Here's a mystery.  If the command is 69 chars long,
 		# pxssh chokes on whatever it sees over ssh and all subsequent tests
 		# fail.  Amazing!  If it's longer, or shorter, everything works fine.
@@ -34,6 +42,10 @@ class mdns_subject:
 		# that the prompt "[PEXPECT]# " is 11 chars, and 69 + 11 is 80, and
 		# there's a line discipline problem somewhere?  If you figure it out
 		# you'll be my hero.
+		if len(command) == 69:
+			print "Warning: command length is 69, inflating command."
+			command = "  " + command
+
 		if self.DEBUG:
 			print "Running Command " + command
 		self.session.sendline(command)
