@@ -22,8 +22,8 @@
  * MDNS_QUERY_API: Developers who require the ability to query for services as
  * opposed to just responding to such queries should define MDNS_QUERY_API.
  * This enables the mdns_query_* functions described below.  These functions
- * will return MDNS_UNIMPLEMENTED if the mdns library was built without
- * MDNS_QUERY_API defined.
+ * will return MDNS_NOIMPL if the mdns library was built without MDNS_QUERY_API
+ * defined.
  *
  * MDNS_CHECK_ARGS: define this to enable various error checking on the input.
  * Developers may wish to enable this during development to ensure that various
