@@ -2,7 +2,7 @@
 # Use and redistribution subject to licensing terms.
 
 CFLAGS += -I$(TOP)/include
-OBJS = mdns.o debug.o dname.o
+OBJS = mdns.o mdns_respond.o debug.o dname.o
 
 all: libmdns.a
 

@@ -6,6 +6,7 @@
 #ifndef __MDNS_PRIVATE_H__
 #define __MDNS_PRIVATE_H__
 
+#include "mdns.h"
 #include "mdns_message.h"
 
 enum mdns_status_t {
@@ -21,6 +22,11 @@ enum mdns_event_t {
 	EVENT_RX,		/* recieved a DNS packet */
 	EVENT_CTRL,		/* recieved a control message */
 	EVENT_TIMEOUT,	/* timed out waiting for DNS packet */
+};
+
+/* internal control message types. */
+enum mdns_commands_t {
+	MDNS_CTRL_HALT = 0,
 };
 
 /* Return values from mdns_prepare_response */
@@ -68,6 +74,7 @@ char *dname_put_label(char *dst, char *label);
 int dname_size(char *dname);
 int dname_increment(char *name);
 int dname_cmp(char *p1, char *n1, char *p2, char *n2);
+void dname_tests(void);
 
 #ifdef MDNS_TESTS
 
@@ -87,9 +94,57 @@ int dname_cmp(char *p1, char *n1, char *p2, char *n2);
 
 #endif
 
-void dname_tests(void);
 
 /* internal flags for service data */
 #define SERVICE_CHECKED_FLAG	1
+
+/* internal API functions for responder */
+int responder_launch(uint32_t ipaddr, char *domain, char *hostname,
+					 struct mdns_service **services);
+void responder_halt(void);
+void responder_tests(void);
+
+/* internal common functions used by responder and querier */
+/* return the amount of tail room in the message m */
+#define TAILROOM(m) ((m)->end - (m)->cur + 1)
+
+/* ensure that message m has at least l bytes of room left */
+#define CHECK_TAILROOM(m, l)										  \
+	do {															  \
+		if (TAILROOM(m) < l) {										  \
+			DBG("Warning: truncated mdns message (%d).\n", __LINE__); \
+			return -1;												  \
+		}															  \
+	} while (0)
+
+/* return the number of valid bytes in message m's buffer */
+#define VALID_LENGTH(m) ((m)->cur - (m)->data)
+
+/* dumb macro to set a struct timeval to "ms" milliseconds. */
+#define SET_TIMEOUT(t, ms)								\
+	do {												\
+		(t)->tv_sec = (ms)/1000;						\
+		(t)->tv_usec = ((ms)%1000) * 1000;				\
+	} while (0)
+
+int mdns_send_msg(struct mdns_message *m, int sock, short port);
+int mdns_send_ctrl_msg(int msg, uint16_t port);
+int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
+						 char *fqdn, int section, uint32_t ttl);
+int mdns_add_question(struct mdns_message *m, char *qname, uint16_t qtype,
+					  uint16_t qclass);
+int mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
+					uint16_t class, uint32_t ttl);
+int mdns_add_authority(struct mdns_message *m, char *name, uint16_t type,
+					   uint16_t class, uint32_t ttl);
+int mdns_add_uint32(struct mdns_message *m, uint32_t i);
+int mdns_add_name(struct mdns_message *m, char *name);
+int mdns_query_init(struct mdns_message *m);
+int mdns_parse_message(struct mdns_message *m, int mlen);
+int mdns_response_init(struct mdns_message *m);
+
+uint32_t interval(uint32_t start, uint32_t stop);
+void recalc_timeout(struct timeval *t, uint32_t start, uint32_t stop,
+					uint32_t target);
 
 #endif /* __MDNS_PRIVATE_H__ */
