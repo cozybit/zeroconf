@@ -325,7 +325,6 @@ static int rr_cmp(struct mdns_message *ma, struct mdns_resource *a,
 
 	case T_CNAME:
 	case T_PTR:
-	case T_TXT:
 		/* some records just have a dname */
 		return dname_cmp(ma->data, a->rdata, mb->data, b->rdata);
 		break;
@@ -340,8 +339,8 @@ static int rr_cmp(struct mdns_message *ma, struct mdns_resource *a,
 		return dname_cmp(ma->data, sa->target, mb->data, sb->target);
 		break;
 
+	case T_TXT:
 	default:
-		LOG("Warning: Unexpected RR type in rr_cmp: %d\n", a->type);
 		min = a->rdlength > b->rdlength ? b->rdlength : a->rdlength;
 		for (i = 0; i < min; i++) {
 			if (((unsigned char *)a->rdata)[i] > ((unsigned char *)b->rdata)[i])
