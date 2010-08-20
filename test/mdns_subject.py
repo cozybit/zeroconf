@@ -76,5 +76,6 @@ class mdns_subject:
 		return self.ready(timeout)
 
 	def stop(self, args=""):
-		self.session.sendline("mdns halt")
+		command = self.mdnspath + " halt"
+		self.session.sendline(command)
 		self.session.prompt()
