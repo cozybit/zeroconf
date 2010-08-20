@@ -22,14 +22,21 @@ struct query_ctrl_msg {
 	char data[CTRL_MSG_LEN];
 };
 
+#define CTRL_MSG_MIN (sizeof(struct query_ctrl_msg) - CTRL_MSG_LEN)
+
 static struct query_ctrl_msg ctrl_msg;
 
-/* Send a query control message */
-int query_send_ctrl_msg(struct query_ctrl_msg * msg, uint16_t port)
+/* Send a control message msg of length len to the server listening at
+ * localhost:port.  Expect an int response code from the server.
+ */
+int query_send_ctrl_msg(struct query_ctrl_msg *msg, int len, uint16_t port)
 {
 	int ret;
 	struct sockaddr_in to;
 	int s;
+	fd_set fds;
+	struct timeval t;
+	int status;
 
 	s = mdns_socket_loopback(htons(port), 0);
 	if (s < 0) {
@@ -42,10 +49,41 @@ int query_send_ctrl_msg(struct query_ctrl_msg * msg, uint16_t port)
 	to.sin_port = htons(port);
 	to.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-	ret = sendto(s, msg, sizeof(&msg), 0, (struct sockaddr *)&to, sizeof(to));
-	if (ret != -1)
-		ret = 0;
+	ret = sendto(s, msg, len, 0, (struct sockaddr *)&to, sizeof(to));
+	if (ret == -1)
+	{
+		LOG("error: failed to send control message: %d\n", errno);
+		ret = MDNS_NORESP;
+		goto done;
+	}
 
+	FD_ZERO(&fds);
+	FD_SET(s, &fds);
+	SET_TIMEOUT(&t, 2000);
+	ret = select(s + 1, &fds, NULL, NULL, &t);
+	if (ret == -1)
+	{
+		LOG("error: select failed for control socket: %d\n", errno);
+		ret = MDNS_NORESP;
+		goto done;
+	}
+
+	if (!FD_ISSET(s, &fds)) {
+		LOG("error: no control response received.\n");
+		ret = MDNS_NORESP;
+		goto done;
+	}
+
+	ret = recvfrom(s, &status, sizeof(status), 0, NULL, 0);
+	if (ret == -1)
+	{
+		LOG("error: failed to recv response to control message: %d\n", errno);
+		ret = MDNS_NORESP;
+		goto done;
+	}
+	ret = status;
+
+done:
 	mdns_socket_close(s);
 	return ret;
 }
@@ -57,10 +95,11 @@ static void do_querier(void *data)
 	struct sockaddr_in from;
 	int active_fds;
 	fd_set fds;
-	int len = 0;
+	int ret = 0;
 	struct timeval *timeout = NULL;
-	socklen_t in_size = sizeof(struct sockaddr_in);
+	socklen_t in_size;
 	uint32_t start_wait, stop_wait;
+	int status;
 
 	query_enabled = 1;
 
@@ -81,19 +120,28 @@ static void do_querier(void *data)
 		 */
 		if (FD_ISSET(ctrl_sock, &fds)) {
 			DBG("Querier got control message.\n");
-			len = recvfrom(ctrl_sock, &ctrl_msg, sizeof(ctrl_msg), MSG_DONTWAIT,
+			in_size = sizeof(struct sockaddr_in);
+			ret = recvfrom(ctrl_sock, &ctrl_msg, sizeof(ctrl_msg), MSG_DONTWAIT,
 						   (struct sockaddr *)&from, &in_size);
-			if (len == -1) {
+			/* we at least need a command and length */
+			if (ret == -1 || ret < sizeof(ctrl_msg) - CTRL_MSG_LEN) {
 				LOG("Warning: querier failed to get control message\n");
+				status = MDNS_INVAL;
 			} else {
 				if (ctrl_msg.command == MDNS_CTRL_HALT) {
 					LOG("Querier done.\n");
 					query_enabled = 0;
-					break;
+					status = MDNS_SUCCESS;
 				} else {
 					LOG("Unkown control message %d", ctrl_msg.command);
+					status = MDNS_NOIMPL;
 				}
 			}
+			/* send status back */
+			ret = sendto(ctrl_sock, &status, sizeof(status), 0,
+						 (struct sockaddr *)&from, sizeof(from));
+			if (ret == -1)
+				LOG("error: failed to send control status: %d\n", errno);
 		}
 	}
 }
@@ -121,14 +169,16 @@ int query_launch(void)
 void query_halt(void)
 {
 	int ret;
-	struct query_ctrl_msg ctrl_msg;
+	/* no need to waste stack space that we don't need */
+	char buf[sizeof(ctrl_msg) - CTRL_MSG_LEN];
+	struct query_ctrl_msg *ctrl_msg = (struct query_ctrl_msg *)buf;
 
-	ctrl_msg.command = MDNS_CTRL_HALT;
-	ctrl_msg.length = 0;
+	ctrl_msg->command = MDNS_CTRL_HALT;
+	ctrl_msg->length = sizeof(buf);
 
-	ret = query_send_ctrl_msg(&ctrl_msg, MDNS_CTRL_QUERIER);
+	ret = query_send_ctrl_msg(ctrl_msg, ctrl_msg->length, MDNS_CTRL_QUERIER);
 	if (ret != 0) {
-		LOG("Warning: failed to send HALT message to querier: %d\n", errno);
+		LOG("Warning: failed to send HALT message to querier: %d\n", ret);
 	} else {
 		mdns_thread_yield();
 	}
@@ -142,7 +192,11 @@ void query_halt(void)
 
 int mdns_query_monitor(char *fqst, mdns_query_cb cb, void *data)
 {
-	return MDNS_NOIMPL;
+	struct query_ctrl_msg ctrl_msg;
+	ctrl_msg.command = MDNS_CTRL_MONITOR;
+	ctrl_msg.length = CTRL_MSG_MIN;
+
+	return query_send_ctrl_msg(&ctrl_msg, ctrl_msg.length, MDNS_CTRL_QUERIER);
 }
 
 void mdns_query_unmonitor(char *fqst)

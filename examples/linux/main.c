@@ -308,6 +308,12 @@ static int parse_service(struct mdns_service *service, char *str)
 	return 0;
 }
 
+static int linux_query_cb(void *data, const struct mdns_service *s, int status)
+{
+	printf("Got callback!\n");
+	return MDNS_SUCCESS;
+}
+
 #define HELP_TEXT \
 "Usage: mdns [options] <command>\n\n" \
 "command can be one of the following:\n" \
@@ -319,8 +325,9 @@ static int parse_service(struct mdns_service *service, char *str)
 "              \"_printer._tcp.local\").  Expect the hostname,\n" \
 "              ip address, port, and the associated txt record (if any)\n" \
 "              to be printed to stdout or outfile if specified.\n" \
-"unmonitor <fqst>\n" \
-"              stop monitoring the specified service type\n" \
+"unmonitor [<fqst>]\n" \
+"              stop monitoring the specified service type.  If fqst\n" \
+"              is not specified, unmonitor all services\n" \
 "test          run internal tests.\n" \
 "\n" \
 "Options\n" \
@@ -410,6 +417,20 @@ int main(int argc, char **argv)
 
 	} else if (strcmp(cmd, "test") == 0) {
 		mdns_tests();
+		return 0;
+
+	} else if (strcmp(cmd, "monitor") == 0) {
+		if (optind == argc - 1) {
+			printf("monitor requires a fully qualified service type arg.\n");
+			return -1;
+		}
+		return mdns_query_monitor(argv[optind + 1], linux_query_cb, NULL);
+
+	} else if (strcmp(cmd, "unmonitor") == 0) {
+		if (optind == argc - 1)
+			mdns_query_unmonitor(NULL);
+		else
+			mdns_query_unmonitor(argv[optind + 1]);
 		return 0;
 
 	} else {

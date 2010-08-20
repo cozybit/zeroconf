@@ -139,10 +139,11 @@ int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port);
  *
  * port: desired port in network byte order.
  *
- * listen: boolean value.  1 indicates that the socket should be a listening
- * socket.  Accordingly, it should be bound to the specified port on the
- * loopback address.  0 indicates that the socket will be used to send packets
- * to a listening loopback socket.
+ * listen: boolean value.  1 indicates that the socket should be a non-blocking
+ * listening socket.  Accordingly, it should be bound to the specified port on
+ * the loopback address.  0 indicates that the socket will be used to send
+ * packets to a listening loopback socket (i.e., a client socket).  client
+ * sockets should block on send and recv.
  *
  * Returns the socket descriptor.  If listen is 1, the socket should be
  * suitable for use with FD_SET, select, recvfrom, etc.  Otherwise, the socket
@@ -152,8 +153,9 @@ int mdns_socket_mcast(uint32_t mcast_addr, uint16_t port);
  * 1.  This allows for the stopping and restarting of mdns without waiting for
  * the socket timeout.
  *
- * Note: when recvfrom is called on this socket, the MSG_DONTWAIT flag will be
- * passed.  This may be sufficient to ensure non-blocking behavior.
+ * Note: when recvfrom is called on this socket and non-blocking behavior is
+ * desired, the MSG_DONTWAIT flag will be passed.  This may be sufficient to
+ * ensure non-blocking behavior.
  */
 int mdns_socket_loopback(uint16_t port, int listen);
 

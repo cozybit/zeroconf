@@ -101,6 +101,7 @@
 #define MDNS_NOIMPL		4	/* unimplemented feature */
 #define MDNS_NOMEM		5	/* insufficient memory */
 #define MDNS_INUSE		6	/* requested resource is in use */
+#define MDNS_NORESP		7	/* no response */
 
 /* service descriptor
  *
@@ -353,6 +354,9 @@ typedef int (* mdns_query_cb)(void *data,
  * MDNS_INUSE: The specified service type is already being monitored by another
  * callback, and multiple callbacks per service are not supported.
  *
+ * MDNS_NORESP: No response from the querier.  Perhaps it was not launched or
+ * it has crashed.
+ *
  * Note: multiple calls to mdns_query_service_start are allowed.  This enables
  * the caller to query for more than just one service type.
  */
@@ -360,7 +364,8 @@ int mdns_query_monitor(char *fqst, mdns_query_cb cb, void *data);
 
 /* mdns_query_unmonitor: stop monitoring a particular service
  *
- * fqst: The service type to stop monitoring.
+ * fqst: The service type to stop monitoring, or NULL to unmonitor all
+ * services.
  *
  * Note: Suppose a service has just been discovered and is being processed
  * while the call to mdns_query_monitor is underway.  A callback may be

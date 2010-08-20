@@ -27,6 +27,8 @@ enum mdns_event_t {
 /* internal control message types. */
 enum mdns_commands_t {
 	MDNS_CTRL_HALT = 0,
+	MDNS_CTRL_MONITOR,
+	MDNS_CTRL_UNMONITOR,
 };
 
 /* Return values from mdns_prepare_response */
@@ -74,6 +76,7 @@ char *dname_put_label(char *dst, char *label);
 int dname_size(char *dname);
 int dname_increment(char *name);
 int dname_cmp(char *p1, char *n1, char *p2, char *n2);
+int dnameify(char *name, char sep, char *dest);
 void dname_tests(void);
 
 #ifdef MDNS_TESTS

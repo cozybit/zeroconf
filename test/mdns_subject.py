@@ -33,8 +33,7 @@ class mdns_subject:
 		self.conf = conf
 		self.stop()
 
-	def start(self, args=""):
-		command = self.mdnspath + " " + args + " -l " + self.mdnslog + " launch"
+	def do_command(self, command):
 		# TODO: Okay.  Here's a mystery.  If the command is 69 chars long,
 		# pxssh chokes on whatever it sees over ssh and all subsequent tests
 		# fail.  Amazing!  If it's longer, or shorter, everything works fine.
@@ -60,6 +59,18 @@ class mdns_subject:
 		if ret != 0:
 			return ret
 		return 0
+
+	def start(self, args=""):
+		command = self.mdnspath + " " + args + " -l " + self.mdnslog + " launch"
+		return self.do_command(command)
+
+	def monitor(self, fqst=""):
+		command = self.mdnspath + " monitor " + fqst
+		return self.do_command(command)
+
+	def unmonitor(self, fqst=""):
+		command = self.mdnspath + " unmonitor " + fqst
+		return self.do_command(command)
 
 	def ready(self, timeout=None):
 		# After we start mdns, there's still a period of time before it

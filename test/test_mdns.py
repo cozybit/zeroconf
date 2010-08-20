@@ -762,3 +762,11 @@ class mdnsTest(unittest.TestCase):
 	def test_StartStopNullHostAndIP(self):
 		ret = uut.start_and_wait("")
 		self.failIf(ret != 0, "Failed to launch mdns without hostname and ip")
+
+	def test_MonitorUnmonitor(self):
+		ret = uut.start("")
+		self.failIf(ret != 0, "Failed to launch mdns")
+		ret = uut.monitor("_http._tcp.local")
+		self.failIf(ret != 0, "Failed to monitor http: %d" % (ret))
+		ret = uut.unmonitor("_http._tcp.local")
+		self.failIf(ret != 0, "Failed to unmonitor http: %d" % (ret))

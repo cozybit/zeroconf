@@ -814,7 +814,6 @@ static void ipaddr_to_inaddrarpa(uint32_t ipaddr, char *out)
 static int validate_service(struct mdns_service *s)
 {
 	int maxlen;
-	char *src, *dest;
 
 	if (!valid_label(s->servname)) {
 		LOG("Invalid service name: %s\n", s->servname);
@@ -846,44 +845,10 @@ static int validate_service(struct mdns_service *s)
 	 * leading length.
 	 */
 	if (s->keyvals != NULL) {
-
-		/* now change all of the colons to lengths starting from the last
-		 * char
-		 */
-		dest = s->keyvals + strlen(s->keyvals);
-		src = dest - 1;
-		s->kvlen = 0;
-		maxlen = 0;
-
-		while (1) {
-			if (*src == ':' && maxlen == 0)
-				return MDNS_BADSRV;
-
-			if (dest == s->keyvals || *src == ':' ) {
-				/* This is the beginning of a key/val.  Update its length and
-				 * start looking at the next one.
-				 */
-				if (maxlen > MDNS_MAX_KEYVAL_LEN) {
-					LOG("key/value exceeds MDNS_MAX_KEYVAL_LEN\n");
-					return MDNS_BADSRV;
-				}
-				*dest = maxlen;
-
-				if (UINT16_MAX - s->kvlen < maxlen)
-					return MDNS_TOOBIG;
-
-				s->kvlen += maxlen + 1;
-				maxlen = 0;
-
-				if (dest == s->keyvals)
-					break;
-				dest--;
-				src--;
-				continue;
-			}
-			/* move the char down */
-			*dest-- = *src--;
-			maxlen++;
+		s->kvlen = dnameify(s->keyvals, ':', NULL);
+		if (s->kvlen > MDNS_MAX_KEYVAL_LEN) {
+			LOG("key/value exceeds MDNS_MAX_KEYVAL_LEN\n");
+			return MDNS_TOOBIG;
 		}
 	}
 

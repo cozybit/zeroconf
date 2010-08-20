@@ -162,6 +162,60 @@ int dname_increment(char *name)
 	return 0;
 }
 
+/* convert the ascii name from a list of labels separated by "sep".  Return the
+ * length of the modified name, or -1 if there was an error.  name is not
+ * allowed to begin with a separator.  dnames can't conceivable be bigger than
+ * UINT16_MAX, if they are, this is an error.  If dest is NULL, the operation
+ * is done in-place, otherwise the result is written to dest.
+ */
+int dnameify(char *name, char sep, char *dest)
+{
+	char *src;
+	int len, labellen;
+
+	/* now change all of the colons to lengths starting from the last
+	 * char
+	 */
+	len = strlen(name);
+	if (dest == NULL) {
+		dest = name + len;
+		src = dest - 1;
+	} else {
+		dest += len;
+		src = name + len - 1;
+	}
+	len = 0;
+	labellen = 0;
+
+	while (1) {
+		if (*src == sep && labellen == 0)
+			return -1;
+
+		if (dest == name || *src == sep ) {
+			/* This is the beginning of a label.  Update its length and start
+			 * looking at the next one.
+			 */
+			*dest = labellen;
+
+			if (UINT16_MAX - len < labellen)
+				return -1;
+
+			len += labellen + 1;
+			labellen = 0;
+
+			if (dest == name)
+				break;
+			dest--;
+			src--;
+			continue;
+		}
+		/* move the char down */
+		*dest-- = *src--;
+		labellen++;
+	}
+	return len;
+}
+
 #ifdef MDNS_TESTS
 static int c_to_dname(char *dst, char *src)
 {
