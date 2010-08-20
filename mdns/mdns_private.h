@@ -104,6 +104,10 @@ int responder_launch(uint32_t ipaddr, char *domain, char *hostname,
 void responder_halt(void);
 void responder_tests(void);
 
+/* internal API functions for querier */
+int query_launch(void);
+void query_halt(void);
+
 /* internal common functions used by responder and querier */
 /* return the amount of tail room in the message m */
 #define TAILROOM(m) ((m)->end - (m)->cur + 1)

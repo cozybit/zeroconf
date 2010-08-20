@@ -47,12 +47,19 @@ static void linux_mdns_signal(int sig)
  */
 void *mdns_thread_create(mdns_thread_entry entry, void *data)
 {
+	static int instance = 0;
+	char mylogfile[50];
+	char mypidfile[25];
 	int ret, lock;
 	/* str needs to hold a string representing the max pid in decimal */
 	char str[sizeof(pid_t)*3 + 1];
 
+	instance++;
+	snprintf(mypidfile, 25, "%s-%d",MDNS_PIDFILE,instance);
+	snprintf(mylogfile, 50, "%s-%d",logfile,instance);
+
 	/* check the lock file */
-	lock = open(MDNS_PIDFILE, O_RDWR|O_CREAT, 0640);
+	lock = open(mypidfile, O_RDWR|O_CREAT, 0640);
 	if (lock < 0) {
 		perror("failed to open lock file");
 		return NULL;
@@ -84,10 +91,11 @@ void *mdns_thread_create(mdns_thread_entry entry, void *data)
 
 		/* redirect stdin, out, and err */
 		freopen("/dev/null", "r", stdin);
-		if (logfile != NULL)
-			freopen(logfile, "w", stdout);
-		else
+		if (logfile != NULL) {
+			freopen(mylogfile, "w", stdout);
+		} else {
 			freopen("/dev/null", "w", stdout);
+		}
 		umask(027);
 		ret = lockf(lock, F_TLOCK, 0);
 		if (0 > ret) {

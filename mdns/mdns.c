@@ -423,6 +423,11 @@ int mdns_launch(uint32_t ipaddr, char *domain, char *hostname,
 		if (ret != 0)
 			return ret;
 	}
+
+	ret = query_launch();
+	if (ret != 0)
+		return ret;
+
 	return 0;
 }
 
@@ -430,6 +435,7 @@ void mdns_halt(void)
 {
 	LOG("Halting mdns.\n");
 	responder_halt();
+	query_halt();
 }
 
 #ifdef MDNS_TESTS
