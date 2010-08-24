@@ -154,4 +154,31 @@ uint32_t interval(uint32_t start, uint32_t stop);
 void recalc_timeout(struct timeval *t, uint32_t start, uint32_t stop,
 					uint32_t target);
 
+/* list helper structs and functions */
+struct mdns_list_item {
+	struct mdns_list_item *next;
+	struct mdns_list_item *prev;
+	void *data;
+};
+
+/* note: for these macros to work, the embedded mdns_list_item struct must be
+ * called list_item.
+ */
+struct mdns_list {
+	struct mdns_list_item *head;
+	struct mdns_list_item *tail;
+};
+
+#define LIST_INIT(l) do { \
+	(l)->head = NULL;	  \
+	(l)->tail = NULL;	  \
+	} while (0)
+
+void mdns_list_push(struct mdns_list *list, struct mdns_list_item *item);
+struct mdns_list_item *mdns_list_pop(struct mdns_list *list);
+int mdns_list_empty(struct mdns_list *list);
+struct mdns_list_item *mdns_list_next(struct mdns_list *list,
+									  struct mdns_list_item *item);
+void mdns_list_remove(struct mdns_list *list, struct mdns_list_item *item);
+void list_tests(void);
 #endif /* __MDNS_PRIVATE_H__ */

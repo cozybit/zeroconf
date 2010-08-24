@@ -443,6 +443,7 @@ void mdns_tests(void)
 {
 	dname_tests();
 	responder_tests();
+	list_tests();
 }
 #else
 void mdns_tests(void)

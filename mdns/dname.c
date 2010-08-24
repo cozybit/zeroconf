@@ -170,7 +170,7 @@ int dname_increment(char *name)
  */
 int dnameify(char *name, char sep, char *dest)
 {
-	char *src;
+	char *src, *start;
 	int len, labellen;
 
 	/* now change all of the colons to lengths starting from the last
@@ -178,9 +178,11 @@ int dnameify(char *name, char sep, char *dest)
 	 */
 	len = strlen(name);
 	if (dest == NULL) {
+		start = name;
 		dest = name + len;
 		src = dest - 1;
 	} else {
+		start = dest;
 		dest += len;
 		src = name + len - 1;
 	}
@@ -191,7 +193,7 @@ int dnameify(char *name, char sep, char *dest)
 		if (*src == sep && labellen == 0)
 			return -1;
 
-		if (dest == name || *src == sep ) {
+		if (dest == start || *src == sep ) {
 			/* This is the beginning of a label.  Update its length and start
 			 * looking at the next one.
 			 */
@@ -203,7 +205,7 @@ int dnameify(char *name, char sep, char *dest)
 			len += labellen + 1;
 			labellen = 0;
 
-			if (dest == name)
+			if (dest == start)
 				break;
 			dest--;
 			src--;

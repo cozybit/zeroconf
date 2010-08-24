@@ -766,7 +766,43 @@ class mdnsTest(unittest.TestCase):
 	def test_MonitorUnmonitor(self):
 		ret = uut.start("")
 		self.failIf(ret != 0, "Failed to launch mdns")
+		# start with the simple case
 		ret = uut.monitor("_http._tcp.local")
 		self.failIf(ret != 0, "Failed to monitor http: %d" % (ret))
 		ret = uut.unmonitor("_http._tcp.local")
 		self.failIf(ret != 0, "Failed to unmonitor http: %d" % (ret))
+
+		# call monitor twice
+		ret = uut.monitor("_http._tcp.local")
+		self.failIf(ret != 0, "Failed to monitor http: %d" % (ret))
+		ret = uut.monitor("_http._tcp.local")
+		self.failIf(ret != 6, "Monitored http twice!")
+		ret = uut.unmonitor("_http._tcp.local")
+
+		# max monitor calls, then unmonitor all
+		ret = uut.monitor("_http._tcp.local")
+		self.failIf(ret != 0, "Failed to monitor http: %d" % (ret))
+		ret = uut.monitor("_lpr._tcp.local")
+		self.failIf(ret != 0, "Failed to monitor lpr: %d" % (ret))
+		ret = uut.monitor("_foobar._tcp.local")
+		self.failIf(ret != 0, "Failed to monitor foobar: %d" % (ret))
+		ret = uut.monitor("_xyz._udp.local")
+		self.failIf(ret != 0, "Failed to monitor xyz: %d" % (ret))
+		ret = uut.monitor("_baz._tcp.local")
+		self.failIf(ret != 5, "Monitored too many services!")
+		ret = uut.unmonitor("")
+		self.failIf(ret != 0, "Failed to unmonitor services")
+
+		# now do a bunch of mon/unmon just for exercise
+		ret = uut.unmonitor("_http._tcp.local")
+		self.failIf(ret != 0, "Failed to unmonitor service")
+		ret = uut.monitor("_lpr._tcp.local")
+		self.failIf(ret != 0, "Failed to monitor lpr: %d" % (ret))
+		ret = uut.monitor("_foobar._tcp.local")
+		self.failIf(ret != 0, "Failed to monitor foobar: %d" % (ret))
+		ret = uut.unmonitor("_lpr._tcp.local")
+		self.failIf(ret != 0, "Failed to unmonitor lpr: %d" % (ret))
+		ret = uut.monitor("_lpr._tcp.local")
+		self.failIf(ret != 0, "failed to monitor lpr")
+		ret = uut.unmonitor("_foobar._tcp.local")
+		self.failIf(ret != 0, "Failed to unmonitor foobar: %d" % (ret))
