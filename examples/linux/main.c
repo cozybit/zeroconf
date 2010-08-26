@@ -308,9 +308,46 @@ static int parse_service(struct mdns_service *service, char *str)
 	return 0;
 }
 
+/* All this callback does is dump results to a file in tmp */
+static char filename[MDNS_MAX_NAME_LEN + sizeof("/tmp/.results")];
 static int linux_query_cb(void *data, const struct mdns_service *s, int status)
 {
-	printf("Got callback!\n");
+	FILE *f;
+
+	LOG("Got callback for %s\n", s->servname);
+	if (data == NULL) {
+		snprintf(filename, sizeof(filename), "/tmp/%s.%s.results",
+				 s->servtype, s->proto == MDNS_PROTO_TCP ? "tcp" : "udp");
+	} else {
+		/* Eventually a non-NULL pointer will mean something. */
+		return MDNS_SUCCESS;
+	}
+
+	f = fopen(filename, "w+");
+	if (f == NULL) {
+		LOG("Failed to open output file in linux handler\n");
+		return MDNS_SUCCESS;
+	}
+
+	if (status == MDNS_DISCOVERED || status == MDNS_CACHE_FULL)
+		fprintf(f, "DISCOVERED: ");
+	else if (status == MDNS_DISAPPEARED)
+		fprintf(f, "DISAPPEARED: ");
+	else if (status == MDNS_UPDATED)
+		fprintf(f, "UPDATED: ");
+	else {
+		fprintf(f, "Warning: unknown status %d\n", status);
+		goto done;
+	}
+	fprintf(f, "%s._%s._%s at %d.%d.%d.%d:%d (%s)\n",
+			s->servname, s->servtype,
+			s->proto == MDNS_PROTO_UDP ? "udp" : "tcp",
+			(s->ipaddr >> 24) & 0xff, (s->ipaddr >> 16) & 0xff,
+			(s->ipaddr >> 8) & 0xff, s->ipaddr & 0xff, htons(s->port),
+			s->keyvals ? s->keyvals : "no key vals");
+
+done:
+	fclose(f);
 	return MDNS_SUCCESS;
 }
 
@@ -358,6 +395,7 @@ int main(int argc, char **argv)
 	char *domain = NULL;
 	char *hostname = NULL;
 	int num_services = 0, i;
+	char *outfile, *fqst;
 
 	memset(services, 0, sizeof(services));
 
@@ -420,11 +458,17 @@ int main(int argc, char **argv)
 		return 0;
 
 	} else if (strcmp(cmd, "monitor") == 0) {
-		if (optind == argc - 1) {
+		fqst = NULL;
+		optind++;
+		if (optind == argc) {
 			printf("monitor requires a fully qualified service type arg.\n");
 			return -1;
 		}
-		return mdns_query_monitor(argv[optind + 1], linux_query_cb, NULL);
+		fqst = argv[optind++];
+		outfile = NULL;
+		if (optind < argc)
+			outfile = argv[optind];
+		return mdns_query_monitor(fqst, linux_query_cb, NULL);
 
 	} else if (strcmp(cmd, "unmonitor") == 0) {
 		if (optind == argc - 1)

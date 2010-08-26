@@ -806,3 +806,16 @@ class mdnsTest(unittest.TestCase):
 		self.failIf(ret != 0, "failed to monitor lpr")
 		ret = uut.unmonitor("_foobar._tcp.local")
 		self.failIf(ret != 0, "Failed to unmonitor foobar: %d" % (ret))
+
+	def test_DiscoverServiceAnnouncement(self):
+		ret = uut.start("")
+		self.failIf(ret != 0, "Failed to launch mdns")
+		ret = uut.monitor("_foo._tcp.local foo.results")
+		self.failIf(ret != 0, "Failed to monitor foo service")
+		s = mdns_tool.service("My Foo Service", "local", "_foo._tcp", 100,
+							  "foobar", ipaddr="5.5.5.5")
+		s.publish()
+		time.sleep(2)
+		results = uut.get_results()
+		expected = "DISCOVERED: My Foo Service._foo._tcp at 5.5.5.5:100 (no key vals)"
+		self.failIf(expected not in results, "Failed to find result")

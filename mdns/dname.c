@@ -55,28 +55,43 @@ int dname_size(char *dname)
 }
 
 /* compare l1 to l2.  return <0, 0, >0 like strcmp */
-static int label_cmp(char *l1, char *l2)
+int dname_label_cmp(char *p1, char *l1, char *p2, char *l2)
 {
 	int i, min;
-	char *p1, *p2;
+	char *c1, *c2;
+
+	while (IS_POINTER(*l1))
+		l1 = p1 + POINTER(l1);
+
+	while (IS_POINTER(*l2))
+		l2 = p2 + POINTER(l2);
 
 	min = *l1 > *l2 ? *l2 : *l1;
-	p1 = l1 + 1;
-	p2 = l2 + 1;
+	c1 = l1 + 1;
+	c2 = l2 + 1;
 
 	for (i = 0; i < min; i++) {
-		if (*p1 > *p2)
+		if (*c1 > *c2)
 			return 1;
-		if (*p2 > *p1)
+		if (*c2 > *c1)
 			return -1;
-		p1++;
-		p2++;
+		c1++;
+		c2++;
 	}
 	if (*l1 > *l2)
 		return 1;
 	if (*l2 > *l1)
 		return -1;
 	return 0;
+}
+
+/* return a pointer to the next label in name or NULL if this is the end */
+char *dname_label_next(char *p, char *n)
+{
+	while (IS_POINTER(*n))
+		n = p + POINTER(n);
+
+	return *n == 0 ? NULL : n;
 }
 
 /* compare the dname name n1 from the raw packet p1 to the dname n2 from the
@@ -102,7 +117,7 @@ int dname_cmp(char *p1, char *n1, char *p2, char *n2)
 
 		if (*n1 != 0 && *n2 != 0) {
 			/* both n1 and n2 are pointing to labels by now */
-			ret = label_cmp(n1, n2);
+			ret = dname_label_cmp(p1, n1, p2, n2);
 			if (ret != 0)
 				return ret;
 		}
@@ -216,6 +231,52 @@ int dnameify(char *name, char sep, char *dest)
 		labellen++;
 	}
 	return len;
+}
+
+int dname_copy(char *dst, char *p, char *src)
+{
+	int len = 0;
+
+	while (*src != 0) {
+		/* advance to the next valid data */
+		while (IS_POINTER(*src))
+			src = p + POINTER(src);
+		len += *src + 1;
+		if (len >= MDNS_MAX_NAME_LEN)
+			return -1;
+		memcpy(dst, src, *src + 1);
+		dst += *src + 1;
+		src += *src + 1;
+	}
+	*dst = 0;
+	return 0;
+}
+
+/* convert the label pointed to by src (which may contain pointers within p) to
+ * a c string and write the result to dst.  If keepuscores is 1, leading
+ * underscores will be preserved.  Otherwise, leading underscore will not be
+ * copied to dst.  Return a pointer to the next label that needs parsing.
+ */
+char *dname_label_to_c(char *dst, char *p, char *src, int keepuscores)
+{
+	int len = 0, i;
+
+	while (IS_POINTER(*src))
+		src = p + POINTER(src);
+
+	len = *src++;
+	if (len >= MDNS_MAX_LABEL_LEN)
+		return NULL;
+
+	for (i = 0; i < len; i++) {
+		if (keepuscores == 0 && *src == '_') {
+			src++;
+			continue;
+		}
+		*dst++ = *src++;
+	}
+	*dst = 0;
+	return src;
 }
 
 #ifdef MDNS_TESTS

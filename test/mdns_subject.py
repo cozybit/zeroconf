@@ -72,6 +72,13 @@ class mdns_subject:
 		command = self.mdnspath + " unmonitor " + fqst
 		return self.do_command(command)
 
+	def get_results(self):
+		# results (if any) are in a tmp file of the form
+		# /tmp/servtype.proto.results.
+		self.session.sendline("cat /tmp/*.results")
+		self.session.prompt()
+		return self.session.before.replace("\r", "").split("\n")[1:-1]
+
 	def ready(self, timeout=None):
 		# After we start mdns, there's still a period of time before it
 		# successfully claims its name.  Generally, this is less than 2
@@ -89,4 +96,6 @@ class mdns_subject:
 	def stop(self, args=""):
 		command = self.mdnspath + " halt"
 		self.session.sendline(command)
+		self.session.prompt()
+		self.session.sendline("rm -f /tmp/*.results")
 		self.session.prompt()

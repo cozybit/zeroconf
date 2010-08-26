@@ -130,7 +130,13 @@
  * products.  Consider registering any new service types at the aforementioned
  * webpage.  servtype must be non-NULL.
  *
- * port: the tcp or udp port on which the service named servname is available.
+ * domain: string that represents the domain.  This field is ignored by the
+ * responder (i.e., in those mdns_services passed to mdns_launch).  In this
+ * case, the domain passed to mdns_launch is used.  However, the domain is
+ * valid for mdns_services that are passed to query callbacks.
+ *
+ * port: the tcp or udp port on which the service named servname is available
+ * in network byte order.
  *
  * proto: Either MDNS_PROTO_TCP or MDNS_PROTO_UDP depending on what protocol
  * clients should use to connect to the service servtype.
@@ -168,6 +174,7 @@ struct mdns_service
 {
     char *servname;
     char *servtype;
+	char *domain;
     uint16_t port;
     int proto;
     char *keyvals;

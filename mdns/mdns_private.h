@@ -77,6 +77,10 @@ int dname_size(char *dname);
 int dname_increment(char *name);
 int dname_cmp(char *p1, char *n1, char *p2, char *n2);
 int dnameify(char *name, char sep, char *dest);
+int dname_copy(char *dst, char *p, char *src);
+char *dname_label_to_c(char *dst, char *p, char *src, int keepuscores);
+int dname_label_cmp(char *p1, char *l1, char *p2, char *l2);
+char *dname_label_next(char *p, char *n);
 void dname_tests(void);
 
 #ifdef MDNS_TESTS
@@ -100,6 +104,10 @@ void dname_tests(void);
 
 /* internal flags for service data */
 #define SERVICE_CHECKED_FLAG	1
+#define SERVICE_HAS_A_FLAG		2
+#define SERVICE_HAS_SRV_FLAG	4
+#define SERVICE_IS_DIRTY_FLAG	8
+#define SERVICE_IS_READY (SERVICE_HAS_A_FLAG|SERVICE_HAS_SRV_FLAG)
 
 /* internal API functions for responder */
 int responder_launch(uint32_t ipaddr, char *domain, char *hostname,
