@@ -66,10 +66,21 @@ void debug_print_name(struct mdns_message *m, char *name);
 #endif
 
 /* helpers for accessing elements */
-#define get_uint16(p) (ntohs(*((uint16_t *)(p))))
-#define get_uint32(p) (ntohl(*((uint32_t *)(p))))
-#define set_uint16(p, v) (*((uint16_t*)(p)) = htons((v)))
-#define set_uint32(p, v) (*((uint32_t*)(p)) = htonl((v)))
+#define get_uint16(p) ((*(uint8_t *)(p) << 8) | *((uint8_t *)(p) + 1))
+#define get_uint32(p) ((*(uint8_t *)(p) << 24) | \
+					   (*((uint8_t *)(p) + 1) << 16) | \
+					   (*((uint8_t *)(p) + 2) << 8) |  \
+					   (*((uint8_t *)(p) + 3)))
+#define set_uint16(p, v) do { \
+	*(uint8_t *)(p) = ((v) >> 8) & 0xff;	 \
+	*((uint8_t *)(p) + 1) = (v) & 0xff;		 \
+	} while (0)
+#define set_uint32(p, v)  do { \
+	*(uint8_t *)(p) = ((v) >> 24) & 0xff;	 \
+	*((uint8_t *)(p) + 1) = ((v) >> 16) & 0xff;		\
+	*((uint8_t *)(p) + 2) = ((v) >> 8) & 0xff;		\
+	*((uint8_t *)(p) + 3) = (v) & 0xff;				\
+	} while (0)
 
 /* helpers for handling dns names */
 char *dname_put_label(char *dst, char *label);
