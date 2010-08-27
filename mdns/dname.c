@@ -40,13 +40,13 @@ int dname_size(char *dname)
 {
 	char *start = dname;
 	while (*dname != 0x00) {
-		if (*dname  > MDNS_MAX_LABEL_LEN)
-			return -1;
-
 		if (IS_POINTER(*dname)) { /* pointer */
 			dname++;
 			break;
 		}
+
+		if (*dname > MDNS_MAX_LABEL_LEN)
+			return -1;
 
 		/* we've found a valid label length */
 		dname += *dname + 1;
@@ -243,8 +243,10 @@ int dname_copy(char *dst, char *p, char *src)
 		while (IS_POINTER(*src))
 			src = p + POINTER(src);
 		len += *src + 1;
-		if (len >= MDNS_MAX_NAME_LEN)
+		if (len >= MDNS_MAX_NAME_LEN) {
+			*dst = 0;
 			return -1;
+		}
 		memcpy(dst, src, *src + 1);
 		dst += *src + 1;
 		src += *src + 1;
@@ -278,6 +280,40 @@ char *dname_label_to_c(char *dst, char *p, char *src, int keepuscores)
 	}
 	*dst = 0;
 	return src;
+}
+
+/* copy the data portion of a txt record pointed to by "txt" with length tlen
+ * to dst with dlen and null terminate it.  Add a : between each string of the
+ * txt record.  copy at most dlen bytes, including the trailing null.
+ */
+void txt_to_c_ncpy(char *dst, int dlen, char *txt, int tlen)
+{
+	int remaining = dlen - 1;
+
+	while (1) {
+		/* any more txt to copy? */
+		if (*txt == 0 || tlen == 0) {
+			*dst = 0;
+			break;
+		}
+
+		/* if the next kv pair won't fit, skip it */
+		if (*txt > remaining) {
+			txt += *txt + 1;
+			continue;
+		}
+
+		memcpy(dst, txt + 1, *txt);
+		remaining -= *txt;
+		tlen -= (*txt + 1);
+		dst += *txt;
+		txt += *txt + 1;
+		if (remaining == 0 || remaining == 1 || tlen == 0) {
+			*dst = 0;
+			break;
+		}
+		*dst++ = ':';
+	}
 }
 
 #ifdef MDNS_TESTS
@@ -423,10 +459,29 @@ static void increment_name_tests(void)
 	FAIL_UNLESS(ret == -1, "Should have failed to over-increment.");
 }
 
+void txt_to_c_ncpy_tests(void)
+{
+	char txt0[] = {1, 0};
+	char txt1[] = {5, 'k', '1', '=', 'v', '1'};
+	char txt2[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'v', '2',
+				   5, 'k', '3', '=', 'v', '3',};
+	char result[MDNS_MAX_NAME_LEN + 1];
+	test_title("txt_to_c_ncpy");
+	txt_to_c_ncpy(result, sizeof(result), txt0, sizeof(txt0));
+	FAIL_UNLESS(strcmp(result, "") == 0, "Failed to copy empty TXT record");
+	txt_to_c_ncpy(result, sizeof(result), txt1, sizeof(txt1));
+	FAIL_UNLESS(strcmp(result, "k1=v1") == 0,
+				"Failed to copy simple TXT record");
+	txt_to_c_ncpy(result, sizeof(result), txt2, sizeof(txt2));
+	FAIL_UNLESS(strcmp(result, "k1=v1:k2=v2:k3=v3") == 0,
+				"Failed to copy multiple kvs");
+}
+
 void dname_tests(void)
 {
 	dname_size_tests();
 	dname_cmp_tests();
 	increment_name_tests();
+	txt_to_c_ncpy_tests();
 }
 #endif

@@ -92,6 +92,7 @@ int dname_copy(char *dst, char *p, char *src);
 char *dname_label_to_c(char *dst, char *p, char *src, int keepuscores);
 int dname_label_cmp(char *p1, char *l1, char *p2, char *l2);
 char *dname_label_next(char *p, char *n);
+void txt_to_c_ncpy(char *dst, int dlen, char *txt, int tlen);
 void dname_tests(void);
 
 #ifdef MDNS_TESTS
