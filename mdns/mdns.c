@@ -216,6 +216,58 @@ int mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
 	return 0;
 }
 
+/* This is just like mdns_add_answer, but instead of specifying a name, the
+ * caller specifies a leading label (which is a C string) and an offset to the
+ * suffix.  This allows us to use a bit of compression when we have lots of
+ * records with the same label (and we know the offset to that label!)
+ */
+int mdns_add_answer_lo(struct mdns_message *m, char *label, uint16_t offset,
+					   uint16_t type, uint16_t class, uint32_t ttl)
+{
+	uint16_t len = (uint16_t)strlen(label);
+	/* the size includes 1 byte for the label len and 2 for the offset */
+	int size = len + 2*sizeof(uint16_t) + sizeof(uint32_t) + 3;
+	CHECK_TAILROOM(m, size);
+	*m->cur++ = len;
+	memcpy(m->cur, label, len);
+	m->cur += len;
+	set_uint16(m->cur, 0xC000|offset);
+	m->cur += sizeof(uint16_t);
+	set_uint16(m->cur, type);
+	m->cur += sizeof(uint16_t);
+	set_uint16(m->cur, class);
+	m->cur += sizeof(uint16_t);
+	set_uint32(m->cur, ttl);
+	m->cur += sizeof(uint32_t);
+
+	m->header->ancount = htons(htons(m->header->ancount) + 1);
+	m->num_answers += 1;
+	return 0;
+}
+
+/* Like mdns_add_answer_lo, but instead of specifying a name, the caller
+ * specifies just an offset.
+ */
+int mdns_add_answer_o(struct mdns_message *m, uint16_t offset, uint16_t type,
+					  uint16_t class, uint32_t ttl)
+{
+	/* len includes a 2-byte offset */
+	uint16_t size = 3*sizeof(uint16_t) + sizeof(uint32_t);
+	CHECK_TAILROOM(m, size);
+	set_uint16(m->cur, 0xC000|offset);
+	m->cur += sizeof(uint16_t);
+	set_uint16(m->cur, type);
+	m->cur += sizeof(uint16_t);
+	set_uint16(m->cur, class);
+	m->cur += sizeof(uint16_t);
+	set_uint32(m->cur, ttl);
+	m->cur += sizeof(uint32_t);
+
+	m->header->ancount = htons(htons(m->header->ancount) + 1);
+	m->num_answers += 1;
+	return 0;
+}
+
 /* add a proposed answer for name to the authority section of the message m.
  * Return 0 for success, -1 for failure.  Note that this function does not add
  * the resource record data.  It just populates the common header.
@@ -254,6 +306,23 @@ int mdns_add_name(struct mdns_message *m, char *name)
 	m->cur += sizeof(uint16_t);
 	memcpy(m->cur, name, len);
 	m->cur += len;
+	return 0;
+}
+
+/* like add name, but instead of taking a dname, it takes a leading label
+ * (which is a C-string) and an offset to the suffix.
+ */
+int mdns_add_name_lo(struct mdns_message *m, char *label, uint16_t offset)
+{
+	int len = strlen(label);
+	CHECK_TAILROOM(m, len + 1 + 2*sizeof(uint16_t));
+	set_uint16(m->cur, len + 1 + sizeof(uint16_t));
+	m->cur += sizeof(uint16_t);
+	*m->cur++ = len;
+	memcpy(m->cur, label, len);
+	m->cur += len;
+	set_uint16(m->cur, 0xC000|offset);
+	m->cur += sizeof(uint16_t);
 	return 0;
 }
 

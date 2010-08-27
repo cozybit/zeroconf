@@ -150,10 +150,15 @@ int mdns_add_question(struct mdns_message *m, char *qname, uint16_t qtype,
 					  uint16_t qclass);
 int mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
 					uint16_t class, uint32_t ttl);
+int mdns_add_answer_o(struct mdns_message *m, uint16_t offset, uint16_t type,
+					  uint16_t class, uint32_t ttl);
+int mdns_add_answer_lo(struct mdns_message *m, char *label, uint16_t offset,
+					   uint16_t type, uint16_t class, uint32_t ttl);
 int mdns_add_authority(struct mdns_message *m, char *name, uint16_t type,
 					   uint16_t class, uint32_t ttl);
 int mdns_add_uint32(struct mdns_message *m, uint32_t i);
 int mdns_add_name(struct mdns_message *m, char *name);
+int mdns_add_name_lo(struct mdns_message *m, char *label, uint16_t offset);
 int mdns_query_init(struct mdns_message *m);
 int mdns_parse_message(struct mdns_message *m, int mlen);
 int mdns_response_init(struct mdns_message *m);
