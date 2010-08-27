@@ -16,8 +16,8 @@ static int parse_resource(struct mdns_message *m, struct mdns_resource *r)
 
 	r->name = m->cur;
 	len = dname_size(m->cur);
-	if (len == -1) {
-		DBG("Warning: invalid label in resource\n");
+	if (len == 0 || len == -1 || len > MDNS_MAX_NAME_LEN) {
+		DBG("Warning: invalid name in resource\n");
 		return -1;
 	}
 	CHECK_TAILROOM(m, len);
@@ -72,7 +72,7 @@ int mdns_parse_message(struct mdns_message *m, int mlen)
 		/* get qname */
 		m->questions[i].qname = m->cur;
 		len = dname_size(m->cur);
-		if (len == 0) {
+		if (len == 0 || len == -1 || len > MDNS_MAX_NAME_LEN) {
 			DBG("Warning: invalid name in question %d\n", i);
 			return -1;
 		}
@@ -83,19 +83,15 @@ int mdns_parse_message(struct mdns_message *m, int mlen)
 		CHECK_TAILROOM(m, 2*sizeof(uint16_t));
 		t = get_uint16(m->cur);
 		m->cur += sizeof(uint16_t);
-		if (t > T_ANY) {
-			DBG("Warning: invalid type in question: %u\n", t);
-			return -1;
-		}
+		if (t > T_ANY)
+			DBG("Warning: unexpected type in question: %u\n", t);
 		m->questions[i].qtype = t;
 
 		/* get qclass */
 		t = get_uint16(m->cur);
 		m->cur += sizeof(uint16_t);
-		if (t != C_FLUSH && t != C_IN) {
-			DBG("Warning: invalid class in question: %u\n", t);
-			return -1;
-		}
+		if (t != C_FLUSH && t != C_IN)
+			DBG("Warning: unexpected class in question: %u\n", t);
 		m->questions[i].qclass = t;
 	}
 
