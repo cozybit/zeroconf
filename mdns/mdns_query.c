@@ -26,6 +26,13 @@ struct service_instance {
 	char domain[MDNS_MAX_LABEL_LEN + 1];
 	char keyvals[MDNS_MAX_KEYVAL_LEN + 1];
 	char fqdn[MDNS_MAX_NAME_LEN + 1];
+	/* we keep ttls for each record.  Note that these ttls are in milliseconds,
+	 * not seconds.  If a received ttl is too big, we simply make it as big as
+	 * possible.
+	 */
+	uint32_t ptr_ttl;
+	uint32_t srv_ttl;
+	uint32_t txt_ttl;
 };
 
 static struct mdns_list sinsts_free;
@@ -36,8 +43,27 @@ struct service_monitor {
 	struct mdns_list_item list_item;
 	struct mdns_list sinsts;
 	char fqst[MDNS_MAX_NAME_LEN + 1];
+	/* save memory by adding a dname pointer to the fqst and fqsn instead of
+	 * copying them over and over.  These offsets can be used while
+	 * constructing packets, but aren't expected to be relevant in any other
+	 * context.
+	 */
+	uint16_t fqst_offset;
+	uint16_t fqsn_offset;
 	mdns_query_cb cb;
 	void *cbdata;
+
+	/* this is the time in milliseconds between service refreshes.  It starts
+	 * at 1s and doubles after each refresh until it reaches 60s, where it
+	 * stays.
+	 */
+	uint32_t refresh_period;
+
+	/* this is the time until the next refresh in ms.  It gets updated every
+	 * time we wake up to do anything.  If it drops to 0, we refresh the
+	 * service.
+	 */
+	uint32_t next_refresh;
 };
 
 static struct mdns_list smons_active;
@@ -65,6 +91,9 @@ struct query_ctrl_msg {
 					  sizeof(union query_ctrl_data))
 
 static struct query_ctrl_msg ctrl_msg;
+
+#define UPDATE_TTL(ttl, elapsed) ((ttl) > (elapsed) ? (ttl) - (elapsed) : 0)
+#define CONVERT_TTL(ttl) ((ttl) > UINT32_MAX/1000 ? UINT32_MAX : (ttl) * 1000)
 
 /* Send a control message msg to the server listening at localhost:port.
  * Expect an int response code from the server.
@@ -178,7 +207,8 @@ static int add_service(struct service_monitor *smon)
 	/* preserve the data pointer, which points to self in our case */
 	cursor->data = found;
 	LIST_INIT(&found->sinsts);
-
+	found->refresh_period = 1000;
+	found->next_refresh = 0;
 	mdns_list_push(&smons_active, cursor);
 
 	return MDNS_SUCCESS;
@@ -239,9 +269,9 @@ void update_service_instance(struct service_instance *sinst,
 			srv = (struct rr_srv *)r->rdata;
 			if (s->port != srv->port ||
 				dname_cmp(m->data, srv->target, NULL, sinst->fqdn) != 0) {
-				/* TODO: check/set proto */
 				s->port = srv->port;
 				dname_copy(sinst->fqdn, m->data, srv->target);
+				sinst->srv_ttl = CONVERT_TTL(r->ttl);
 				sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
 				sinst->service.flags |= SERVICE_HAS_SRV_FLAG;
 			}
@@ -332,7 +362,7 @@ int copy_servinfo(struct mdns_service *s, struct mdns_message *m, char *fqsn)
 		LOG("Failed to parse protocol.\n");
 		return -1;
 	}
-	fqsn = dname_label_next(fqsn, m->data);
+	fqsn = dname_label_next(m->data, fqsn);
 	if (fqsn == NULL)
 		return -1;
 
@@ -353,6 +383,7 @@ static int update_service_cache(struct mdns_message *m)
 {
 	struct service_monitor *smon = NULL;
 	struct mdns_resource *ptr;
+	struct mdns_list_item *cursor;
 	struct service_instance *sinst = NULL;
 	int status, i, ret;
 
@@ -383,7 +414,8 @@ static int update_service_cache(struct mdns_message *m)
 		if (sinst == NULL) {
 			/* This is a new service instance. */
 			status = MDNS_DISCOVERED;
-			sinst = mdns_list_pop(&sinsts_free)->data;
+			cursor = mdns_list_pop(&sinsts_free);
+			sinst = cursor == NULL ? NULL : cursor->data;
 			if (sinst == NULL) {
 				/* no more space in cache.  Use the overflow instance. */
 				status = MDNS_CACHE_FULL;
@@ -391,7 +423,9 @@ static int update_service_cache(struct mdns_message *m)
 			}
 			reset_service_instance(sinst);
 			sinst->service.flags = SERVICE_IS_DIRTY_FLAG;
-			copy_servinfo(&sinst->service, m, ptr->rdata);
+			if (copy_servinfo(&sinst->service, m, ptr->rdata) == -1)
+				LOG("Warning: failed to copy service info\n");
+			sinst->ptr_ttl = CONVERT_TTL(ptr->ttl);
 		}
 		/* populate the service instance and update its state */
 		update_service_instance(sinst, m);
@@ -408,6 +442,134 @@ static int update_service_cache(struct mdns_message *m)
 	return 0;
 }
 
+/* calculate the size of the answer that contains the ptr record of a service
+ * instance.
+ */
+static int ptr_size(struct service_instance *sinst)
+{
+	/* our ptr contains an answer, an offset to the fqst, a service label, the
+	 * length of the service label, and another offset to the fqst, and the len
+	 * of the ptr data.
+	 */
+	uint16_t len = 2*sizeof(uint16_t) + sizeof(uint32_t); /* answer */
+	len += 2*sizeof(uint16_t); /* offsets to fqst */
+	len += strlen(sinst->service.servname) + 1; /* service label, its len */
+	len += sizeof(uint16_t); /* len of ptr data */
+	return len;
+}
+
+/* add the known answers from smon to the message m.  Return 0 if everything
+ * went fine, or -1 if the answers didn't all fit.  Also take this opportunity
+ * to update the ttls of the records.
+ */
+static int add_known_answers(struct mdns_message *m,
+							 struct service_monitor *smon, uint32_t elapsed)
+{
+
+	struct mdns_list_item *cursor = NULL;
+	struct service_instance *sinst;
+	int len;
+
+	cursor = mdns_list_next(&smon->sinsts, cursor);
+	while (cursor != NULL) {
+		sinst = cursor->data;
+
+		/* first add the PTR record for the service. */
+		sinst->ptr_ttl = UPDATE_TTL(sinst->ptr_ttl, elapsed);
+		len = ptr_size(sinst);
+		if (len > TAILROOM(m))
+			goto fail;
+
+		mdns_add_answer_o(m, smon->fqst_offset, T_PTR, C_IN,
+						  sinst->ptr_ttl/1000);
+		smon->fqsn_offset = m->cur - m->data;
+		mdns_add_name_lo(m, sinst->service.servname, smon->fqst_offset);
+		cursor = mdns_list_next(&smons->sinsts, cursor);
+	}
+	return 0;
+
+fail:
+	LOG("Warning: all known answers didn't fit in packet\n");
+	return -1;
+}
+
+/* given the elapsed time in ms since the last activity, prepare a query in the
+ * message m.  Return -1 for error, 0 for no packet to send, and 1 to send the
+ * packet.  Also update the next_event pointer with milliseconds until the next
+ * event, or to UINT32_MAX if no scheduling is necessary.
+ */
+static int prepare_query(struct mdns_message *m, uint32_t elapsed,
+						 uint32_t *next_event)
+{
+	struct service_monitor *smon;
+	struct mdns_list_item *cursor = NULL;
+	int ret = 0;
+
+	*next_event = UINT32_MAX;
+
+	/* We make two passes.  One to update all of the refresh times and to
+	 * populate the questions section, and another to populated the known
+	 * answers section
+	 */
+	if (mdns_query_init(m) != 0)
+		return -1;
+
+	cursor = mdns_list_next(&smons_active, cursor);
+	while (cursor != NULL) {
+		smon = cursor->data;
+		DBG("Considering ");
+		debug_print_name(NULL, smon->fqst);
+		DBG("\n");
+		if (smon->next_refresh <= elapsed) {
+			/* double the refresh period, topping out at 60s, and add a
+			 * suitable question
+			 */
+			smon->next_refresh = 0;
+			smon->refresh_period = smon->refresh_period > 30000 ?
+				60000 : smon->refresh_period * 2;
+			smon->fqst_offset = m->cur - m->data;
+			if (mdns_add_question(m, smon->fqst, T_ANY, C_IN) != 0) {
+				LOG("ERROR: failed to populate questions!\n");
+				return -1;
+			}
+			DBG("Added query for service ");
+			debug_print_name(NULL, smon->fqst);
+			DBG("\n");
+			ret = 1;
+		} else {
+			smon->next_refresh -= elapsed;
+			if (smon->next_refresh < *next_event)
+				*next_event = smon->next_refresh;
+		}
+		cursor = mdns_list_next(&smons_active, cursor);
+	}
+
+	if (ret == 0)
+		return ret;
+
+	/* Okay.  We've added all of the questions that we want to ask.  Now we
+	 * populate the known-answers section.  We know which service instances to
+	 * add to the known answers because their service monitors have a
+	 * next_refresh time of 0.
+	 *
+	 * NOTE: we don't support the TC bit.  So we only put as many answers as
+	 * will fit into a single packet.  This may generate unnecessary network
+	 * traffic by inducing responses with answers that actually are known.
+	 */
+	cursor = mdns_list_next(&smons_active, cursor);
+	while (cursor != NULL) {
+		smon = cursor->data;
+		if (smon->next_refresh == 0) {
+			add_known_answers(m, smon, elapsed);
+			smon->next_refresh = smon->refresh_period;
+			if (smon->next_refresh < *next_event)
+				*next_event = smon->next_refresh;
+		}
+		cursor = mdns_list_next(&smons_active, cursor);
+	}
+	return 1;
+}
+
 /* Main query thread */
 static void do_querier(void *data)
 {
@@ -416,9 +578,9 @@ static void do_querier(void *data)
 	int active_fds;
 	fd_set fds;
 	int ret = 0;
-	struct timeval *timeout = NULL;
+	struct timeval *timeout = NULL, tv;
 	socklen_t in_size;
-	uint32_t start_wait, stop_wait;
+	uint32_t start_wait, stop_wait, sleep_time, next_event;
 	int status, len;
 
 	query_enabled = 1;
@@ -471,6 +633,7 @@ static void do_querier(void *data)
 		}
 
 		if (FD_ISSET(mc_sock, &fds)) {
+			LOG("querier got message\n");
 			in_size = sizeof(struct sockaddr_in);
 			len = recvfrom(mc_sock, rx_msg.data, sizeof(rx_msg.data),
 						   MSG_DONTWAIT, (struct sockaddr*)&from, &in_size);
@@ -479,9 +642,22 @@ static void do_querier(void *data)
 				continue;
 			}
 			ret = mdns_parse_message(&rx_msg, len);
-			if (ret != 0)
-				continue;
-			update_service_cache(&rx_msg);
+			if (ret == 0)
+				update_service_cache(&rx_msg);
+		}
+		sleep_time = interval(start_wait, stop_wait);
+		DBG("Preparing next query\n");
+		ret = prepare_query(&tx_msg, sleep_time, &next_event);
+		if (ret == 1)
+			mdns_send_msg(&tx_msg, mc_sock, htons(5353));
+
+		if (next_event == UINT32_MAX) {
+			DBG("No event scheduled\n");
+			timeout = NULL;
+		} else {
+			DBG("Next event in %d ms\n", next_event);
+			SET_TIMEOUT(&tv, next_event);
+			timeout = &tv;
 		}
 	}
 }

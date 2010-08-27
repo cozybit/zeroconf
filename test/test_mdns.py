@@ -2,7 +2,7 @@ import unittest, sys, os, ConfigParser, time, socket, struct
 import dns.query, dns.message
 import mdns_subject
 import mdns_tool
-import time
+import time, random
 
 # Parse config file
 configfile = "test.conf"
@@ -176,6 +176,73 @@ class mdnsTest(unittest.TestCase):
 									  dns.rdatatype.TXT, txt)
 			q.authority.append(txt)
 		return q
+
+	def prepareServiceQuery(self, fqst):
+		q = dns.message.make_query(fqst, dns.rdatatype.ANY, dns.rdataclass.IN)
+		q.id = 0
+		q.flags = 0
+		return q;
+
+	def prepareServiceResponse(self, fqdn, fqst, fqsn, port, ip=None, txt=None):
+
+		r = dns.message.Message()
+		r.flags = dns.flags.QR | dns.flags.AA
+		r.id = 0
+
+		srv = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+								  dns.rdatatype.SRV,
+								  "0 0 %d %s" % (port, fqdn))
+		r.answer.append(srv)
+
+		ptr = dns.rrset.from_text(fqst, 255, dns.rdataclass.FLUSH,
+								  dns.rdatatype.PTR, fqsn)
+		r.answer.append(ptr)
+
+		if txt != None:
+			txt = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+									  dns.rdatatype.TXT, txt)
+			r.answer.append(txt)
+
+		if ip != None:
+			a = dns.rrset.from_text(fqdn, 255, dns.rdataclass.FLUSH,
+									  dns.rdatatype.A, ip)
+			r.answer.append(a)
+		return r
+
+	def createFooN(self, i):
+		fqdnTemplate = "node-%d.local."
+		fqst = "_foo._tcp.local."
+		fqsnTemplate = "MyFooService-%d." + fqst
+		ipTemplate =  "192.168.3.%d"
+
+		response = self.prepareServiceResponse(fqdnTemplate % (i), fqst,
+											   fqsnTemplate % (i), 100,
+											   ipTemplate % (i))
+		expected = fqsnTemplate % (i) + " at " + ipTemplate % (i) + ":100 (no key vals)"
+		return [response, expected]
+
+	def discoverNFoos(self, n):
+		test_sniffer.start()
+		expected = self.prepareServiceQuery("_foo._tcp.local.")
+
+		ret = uut.start("")
+		self.failIf(ret != 0, "Failed to launch mdns")
+		ret = uut.monitor("_foo._tcp.local foo.results")
+		self.failIf(ret != 0, "Failed to monitor foo service")
+		q = self.getNextPacket(test_sniffer)
+		self.expectEqual(expected, q)
+
+		outputs = []
+		for i in range(1, n + 1):
+			[response, output] = self.createFooN(i)
+			outputs.append(output)
+			mdns_tool.inject(response, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+
+		results = uut.get_results()
+		for expected in outputs:
+			self.failIf("DISCOVERED: " + expected not in results,
+						"Failed to find result:\n" + expected)
 
 	#################### unittest functions ####################
 	def setUp(self):
@@ -817,5 +884,67 @@ class mdnsTest(unittest.TestCase):
 		s.publish()
 		time.sleep(2)
 		results = uut.get_results()
-		expected = "DISCOVERED: My Foo Service._foo._tcp at 5.5.5.5:100 (no key vals)"
+		expected = "DISCOVERED: My Foo Service._foo._tcp.local. at 5.5.5.5:100 (no key vals)"
 		self.failIf(expected not in results, "Failed to find result")
+
+	def test_DiscoverSingleService(self):
+		self.discoverNFoos(1)
+
+	def test_DiscoverFiveServices(self):
+		self.discoverNFoos(5)
+
+	def test_DiscoverSixteenServices(self):
+		self.discoverNFoos(16)
+
+	def test_CacheOverflow(self):
+		self.discoverNFoos(16)
+		[response, output] = self.createFooN(17)
+		for i in range(0, 5):
+			mdns_tool.inject(response, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+
+		expected = "NOT_CACHED: " + output
+		results = uut.get_results()
+		n = results.count(expected)
+		self.failIf(n != 5, "Expected 5 NOT_CACHED results, found %d" % (n))
+
+	def test_NoDuplicateResults(self):
+		self.discoverNFoos(1)
+		[response, output] = self.createFooN(1)
+		for i in range(0, 5):
+			mdns_tool.inject(response, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+
+		expected = "DISCOVERED: " + output
+		results = uut.get_results()
+		n = results.count(expected)
+		self.failIf(n != 1, "Expected 1 DISCOVERED result, found %d" % (n))
+
+	def test_KnownAnswerSupression(self):
+		test_sniffer.start()
+		expected = self.prepareServiceQuery("_foo._tcp.local.")
+
+		ret = uut.start("")
+		self.failIf(ret != 0, "Failed to launch mdns")
+		ret = uut.monitor("_foo._tcp.local foo.results")
+		self.failIf(ret != 0, "Failed to monitor foo service")
+		q = self.getNextPacket(test_sniffer)
+		self.expectEqual(expected, q)
+
+		outputs = []
+		responses = []
+		for i in range(1, 5):
+			[response, output] = self.createFooN(i)
+			responses.append(response)
+			outputs.append(output)
+			mdns_tool.inject(response, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+
+		# read the next query packet.  It should come around 1s or so
+		q = self.getNextPacket(test_sniffer, 4)
+		self.failIf(len(q.answer[0]) != 4,
+					"Expected 4 answers, got %d" % len(q.answer[0]))
+		for a in q.answer:
+			self.failIf(a.rdtype != dns.rdatatype.PTR,
+						"Expected PTR records in known answers")
+			self.expectEqual("_foo._tcp.local.", str(a.name))
