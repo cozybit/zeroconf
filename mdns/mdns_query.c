@@ -25,6 +25,8 @@ struct service_instance {
 	char stype[MDNS_MAX_LABEL_LEN + 1];
 	char domain[MDNS_MAX_LABEL_LEN + 1];
 	char keyvals[MDNS_MAX_KEYVAL_LEN + 1];
+	char rawkeyvals[MDNS_MAX_KEYVAL_LEN + 1];
+	int rawkvlen;
 	char fqdn[MDNS_MAX_NAME_LEN + 1];
 	/* we keep ttls for each record.  Note that these ttls are in milliseconds,
 	 * not seconds.  If a received ttl is too big, we simply make it as big as
@@ -261,6 +263,7 @@ void update_service_instance(struct service_instance *sinst,
 	struct mdns_resource *r;
 	struct rr_srv *srv;
 	struct mdns_service *s = &sinst->service;
+	int len;
 
 	for(i = 0; i < m->num_answers; i++) {
 		r = &m->answers[i];
@@ -277,7 +280,19 @@ void update_service_instance(struct service_instance *sinst,
 			}
 		} else if (r->type == T_TXT &&
 				   dname_cmp(m->data, r->name, NULL, s->fqsn) == 0) {
-			/* TODO: inspect TXT record, copy it, and update it */
+			if (sinst->service.keyvals == NULL ||
+				memcmp(r->rdata, sinst->rawkeyvals,
+					   r->rdlength < sinst->rawkvlen ?
+					   r->rdlength : sinst->rawkvlen) != 0) {
+				len = r->rdlength < MDNS_MAX_KEYVAL_LEN + 1 ?
+					r->rdlength : MDNS_MAX_KEYVAL_LEN + 1;
+				memcpy(sinst->rawkeyvals, r->rdata, len);
+				sinst->rawkvlen = len;
+				sinst->service.keyvals = sinst->keyvals;
+				txt_to_c_ncpy(sinst->keyvals, sizeof(sinst->keyvals),
+							  r->rdata, r->rdlength);
+				sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
+			}
 		}
 	}
 

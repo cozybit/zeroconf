@@ -209,28 +209,39 @@ class mdnsTest(unittest.TestCase):
 			r.answer.append(a)
 		return r
 
-	def createFooN(self, i):
+	def createFooN(self, i, txt=None):
 		fqdnTemplate = "node-%d.local."
 		fqst = "_foo._tcp.local."
 		fqsnTemplate = "MyFooService-%d." + fqst
 		ipTemplate =  "192.168.3.%d"
-
+		txtArg = None
+		if txt != None:
+			txtArg = txt.replace(":", " ")
 		response = self.prepareServiceResponse(fqdnTemplate % (i), fqst,
 											   fqsnTemplate % (i), 100,
-											   ipTemplate % (i))
-		expected = fqsnTemplate % (i) + " at " + ipTemplate % (i) + ":100 (no key vals)"
+											   ipTemplate % (i),
+											   txtArg)
+		expected = fqsnTemplate % (i) + " at " + ipTemplate % (i)
+		if txt == None:
+			expected += ":100 (no key vals)"
+		elif txt == '""':
+			expected += ":100 ()"
+		else:
+			expected += ":100 (" + txt + ")"
 		return [response, expected]
 
-	def discoverNFoos(self, n):
+	def startFoo(self):
 		test_sniffer.start()
 		expected = self.prepareServiceQuery("_foo._tcp.local.")
-
 		ret = uut.start("")
 		self.failIf(ret != 0, "Failed to launch mdns")
 		ret = uut.monitor("_foo._tcp.local foo.results")
 		self.failIf(ret != 0, "Failed to monitor foo service")
 		q = self.getNextPacket(test_sniffer)
 		self.expectEqual(expected, q)
+
+	def discoverNFoos(self, n):
+		self.startFoo()
 
 		outputs = []
 		for i in range(1, n + 1):
@@ -884,7 +895,7 @@ class mdnsTest(unittest.TestCase):
 		s.publish()
 		time.sleep(2)
 		results = uut.get_results()
-		expected = "DISCOVERED: My Foo Service._foo._tcp.local. at 5.5.5.5:100 (no key vals)"
+		expected = "DISCOVERED: My Foo Service._foo._tcp.local. at 5.5.5.5:100 ()"
 		self.failIf(expected not in results, "Failed to find result")
 
 	def test_DiscoverSingleService(self):
@@ -921,16 +932,8 @@ class mdnsTest(unittest.TestCase):
 		self.failIf(n != 1, "Expected 1 DISCOVERED result, found %d" % (n))
 
 	def test_KnownAnswerSupression(self):
-		test_sniffer.start()
-		expected = self.prepareServiceQuery("_foo._tcp.local.")
 
-		ret = uut.start("")
-		self.failIf(ret != 0, "Failed to launch mdns")
-		ret = uut.monitor("_foo._tcp.local foo.results")
-		self.failIf(ret != 0, "Failed to monitor foo service")
-		q = self.getNextPacket(test_sniffer)
-		self.expectEqual(expected, q)
-
+		self.startFoo()
 		outputs = []
 		responses = []
 		for i in range(1, 5):
@@ -948,3 +951,21 @@ class mdnsTest(unittest.TestCase):
 			self.failIf(a.rdtype != dns.rdatatype.PTR,
 						"Expected PTR records in known answers")
 			self.expectEqual("_foo._tcp.local.", str(a.name))
+
+	def test_DiscoverServiceWithTXT(self):
+		self.startFoo()
+		outputs = []
+		[response, output] = self.createFooN(1, "k1=v1")
+		outputs.append(output)
+		mdns_tool.inject(response, '224.0.0.251')
+		[response, output] = self.createFooN(2, "k1=v1:k2=v2")
+		outputs.append(output)
+		mdns_tool.inject(response, '224.0.0.251')
+		[response, output] = self.createFooN(3, '""')
+		outputs.append(output)
+		mdns_tool.inject(response, '224.0.0.251')
+
+		results = uut.get_results()
+		for o in outputs:
+			self.failIf("DISCOVERED: " + o not in results,
+					"Failed to find result:\n" + output)
