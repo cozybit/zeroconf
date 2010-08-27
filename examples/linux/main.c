@@ -323,14 +323,16 @@ static int linux_query_cb(void *data, const struct mdns_service *s, int status)
 		return MDNS_SUCCESS;
 	}
 
-	f = fopen(filename, "w+");
+	f = fopen(filename, "a");
 	if (f == NULL) {
 		LOG("Failed to open output file in linux handler\n");
 		return MDNS_SUCCESS;
 	}
 
-	if (status == MDNS_DISCOVERED || status == MDNS_CACHE_FULL)
+	if (status == MDNS_DISCOVERED)
 		fprintf(f, "DISCOVERED: ");
+	else if (status == MDNS_CACHE_FULL)
+		fprintf(f, "NOT_CACHED: ");
 	else if (status == MDNS_DISAPPEARED)
 		fprintf(f, "DISAPPEARED: ");
 	else if (status == MDNS_UPDATED)
@@ -339,9 +341,10 @@ static int linux_query_cb(void *data, const struct mdns_service *s, int status)
 		fprintf(f, "Warning: unknown status %d\n", status);
 		goto done;
 	}
-	fprintf(f, "%s._%s._%s at %d.%d.%d.%d:%d (%s)\n",
+	fprintf(f, "%s._%s._%s.%s. at %d.%d.%d.%d:%d (%s)\n",
 			s->servname, s->servtype,
 			s->proto == MDNS_PROTO_UDP ? "udp" : "tcp",
+			s->domain,
 			(s->ipaddr >> 24) & 0xff, (s->ipaddr >> 16) & 0xff,
 			(s->ipaddr >> 8) & 0xff, s->ipaddr & 0xff, htons(s->port),
 			s->keyvals ? s->keyvals : "no key vals");
