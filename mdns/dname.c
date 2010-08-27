@@ -90,6 +90,7 @@ char *dname_label_next(char *p, char *n)
 {
 	while (IS_POINTER(*n))
 		n = p + POINTER(n);
+	n += *n + 1;
 
 	return *n == 0 ? NULL : n;
 }
