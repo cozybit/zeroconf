@@ -13,9 +13,8 @@ class mdns_subject:
 
 	# Set DEBUG to True if you want to see the commands and stdout between the
 	# subject and the host.
-	DEBUG = False
-
-	def __init__(self, conf):
+	def __init__(self, conf, DEBUG=False):
+		self.DEBUG = DEBUG
 		targettype = conf.get("target", "targettype")
 		if targettype != "linuxssh":
 			raise NoSuchTargetType
@@ -61,6 +60,9 @@ class mdns_subject:
 		return 0
 
 	def start(self, args=""):
+		# in debug mode, user starts and stops the uut.
+		if self.DEBUG == True:
+			return 0
 		command = self.mdnspath + " " + args + " -l " + self.mdnslog + " launch"
 		return self.do_command(command)
 
@@ -94,6 +96,9 @@ class mdns_subject:
 		return self.ready(timeout)
 
 	def stop(self, args=""):
+		# in debug mode, user starts and stops the uut.
+		if self.DEBUG == True:
+			return
 		command = self.mdnspath + " halt"
 		self.session.sendline(command)
 		self.session.prompt()
