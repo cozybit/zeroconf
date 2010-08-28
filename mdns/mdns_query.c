@@ -6,6 +6,7 @@
 #include "mdns.h"
 #include "mdns_private.h"
 #include "mdns_port.h"
+#include "queue.h"
 
 #ifdef MDNS_QUERY_API
 
@@ -19,7 +20,7 @@ static struct mdns_message rx_msg;
 
 /* Each service instance that we detect is stored in a service instance */
 struct service_instance {
-	struct mdns_list_item list_item;
+	SLIST_ENTRY(service_instance) list_item;
 	struct mdns_service service;
 	char sname[MDNS_MAX_LABEL_LEN + 1];
 	char stype[MDNS_MAX_LABEL_LEN + 1];
@@ -37,13 +38,15 @@ struct service_instance {
 	uint32_t txt_ttl;
 };
 
-static struct mdns_list sinsts_free;
+SLIST_HEAD(sinst_list, service_instance);
+static struct sinst_list sinsts_free;
 static struct service_instance sinsts[MDNS_SERVICE_CACHE_SIZE];
 
 /* We maintain a linked list of services that we are monitoring. */
 struct service_monitor {
-	struct mdns_list_item list_item;
-	struct mdns_list sinsts;
+	SLIST_ENTRY(service_monitor) list_item;
+	struct sinst_list sinsts;
+
 	char fqst[MDNS_MAX_NAME_LEN + 1];
 	/* save memory by adding a dname pointer to the fqst and fqsn instead of
 	 * copying them over and over.  These offsets can be used while
@@ -68,8 +71,9 @@ struct service_monitor {
 	uint32_t next_refresh;
 };
 
-static struct mdns_list smons_active;
-static struct mdns_list smons_free;
+SLIST_HEAD(smons_list, service_monitor);
+static struct smons_list smons_active;
+static struct smons_list smons_free;
 static struct service_monitor smons[MDNS_MAX_SERVICE_MONITORS];
 
 /* Commands sent over the control socket must at least have a command (e.g.,
@@ -166,15 +170,11 @@ done:
 static struct service_monitor *find_service_monitor(struct mdns_message *m,
 													char *fqst)
 {
-	struct mdns_list_item *cursor = NULL;
 	struct service_monitor *found = NULL;
 
-	cursor = mdns_list_next(&smons_active, cursor);
-	while (cursor != NULL) {
-		found = cursor->data;
+	SLIST_FOREACH(found, &smons_active, list_item) {
 		if (dname_cmp(NULL, found->fqst, m->data, fqst) == 0)
 			return found;
-		cursor = mdns_list_next(&smons_active, cursor);
 	}
 	return NULL;
 }
@@ -184,7 +184,6 @@ static struct service_monitor *find_service_monitor(struct mdns_message *m,
  */
 static int add_service(struct service_monitor *smon)
 {
-	struct mdns_list_item *cursor = NULL;
 	struct service_monitor *found = NULL;
 
 	DBG("Adding service ");
@@ -198,20 +197,18 @@ static int add_service(struct service_monitor *smon)
 		return MDNS_INUSE;
 	}
 
-	cursor = mdns_list_pop(&smons_free);
-	if (cursor == NULL) {
+	found = SLIST_FIRST(&smons_free);
+	if (found == NULL) {
 		DBG("error: no more service monitor slots available.\n");
 		return MDNS_NOMEM;
 	}
+	SLIST_REMOVE_HEAD(&smons_free, list_item);
 
-	found = cursor->data;
-	memcpy(cursor->data, smon, sizeof(struct service_monitor));
-	/* preserve the data pointer, which points to self in our case */
-	cursor->data = found;
-	LIST_INIT(&found->sinsts);
-	found->refresh_period = 1000;
+	memcpy(found, smon, sizeof(struct service_monitor));
+	SLIST_INIT(&found->sinsts);
+	found->refresh_period = 1000; /* start the refresh period at 1s. */
 	found->next_refresh = 0;
-	mdns_list_push(&smons_active, cursor);
+	SLIST_INSERT_HEAD(&smons_active, found, list_item);
 
 	return MDNS_SUCCESS;
 }
@@ -219,21 +216,19 @@ static int add_service(struct service_monitor *smon)
 /* remove the service fqst from the monitor list.  If fqst is an empty string,
  * we unmonitor all services.
  */
-void remove_service(char *fqst)
+static void remove_service(char *fqst)
 {
-	struct mdns_list_item *cursor = NULL;
-	struct service_monitor *found = NULL;
+	struct service_monitor *found;
 
 	if (fqst[0] == 0) {
 		DBG("Removing all services from monitor list:\n");
-		cursor = mdns_list_pop(&smons_active);
-		while (cursor != NULL) {
-			found = cursor->data;
+		while (!SLIST_EMPTY(&smons_active)) {
+			found = SLIST_FIRST(&smons_active);
+			SLIST_REMOVE_HEAD(&smons_active, list_item);
 			DBG("\t");
 			debug_print_name(NULL, found->fqst);
 			DBG("\n");
-			mdns_list_push(&smons_free, cursor);
-			cursor = mdns_list_pop(&smons_active);
+			SLIST_INSERT_HEAD(&smons_free, found, list_item);
 		}
 		return;
 	}
@@ -248,9 +243,8 @@ void remove_service(char *fqst)
 		DBG("Warning: service was not being monitored\n");
 		return;
 	}
-
-	mdns_list_remove(&smons_active, &found->list_item);
-	mdns_list_push(&smons_free, &found->list_item);
+	SLIST_REMOVE(&smons_active, found, service_monitor, list_item);
+	SLIST_INSERT_HEAD(&smons_free, found, list_item);
 }
 
 /* update the service instance sinst with any SRV, PTR, A, or TXT information
@@ -322,15 +316,11 @@ static struct service_instance *find_service_instance(struct service_monitor *sm
 													  struct mdns_message *m,
 													  char *fqsn)
 {
-	struct mdns_list_item *cursor = NULL;
 	struct service_instance *found = NULL;
 
-	cursor = mdns_list_next(&smon->sinsts, cursor);
-	while (cursor != NULL) {
-		found = cursor->data;
+	SLIST_FOREACH(found, &smon->sinsts, list_item) {
 		if (dname_cmp(NULL, found->service.fqsn, m->data, fqsn) == 0)
 			return found;
-		cursor = mdns_list_next(&smon->sinsts, cursor);
 	}
 	return NULL;
 }
@@ -398,7 +388,6 @@ static int update_service_cache(struct mdns_message *m)
 {
 	struct service_monitor *smon = NULL;
 	struct mdns_resource *ptr;
-	struct mdns_list_item *cursor;
 	struct service_instance *sinst = NULL;
 	int status, i, ret;
 
@@ -429,12 +418,13 @@ static int update_service_cache(struct mdns_message *m)
 		if (sinst == NULL) {
 			/* This is a new service instance. */
 			status = MDNS_DISCOVERED;
-			cursor = mdns_list_pop(&sinsts_free);
-			sinst = cursor == NULL ? NULL : cursor->data;
+			sinst = SLIST_FIRST(&sinsts_free);
 			if (sinst == NULL) {
 				/* no more space in cache.  Use the overflow instance. */
 				status = MDNS_CACHE_FULL;
 				sinst = &overflow_sinst;
+			} else {
+				SLIST_REMOVE_HEAD(&sinsts_free, list_item);
 			}
 			reset_service_instance(sinst);
 			sinst->service.flags = SERVICE_IS_DIRTY_FLAG;
@@ -445,7 +435,7 @@ static int update_service_cache(struct mdns_message *m)
 		/* populate the service instance and update its state */
 		update_service_instance(sinst, m);
 		if (status == MDNS_DISCOVERED)
-			mdns_list_push(&smon->sinsts, &sinst->list_item);
+			SLIST_INSERT_HEAD(&smon->sinsts, sinst, list_item);
 		if ((sinst->service.flags & SERVICE_IS_READY) == SERVICE_IS_READY &&
 			sinst->service.flags & SERVICE_IS_DIRTY_FLAG) {
 			ret = smon->cb(smon->cbdata, &sinst->service, status);
@@ -481,13 +471,10 @@ static int add_known_answers(struct mdns_message *m,
 							 struct service_monitor *smon, uint32_t elapsed)
 {
 
-	struct mdns_list_item *cursor = NULL;
 	struct service_instance *sinst;
 	int len;
 
-	cursor = mdns_list_next(&smon->sinsts, cursor);
-	while (cursor != NULL) {
-		sinst = cursor->data;
+	SLIST_FOREACH(sinst, &smon->sinsts, list_item) {
 
 		/* first add the PTR record for the service. */
 		sinst->ptr_ttl = UPDATE_TTL(sinst->ptr_ttl, elapsed);
@@ -499,7 +486,6 @@ static int add_known_answers(struct mdns_message *m,
 						  sinst->ptr_ttl/1000);
 		smon->fqsn_offset = m->cur - m->data;
 		mdns_add_name_lo(m, sinst->service.servname, smon->fqst_offset);
-		cursor = mdns_list_next(&smons->sinsts, cursor);
 	}
 	return 0;
 
@@ -517,7 +503,6 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 						 uint32_t *next_event)
 {
 	struct service_monitor *smon;
-	struct mdns_list_item *cursor = NULL;
 	int ret = 0;
 
 	*next_event = UINT32_MAX;
@@ -529,9 +514,8 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 	if (mdns_query_init(m) != 0)
 		return -1;
 
-	cursor = mdns_list_next(&smons_active, cursor);
-	while (cursor != NULL) {
-		smon = cursor->data;
+	SLIST_FOREACH(smon, &smons_active, list_item) {
+
 		DBG("Considering ");
 		debug_print_name(NULL, smon->fqst);
 		DBG("\n");
@@ -556,7 +540,6 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 			if (smon->next_refresh < *next_event)
 				*next_event = smon->next_refresh;
 		}
-		cursor = mdns_list_next(&smons_active, cursor);
 	}
 
 	if (ret == 0)
@@ -571,16 +554,13 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 	 * will fit into a single packet.  This may generate unnecessary network
 	 * traffic by inducing responses with answers that actually are known.
 	 */
-	cursor = mdns_list_next(&smons_active, cursor);
-	while (cursor != NULL) {
-		smon = cursor->data;
+	SLIST_FOREACH(smon, &smons_active, list_item) {
 		if (smon->next_refresh == 0) {
 			add_known_answers(m, smon, elapsed);
 			smon->next_refresh = smon->refresh_period;
 			if (smon->next_refresh < *next_event)
 				*next_event = smon->next_refresh;
 		}
-		cursor = mdns_list_next(&smons_active, cursor);
 	}
 	return 1;
 }
@@ -683,23 +663,19 @@ int query_launch(void)
 	int i;
 
 	/* Initially, all service monitors are on the free list */
-	LIST_INIT(&smons_active);
-	LIST_INIT(&smons_free);
+	SLIST_INIT(&smons_active);
+	SLIST_INIT(&smons_free);
+
 	for (i = 0; i < MDNS_MAX_SERVICE_MONITORS; i++) {
-		LIST_INIT(&smons[i].sinsts);
-		smons[i].list_item.data = &smons[i];
-		mdns_list_push(&smons_free, &smons[i].list_item);
+		SLIST_INIT(&smons[i].sinsts);
+		SLIST_INSERT_HEAD(&smons_free, &smons[i], list_item);
 	}
 
 	/* Initially, all service instances are in the free list */
-	LIST_INIT(&sinsts_free);
+	SLIST_INIT(&sinsts_free);
 	for (i = 0; i < MDNS_SERVICE_CACHE_SIZE; i++) {
-		sinsts[i].list_item.data = &sinsts[i];
-		sinsts[i].service.servname = sinsts[i].sname;
-		sinsts[i].service.servtype = sinsts[i].stype;
-		sinsts[i].service.domain = sinsts[i].domain;
-		sinsts[i].service.keyvals = NULL;
-		mdns_list_push(&sinsts_free, &sinsts[i].list_item);
+		reset_service_instance(&sinsts[i]);
+		SLIST_INSERT_HEAD(&sinsts_free, &sinsts[i], list_item);
 	}
 
 	/* create both ends of the control socket */
