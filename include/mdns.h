@@ -282,8 +282,9 @@ void mdns_halt(void);
  * of mdns, such as a closed TCP connection.
  *
  * MDNS_CACHE_FULL: The mdns_service has been discovered.  However, the number
- * of monitored service instances has exceeded MDNS_SERVICE_CACHE_SIZE.  See
- * NOTES below on the implications of an MDNS_CACHE_FULL status.
+ * of monitored service instances has exceeded MDNS_SERVICE_CACHE_SIZE.  So the
+ * returned mdns_service may not be complete.  See NOTES below on other
+ * implications of an MDNS_CACHE_FULL status.
  *
  * NOTES:
  *
@@ -300,11 +301,14 @@ void mdns_halt(void);
  * status MDNS_DISCOVERED.  These instances will be cached and monitored for
  * updates, disappearance, etc.  When the 17th instance is discovered, the
  * callback will be called as usual, but the status will be MDNS_CACHE_FULL,
- * and the service will not be monitored.  As a result, the callback may be
- * called again if the 17th instance of the service announces itself on the
- * network again.  If one of the other services disappears, the next
- * announcement from the 17th instance will result in a callback with status
- * MDNS_DISCOVERED, and from that point forward it will be monitored.
+ * and the service will not be monitored.  While a best effort is made to
+ * deliver all of the service information, the mdns_service may be incomplete.
+ * Specifically, the ipaddr may be 0 and the service name may be "".  Further,
+ * the callback may be called again if the 17th instance of the service
+ * announces itself on the network again.  If one of the other services
+ * disappears, the next announcement from the 17th instance will result in a
+ * callback with status MDNS_DISCOVERED, and from that point forward it will be
+ * monitored.
  *
  * So what's the "best" value for MDNS_SERVICE_CACHE_SIZE?  This depends on the
  * application and on the field in which the application is deployed.  If a

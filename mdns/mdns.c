@@ -34,6 +34,23 @@ static int parse_resource(struct mdns_message *m, struct mdns_resource *r)
 	CHECK_TAILROOM(m, r->rdlength);
 	r->rdata = m->cur;
 	m->cur += r->rdlength;
+
+#ifdef MDNS_QUERY_API
+	switch (r->type) {
+	case T_A:
+		SLIST_INSERT_HEAD(&m->as, r, list_item);
+		break;
+	case T_SRV:
+		SLIST_INSERT_HEAD(&m->srvs, r, list_item);
+		break;
+	case T_TXT:
+		SLIST_INSERT_HEAD(&m->txts, r, list_item);
+		break;
+	case T_PTR:
+		SLIST_INSERT_HEAD(&m->ptrs, r, list_item);
+		break;
+	}
+#endif
 	return 0;
 }
 
@@ -49,6 +66,18 @@ int mdns_parse_message(struct mdns_message *m, int mlen)
 		LOG("Warning: DNS message too short.\n");
 		return -1;
 	}
+
+#ifdef MDNS_QUERY_API
+	/* The querier needs to look at all PTRs, then all TXTs, then all SRVs,
+	 * then all As.  We create these lists here since we're stepping through
+	 * all of the answers anyway.
+	 */
+	SLIST_INIT(&m->as);
+	SLIST_INIT(&m->srvs);
+	SLIST_INIT(&m->txts);
+	SLIST_INIT(&m->ptrs);
+#endif
+
 	m->header = (struct mdns_header *)m->data;
 	m->len = mlen;
 	m->end = m->data + mlen - 1;

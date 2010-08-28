@@ -10,6 +10,26 @@
 
 #ifdef MDNS_QUERY_API
 
+/* OVERVIEW
+ *
+ * The querier monitors any service instances on the network with the service
+ * types specified by calls to mdns_query_monitor.  Each service instance has
+ * at least 3 records of interest: a PTR which points to a SRV which points to
+ * an A which conains an ipaddr.  The SRV may have an associated TXT record
+ * that also needs to be tracked.  Information about the PTR/SRV/TXT records
+ * are stored as a service_instance, and the service_instance contains a
+ * reference to an A record.  We have this indirection because many services
+ * may have the same A record.  Accordingly, each A record maintains a
+ * cross-reference list of service_instances that refer to it.
+ *
+ * When we receive a message, we sort the answer records by type (see
+ * mdns_parse_message).  This allows us to create and populate any new service
+ * instances, update existing service instances, create new a records, update
+ * existing A records, and notify the user without having to traverse the
+ * entire list of services that we are monitoring over and over.  See
+ * update_service_cache for details on the algorithm.
+ */
+
 /* global mdns state */
 static void *query_thread;
 static int ctrl_sock;
@@ -247,67 +267,6 @@ static void remove_service(char *fqst)
 	SLIST_INSERT_HEAD(&smons_free, found, list_item);
 }
 
-/* update the service instance sinst with any SRV, PTR, A, or TXT information
- * in the message m.  Expect the fqsn of the sinst to be initialized.
- */
-void update_service_instance(struct service_instance *sinst,
-							 struct mdns_message *m)
-{
-	int i;
-	struct mdns_resource *r;
-	struct rr_srv *srv;
-	struct mdns_service *s = &sinst->service;
-	int len;
-
-	for(i = 0; i < m->num_answers; i++) {
-		r = &m->answers[i];
-		if (r->type == T_SRV &&
-			dname_cmp(m->data, r->name, NULL, s->fqsn) == 0) {
-			srv = (struct rr_srv *)r->rdata;
-			if (s->port != srv->port ||
-				dname_cmp(m->data, srv->target, NULL, sinst->fqdn) != 0) {
-				s->port = srv->port;
-				dname_copy(sinst->fqdn, m->data, srv->target);
-				sinst->srv_ttl = CONVERT_TTL(r->ttl);
-				sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
-				sinst->service.flags |= SERVICE_HAS_SRV_FLAG;
-			}
-		} else if (r->type == T_TXT &&
-				   dname_cmp(m->data, r->name, NULL, s->fqsn) == 0) {
-			if (sinst->service.keyvals == NULL ||
-				memcmp(r->rdata, sinst->rawkeyvals,
-					   r->rdlength < sinst->rawkvlen ?
-					   r->rdlength : sinst->rawkvlen) != 0) {
-				len = r->rdlength < MDNS_MAX_KEYVAL_LEN + 1 ?
-					r->rdlength : MDNS_MAX_KEYVAL_LEN + 1;
-				memcpy(sinst->rawkeyvals, r->rdata, len);
-				sinst->rawkvlen = len;
-				sinst->service.keyvals = sinst->keyvals;
-				txt_to_c_ncpy(sinst->keyvals, sizeof(sinst->keyvals),
-							  r->rdata, r->rdlength);
-				sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
-			}
-		}
-	}
-
-	/* Now there may be an A record in there that we need.  But we must have
-	 * the SRV record first.  So we search again.
-	 */
-	if (!(sinst->service.flags & SERVICE_HAS_SRV_FLAG))
-		return;
-
-	for(i = 0; i < m->num_answers; i++) {
-		r = &m->answers[i];
-		if (r->type == T_A &&
-			dname_cmp(m->data, r->name, NULL, sinst->fqdn) == 0 &&
-			get_uint32(r->rdata) != s->ipaddr) {
-			s->ipaddr = get_uint32(r->rdata);
-			sinst->service.flags |= SERVICE_HAS_A_FLAG;
-			sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
-		}
-	}
-}
-
 /* find the service instance with the specified fqsn in the list of a
  * particular service monitor.  Return the service instance, or NULL if it was
  * not found.
@@ -338,12 +297,15 @@ static void reset_service_instance(struct service_instance *sinst)
 	sinst->service.servtype = sinst->stype;
 	sinst->service.domain = sinst->domain;
 	sinst->service.flags = 0;
+	sinst->rawkvlen = 0;
+	sinst->rawkeyvals[0] = 0;
 }
 
 /* populate the service s with the bits and pieces in the fqsn from message
  * m.  Return 0 on success or -1 on failure.
  */
-int copy_servinfo(struct mdns_service *s, struct mdns_message *m, char *fqsn)
+static int copy_servinfo(struct mdns_service *s, struct mdns_message *m,
+						 char *fqsn)
 {
 	int ret;
 
@@ -379,6 +341,50 @@ int copy_servinfo(struct mdns_service *s, struct mdns_message *m, char *fqsn)
 	return 0;
 }
 
+/* the TXT record r goes with the service instance sinst.  Update sinst if
+ * necessary and set the dirty bit.
+ */
+static void update_txt(struct service_instance *sinst, struct mdns_resource *r)
+{
+	int len;
+
+	len = r->rdlength < sinst->rawkvlen ? r->rdlength : sinst->rawkvlen;
+	if (sinst->service.keyvals == NULL ||
+		memcmp(r->rdata, sinst->rawkeyvals, len) != 0) {
+		len = r->rdlength < MDNS_MAX_KEYVAL_LEN + 1 ?
+			r->rdlength : MDNS_MAX_KEYVAL_LEN + 1;
+		memcpy(sinst->rawkeyvals, r->rdata, len);
+		sinst->rawkvlen = len;
+		sinst->service.keyvals = sinst->keyvals;
+		txt_to_c_ncpy(sinst->keyvals, sizeof(sinst->keyvals),
+					  r->rdata, r->rdlength);
+		sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
+	}
+	sinst->txt_ttl = CONVERT_TTL(r->ttl);
+}
+
+/* the SRV record r from the mdns_message m goes with the service instance
+ * sinst.  Update sinst if necessary and set the dirty bit.
+ */
+static void update_srv(struct service_instance *sinst, struct mdns_message *m,
+					   struct mdns_resource *r)
+{
+	struct rr_srv *srv = (struct rr_srv *)r->rdata;
+	struct mdns_service *s = &sinst->service;
+
+	/* we found a service record for this sinst. */
+	if (s->port != srv->port) {
+		s->port = srv->port;
+		s->flags |= SERVICE_IS_DIRTY_FLAG;
+	}
+	if (dname_cmp(m->data, srv->target, NULL, sinst->fqdn) != 0) {
+		dname_copy(sinst->fqdn, m->data, srv->target);
+		sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
+	}
+	sinst->srv_ttl = CONVERT_TTL(r->ttl);
+	sinst->service.flags |= SERVICE_HAS_SRV_FLAG;
+}
+
 static struct service_instance overflow_sinst;
 
 /* we received a packet.  If it matches a service that we're monitoring, update
@@ -387,61 +393,107 @@ static struct service_instance overflow_sinst;
 static int update_service_cache(struct mdns_message *m)
 {
 	struct service_monitor *smon = NULL;
-	struct mdns_resource *ptr;
+	struct mdns_resource *ptr, *r, *rtmp;
 	struct service_instance *sinst = NULL;
-	int status, i, ret;
+	int status, ret;
+	uint32_t ipaddr;
 
 	if (m->header->flags.fields.qr != RESPONSE)
 		return 0;
 
-	/* wouldn't it be nice if we could just walk through the entire list of
-	 * answers, generate a list of services, than analyze the list to decide if
-	 * we hold on to those services or not?  The problem with this is that we
-	 * don't know how many services will arrive in a message, and we don't have
-	 * dynamic memory allocation.  Also, we don't know what order the PTR, SRV,
-	 * and TXT records will arrive anyway.  So we check all of the PTR records,
-	 * then the SRV records and TXT records if necessary.  This is O(n^2) where
-	 * n is the number of answers.  Yuck.  Fortunately, we don't expect more
-	 * than a few answers per packet.
-	 */
-	for(i = 0; i < m->num_answers; i++) {
-		ptr = &m->answers[i];
-		if (ptr->type != T_PTR)
-			continue;
-
+	SLIST_FOREACH(ptr, &m->ptrs, list_item) {
 		smon = find_service_monitor(m, ptr->name);
 		if (smon == NULL)
 			continue;
 
+		/* This PTR record is interesting.  Analyze it. */
 		sinst = find_service_instance(smon, m, ptr->rdata);
-		status = MDNS_UPDATED;
 		if (sinst == NULL) {
 			/* This is a new service instance. */
-			status = MDNS_DISCOVERED;
 			sinst = SLIST_FIRST(&sinsts_free);
 			if (sinst == NULL) {
 				/* no more space in cache.  Use the overflow instance. */
-				status = MDNS_CACHE_FULL;
 				sinst = &overflow_sinst;
+				status = MDNS_CACHE_FULL;
 			} else {
 				SLIST_REMOVE_HEAD(&sinsts_free, list_item);
+				status = MDNS_DISCOVERED;
 			}
 			reset_service_instance(sinst);
-			sinst->service.flags = SERVICE_IS_DIRTY_FLAG;
-			if (copy_servinfo(&sinst->service, m, ptr->rdata) == -1)
-				LOG("Warning: failed to copy service info\n");
-			sinst->ptr_ttl = CONVERT_TTL(ptr->ttl);
+		} else {
+			/* this is an existing service instance.  If we get it dirty, we
+			 * will update the user.
+			 */
+			status = MDNS_UPDATED;
+			SLIST_REMOVE(&smon->sinsts, sinst, service_instance, list_item);
 		}
-		/* populate the service instance and update its state */
-		update_service_instance(sinst, m);
-		if (status == MDNS_DISCOVERED)
-			SLIST_INSERT_HEAD(&smon->sinsts, sinst, list_item);
-		if ((sinst->service.flags & SERVICE_IS_READY) == SERVICE_IS_READY &&
-			sinst->service.flags & SERVICE_IS_DIRTY_FLAG) {
+
+		/* TODO: increment ttl by elapsed time so it's correct when we
+		 * decrement it later!
+		 */
+		sinst->ptr_ttl = CONVERT_TTL(ptr->ttl);
+		if (copy_servinfo(&sinst->service, m, ptr->rdata) == -1) {
+			LOG("Warning: failed to copy service info.\n");
+			SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
+			continue;
+		}
+
+		/* Now we have a service instance that needs updating, and it may or
+		 * may not fit in the cache when we're done.  So make a best effort
+		 * here by collecting all of the relevant records, and alerting the
+		 * user if this is an overflow item.
+		 */
+
+		/* start by checking all of the TXT records. */
+		SLIST_FOREACH_SAFE(r, &m->txts, list_item, rtmp) {
+			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) != 0)
+				continue;
+
+			/* we found a TXT record that matches our service instance.
+			 * Analyze it and drop it from the list.
+			 */
+			update_txt(sinst, r);
+			SLIST_REMOVE(&m->txts, r, mdns_resource, list_item);
+		}
+
+		/* ...then check the SRV records */
+		SLIST_FOREACH_SAFE(r, &m->srvs, list_item, rtmp) {
+			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) != 0)
+				continue;
+			update_srv(sinst, m, r);
+			SLIST_REMOVE(&m->srvs, r, mdns_resource, list_item);
+		}
+
+		/* ...and finally check the A records.  Note that we don't pop these
+		 * off the list because other SRVs in the message may refer to them.
+		 */
+		if (sinst->service.flags & SERVICE_HAS_SRV_FLAG) {
+			SLIST_FOREACH_SAFE(r, &m->as, list_item, rtmp) {
+				ipaddr = get_uint32(r->rdata);
+				if (dname_cmp(m->data, r->name, NULL, sinst->fqdn) == 0 &&
+					sinst->service.ipaddr != ipaddr) {
+					sinst->service.ipaddr = ipaddr;
+					sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
+					sinst->service.flags |= SERVICE_HAS_A_FLAG;
+				}
+			}
+		}
+
+		/* If the service record is complete and dirty, alert the user.  Also
+		 * alert the user if we did our best but the cache is full.
+		 */
+		if (status == MDNS_CACHE_FULL ||
+			((sinst->service.flags & SERVICE_IS_READY) == SERVICE_IS_READY &&
+			 sinst->service.flags & SERVICE_IS_DIRTY_FLAG)) {
 			ret = smon->cb(smon->cbdata, &sinst->service, status);
 			if (ret != MDNS_SUCCESS)
 				LOG("Warning: callback returned unexpected value: %d\n", ret);
 			sinst->service.flags &= ~SERVICE_IS_DIRTY_FLAG;
+		}
+
+		/* If we can, cache the result */
+		if (status != MDNS_CACHE_FULL) {
+			SLIST_INSERT_HEAD(&smon->sinsts, sinst, list_item);
 		}
 	}
 	return 0;

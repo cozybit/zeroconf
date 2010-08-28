@@ -7,6 +7,7 @@
 #define MDNS_MESSAGE_H
 
 #include "mdns_port.h"
+#include "queue.h"
 
 /* settings */
 #define MDNS_MAX_QUESTIONS		32
@@ -83,6 +84,9 @@ struct mdns_resource {
 	uint32_t ttl; /* how long the record may be cached */
 	uint16_t rdlength; /* length of RDATA field */
 	void *rdata;
+#ifdef MDNS_QUERY_API
+	SLIST_ENTRY(mdns_resource) list_item;
+#endif
 };
 
 /* structured rdata for SRV record */
@@ -102,6 +106,10 @@ struct rr_srv {
  */
 #define MDNS_DATA_MAX	1472
 
+#ifdef MDNS_QUERY_API
+SLIST_HEAD(rr_list, mdns_resource);
+#endif
+
 /* mDNS message representation */
 struct mdns_message {
 	char data[MDNS_DATA_MAX]; /* raw data for packet. */
@@ -115,6 +123,9 @@ struct mdns_message {
 	uint16_t num_answers;
 	struct mdns_resource authorities[MDNS_MAX_AUTHORITIES];
 	uint16_t num_authorities;
+#ifdef MDNS_QUERY_API
+	struct rr_list as, srvs, txts, ptrs;
+#endif
 };
 
 #endif
