@@ -94,6 +94,7 @@ uint8_t *dname_label_to_c(char *dst, uint8_t *p, uint8_t *src,
 int dname_label_cmp(uint8_t *p1, uint8_t *l1, uint8_t *p2, uint8_t *l2);
 uint8_t *dname_label_next(uint8_t *p, uint8_t *n);
 void txt_to_c_ncpy(char *dst, int dlen, char *txt, int tlen);
+int dname_overrun(uint8_t *p, uint8_t *e, uint8_t *n);
 void dname_tests(void);
 
 #ifdef MDNS_TESTS

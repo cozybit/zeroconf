@@ -33,7 +33,7 @@ uint8_t *dname_put_label(uint8_t *dst, char *label)
 
 	len = (uint8_t)strlen(label);
 	*p++ = len;
-	memcpy(p, label, len);
+	strcpy((char *)p, label);
 	return p + len;
 }
 
@@ -323,6 +323,27 @@ void txt_to_c_ncpy(char *dst, int dlen, char *txt, int tlen)
 	}
 }
 
+/* would parsing the dname n from the raw packet p overrun the end of the
+ * packet e?
+ */
+int dname_overrun(uint8_t *p, uint8_t *e, uint8_t *n)
+{
+	while (1) {
+		if (n > e)
+			return 1;
+		if (n <= e && *n == 0)
+			return 0;
+
+		while (IS_POINTER(*n)) {
+			n = p + POINTER(n);
+			if (n > e)
+				return 1;
+		}
+		n += *n + 1;
+	}
+
+}
+
 #ifdef MDNS_TESTS
 static int c_to_dname(uint8_t *dst, char *src)
 {
@@ -374,6 +395,10 @@ uint8_t p3[] = {5, 'f', 'o', 'o', '-', '2', 5, 'l', 'o', 'c', 'a', 'l', 0};
 uint8_t p4[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '3', 0};
 
 uint8_t p5[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '2', 0};
+
+uint8_t p6[] = {5, 'l', 'a', 'b', 'e', 'l', 4, 'w', 'i', 't', 'h', 1, 'a',
+				3, 'b', 'a', 'd', 0xC1, 0xFF,
+				'p', 'o', 'i', 'n', 't', 'e', 'r', 0};
 
 static void dname_size_tests(void)
 {
@@ -460,10 +485,6 @@ static void increment_name_tests(void)
 	FAIL_UNLESS(ret == 0, "Failed to convert name to mdns name");	
 	ret = strcmp((char *)n1, (char *)n2);
 	FAIL_UNLESS(ret == 0, "Failed to increment foo to foo-9");
-
-	/* over increment */
-	ret = dname_increment(n1);
-	FAIL_UNLESS(ret == -1, "Should have failed to over-increment.");
 }
 
 void txt_to_c_ncpy_tests(void)

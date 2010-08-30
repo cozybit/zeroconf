@@ -403,10 +403,9 @@ class mdnsTest(unittest.TestCase):
 								   dns.rdataclass.IN)
 		r = dns.message.make_response(q)
 		r.question = []
-		r.find_rrset(r.answer, dns.name.Name(["foo", "local", ""]),
-					 dns.rdataclass.FLUSH, dns.rdatatype.A,
-					 create=True, force_unique=True)
-
+		a = dns.rrset.from_text("foo.local.", 255, dns.rdataclass.FLUSH,
+								dns.rdatatype.A, "1.2.3.4")
+		r.answer = [a]
 		self.waitForFirstProbe("-b " + ipaddr + " -n foo")
 
 		# respond to probe

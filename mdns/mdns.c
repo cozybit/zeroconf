@@ -21,6 +21,12 @@ static int parse_resource(struct mdns_message *m, struct mdns_resource *r)
 		return -1;
 	}
 	CHECK_TAILROOM(m, len);
+	if (dname_overrun(m->data, m->end, m->cur) != 0) {
+		DBG("Warning: bad pointer in resource name\n");
+		DBG("%c %c %c %c %c %c %c %c %c %c\n",
+			m->cur[0], m->cur[1], m->cur[2], m->cur[3], m->cur[4], m->cur[5], m->cur[6], m->cur[7], m->cur[8], m->cur[9]);
+		return -1;
+	}
 	m->cur += len;
 	CHECK_TAILROOM(m, 3*sizeof(uint16_t) + sizeof(uint32_t));
 	r->type = get_uint16(m->cur);
@@ -35,7 +41,25 @@ static int parse_resource(struct mdns_message *m, struct mdns_resource *r)
 	r->rdata = m->cur;
 	m->cur += r->rdlength;
 
+	/* validate the resource data */
+	switch (r->type) {
+	case T_A:
+		if (r->rdlength != 4) {
+			DBG("Error: insufficient data in A record\n");
+			return -1;
+		}
+		break;
+	case T_SRV:
+	case T_PTR:
+		if (dname_overrun(m->data, m->end, r->rdata) != 0) {
+			DBG("Warning: bad pointer in resource data\n");
+			return -1;
+		}
+		break;
+	}
+
 #ifdef MDNS_QUERY_API
+	/* sort the records */
 	switch (r->type) {
 	case T_A:
 		SLIST_INSERT_HEAD(&m->as, r, list_item);
@@ -106,6 +130,11 @@ int mdns_parse_message(struct mdns_message *m, int mlen)
 			return -1;
 		}
 		CHECK_TAILROOM(m, len);
+		if (dname_overrun(m->data, m->end, m->cur) != 0) {
+			DBG("Warning: bad pointer in question name\n");
+			return -1;
+		}
+
 		m->cur += len;
 
 		/* get qtype and qclass */
