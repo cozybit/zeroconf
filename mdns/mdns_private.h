@@ -181,4 +181,16 @@ uint32_t interval(uint32_t start, uint32_t stop);
 void recalc_timeout(struct timeval *t, uint32_t start, uint32_t stop,
 					uint32_t target);
 
+#ifdef MDNS_DBG
+#define ASSERT(condition) do { \
+	if (!(condition)) { \
+		DBG("%s: %d: ASSERTION FAILED\n", __FILE__, __LINE__); \
+		while (1); \
+	} \
+} while (0)
+
+#else
+#define ASSERT(condition) do {} while (0)
+#endif
+
 #endif /* __MDNS_PRIVATE_H__ */
