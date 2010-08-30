@@ -183,8 +183,8 @@ struct mdns_service
 	/* The following members are for internal use only and should not be
 	 * dereferenced by the user.
 	 */
-	char fqsn[MDNS_MAX_NAME_LEN];
-	char *ptrname;
+	uint8_t fqsn[MDNS_MAX_NAME_LEN];
+	uint8_t *ptrname;
 	uint16_t kvlen;
 	uint32_t flags;
 };

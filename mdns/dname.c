@@ -4,6 +4,12 @@
  * Use and redistribution subject to licensing terms.
  *
  * DNS Name helper functions
+ *
+ * Internally, we use uint8_t to represent dns labels and names.  The reason is
+ * that these may contain pointers to other parts of a dns message, which must
+ * be unsigned.  Further, some labels and names may contain UTF-8, which is
+ * better treated as unsigned.  However, we represent the text in TXT records
+ * with normal chars, and data coming from the user is also treated as chars.
  */
 #include "mdns.h"
 #include "mdns_port.h"
@@ -20,14 +26,14 @@
  * null termination.  Return a pointer to the byte after the last one written,
  * or 0 if the label was too long.
  */
-char *dname_put_label(char *dst, char *label)
+uint8_t *dname_put_label(uint8_t *dst, char *label)
 {
 	int len;
-	char *p = dst;
+	uint8_t *p = dst;
 
 	len = (uint8_t)strlen(label);
 	*p++ = len;
-	strcpy(p, label);
+	memcpy(p, label, len);
 	return p + len;
 }
 
@@ -36,9 +42,9 @@ char *dname_put_label(char *dst, char *label)
  * size of the data it points to.  It also includes the byte taken up by the
  * terminating 0, if any.  return -1 for invalid names.
  */
-int dname_size(char *dname)
+int dname_size(uint8_t *dname)
 {
-	char *start = dname;
+	uint8_t *start = dname;
 	while (*dname != 0x00) {
 		if (IS_POINTER(*dname)) { /* pointer */
 			dname++;
@@ -55,10 +61,10 @@ int dname_size(char *dname)
 }
 
 /* compare l1 to l2.  return <0, 0, >0 like strcmp */
-int dname_label_cmp(char *p1, char *l1, char *p2, char *l2)
+int dname_label_cmp(uint8_t *p1, uint8_t *l1, uint8_t *p2, uint8_t *l2)
 {
 	int i, min;
-	char *c1, *c2;
+	uint8_t *c1, *c2;
 
 	while (IS_POINTER(*l1))
 		l1 = p1 + POINTER(l1);
@@ -86,7 +92,7 @@ int dname_label_cmp(char *p1, char *l1, char *p2, char *l2)
 }
 
 /* return a pointer to the next label in name or NULL if this is the end */
-char *dname_label_next(char *p, char *n)
+uint8_t *dname_label_next(uint8_t *p, uint8_t *n)
 {
 	while (IS_POINTER(*n))
 		n = p + POINTER(n);
@@ -102,7 +108,7 @@ char *dname_label_next(char *p, char *n)
  * you are absolutely certain that a name doesn't contain pointers, you can
  * pass NULL as it's raw packet.
  */
-int dname_cmp(char *p1, char *n1, char *p2, char *n2)
+int dname_cmp(uint8_t *p1, uint8_t *n1, uint8_t *p2, uint8_t *n2)
 {
 	int ret;
 
@@ -149,7 +155,7 @@ int dname_cmp(char *p1, char *n1, char *p2, char *n2)
  * return -1.  name must be a valid dns name and must contain at least 2 extra
  * bytes.
  */
-int dname_increment(char *name)
+int dname_increment(uint8_t *name)
 {
 	int len = name[0], newlen;
 
@@ -168,7 +174,7 @@ int dname_increment(char *name)
 	} else {
 		name[0] = newlen;
 		/* don't forget to move trailing 0 */
-		memmove(&name[len + 3], &name[len + 1], strlen(name) - len);
+		memmove(&name[len + 3], &name[len + 1], strlen((char *)name) - len);
 		name[len + 1] = '-';
 		name[len + 2] = '2';
 	}
@@ -184,7 +190,7 @@ int dname_increment(char *name)
  * UINT16_MAX, if they are, this is an error.  If dest is NULL, the operation
  * is done in-place, otherwise the result is written to dest.
  */
-int dnameify(char *name, char sep, char *dest)
+int dnameify(char *name, uint8_t sep, uint8_t *dest)
 {
 	char *src, *start;
 	int len, labellen;
@@ -194,11 +200,11 @@ int dnameify(char *name, char sep, char *dest)
 	 */
 	len = strlen(name);
 	if (dest == NULL) {
-		start = name;
-		dest = name + len;
-		src = dest - 1;
+		start = (char *)name;
+		dest = (uint8_t *)name + len;
+		src = (char *)dest - 1;
 	} else {
-		start = dest;
+		start = (char *)dest;
 		dest += len;
 		src = name + len - 1;
 	}
@@ -209,7 +215,7 @@ int dnameify(char *name, char sep, char *dest)
 		if (*src == sep && labellen == 0)
 			return -1;
 
-		if (dest == start || *src == sep ) {
+		if (dest == (uint8_t *)start || *src == sep ) {
 			/* This is the beginning of a label.  Update its length and start
 			 * looking at the next one.
 			 */
@@ -221,7 +227,7 @@ int dnameify(char *name, char sep, char *dest)
 			len += labellen + 1;
 			labellen = 0;
 
-			if (dest == start)
+			if (dest == (uint8_t *)start)
 				break;
 			dest--;
 			src--;
@@ -234,7 +240,7 @@ int dnameify(char *name, char sep, char *dest)
 	return len;
 }
 
-int dname_copy(char *dst, char *p, char *src)
+int dname_copy(uint8_t *dst, uint8_t *p, uint8_t *src)
 {
 	int len = 0;
 
@@ -260,7 +266,8 @@ int dname_copy(char *dst, char *p, char *src)
  * underscores will be preserved.  Otherwise, leading underscore will not be
  * copied to dst.  Return a pointer to the next label that needs parsing.
  */
-char *dname_label_to_c(char *dst, char *p, char *src, int keepuscores)
+uint8_t *dname_label_to_c(char *dst, uint8_t *p, uint8_t *src,
+						  int keepuscores)
 {
 	int len = 0, i;
 
@@ -276,7 +283,7 @@ char *dname_label_to_c(char *dst, char *p, char *src, int keepuscores)
 			src++;
 			continue;
 		}
-		*dst++ = *src++;
+		*dst++ = (char)*src++;
 	}
 	*dst = 0;
 	return src;
@@ -317,9 +324,9 @@ void txt_to_c_ncpy(char *dst, int dlen, char *txt, int tlen)
 }
 
 #ifdef MDNS_TESTS
-static int c_to_dname(char *dst, char *src)
+static int c_to_dname(uint8_t *dst, char *src)
 {
-	char *label = dst;
+	uint8_t *label = dst;
 	int len = 0;
 
 	dst++;
@@ -336,7 +343,7 @@ static int c_to_dname(char *dst, char *src)
 			src++;
 			continue;
 		}
-		*dst++ = *src++;
+		*dst++ = (uint8_t)*src++;
 		len++;
 	}
 	*dst = 0;
@@ -345,28 +352,28 @@ static int c_to_dname(char *dst, char *src)
 }
 
 /* dname_length tests and test data */
-char p0[] = {3, 'f', 'o', 'o', 5, 'l', 'o', 'c', 'a', 'l', 0};
+uint8_t p0[] = {3, 'f', 'o', 'o', 5, 'l', 'o', 'c', 'a', 'l', 0};
 
 /* p1 contains the name foo.local in a query and a pointer to that name at
  * offset 27.
  */
-char p1[] = {0xBD, 0x38, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
+uint8_t p1[] = {0xBD, 0x38, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
 			 0x00, 0x03, 0x66, 0x6F, 0x6F, 0x05, 0x6C, 0x6F, 0x63, 0x61, 0x6C,
 			 0x00, 0x00, 0x01, 0x00, 0x01, 0xC0, 0x0C, 0x00, 0x01, 0x00, 0x01,
 			 0x00, 0x00, 0x00, 0xFF, 0x00, 0x04, 0xC0, 0xA8, 0x01, 0x51, };
 
-char p2[] = {64, 't', 'h', 'i', 's', 'n', 'a', 'm', 'e', 'i', 's', 't', 'h',
+uint8_t p2[] = {64, 't', 'h', 'i', 's', 'n', 'a', 'm', 'e', 'i', 's', 't', 'h',
 			 'e', 'm', 'a', 'x', 'l', 'a', 'b', 'e', 'l', 'l', 'e', 'n', 'g',
 			 't', 'h', 'p', 'l', 'u', 's', '1', '0', '0', '0', '0', '0', '0',
 			 '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0',
 			 '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', 5,
 			 'l', 'o', 'c', 'a', 'l', 0};
 
-char p3[] = {5, 'f', 'o', 'o', '-', '2', 5, 'l', 'o', 'c', 'a', 'l', 0};
+uint8_t p3[] = {5, 'f', 'o', 'o', '-', '2', 5, 'l', 'o', 'c', 'a', 'l', 0};
 
-char p4[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '3', 0};
+uint8_t p4[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '3', 0};
 
-char p5[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '2', 0};
+uint8_t p5[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '2', 0};
 
 static void dname_size_tests(void)
 {
@@ -412,8 +419,8 @@ static void dname_cmp_tests(void)
 static void increment_name_tests(void)
 {
 	int ret, i;
-	char n1[MDNS_MAX_NAME_LEN];
-	char n2[MDNS_MAX_NAME_LEN];
+	uint8_t n1[MDNS_MAX_NAME_LEN];
+	uint8_t n2[MDNS_MAX_NAME_LEN];
 
 	test_title("dname_increment");
 	/* simple test case */
@@ -423,7 +430,7 @@ static void increment_name_tests(void)
 	FAIL_UNLESS(ret == 0, "Failed to increment foo to foo-2");
 	ret = c_to_dname(n2, "foo-2.local");
 	FAIL_UNLESS(ret == 0, "Failed to convert name to mdns name");	
-	ret = strcmp(n1, n2);
+	ret = strcmp((char *)n1, (char *)n2);
 	FAIL_UNLESS(ret == 0, "Failed to increment foo to foo-2");
 
 	/* maximum name */
@@ -433,7 +440,7 @@ static void increment_name_tests(void)
 	FAIL_UNLESS(ret == 0, "Failed to increment longest possible name");
 	ret = c_to_dname(n2, "thisnameisthemaxlabellength0000000000000000000000000000000000-2.local");
 	FAIL_UNLESS(ret == 0, "Failed to convert longest possible name to mdns name");
-	ret = strcmp(n1, n2);
+	ret = strcmp((char *)n1, (char *)n2);
 	FAIL_UNLESS(ret == 0, "Failed to increment longest possible name");
 
 	/* several increments */
@@ -443,7 +450,7 @@ static void increment_name_tests(void)
 		dname_increment(n1);
 	ret = c_to_dname(n2, "myname-7.local");
 	FAIL_UNLESS(ret == 0, "Failed to convert name to mdns name");	
-	ret = strcmp(n1, n2);
+	ret = strcmp((char *)n1, (char *)n2);
 	FAIL_UNLESS(ret == 0, "Failed to increment foo to foo-6");
 
 	/* max increments */
@@ -451,7 +458,7 @@ static void increment_name_tests(void)
 		dname_increment(n1);
 	ret = c_to_dname(n2, "myname-9.local");
 	FAIL_UNLESS(ret == 0, "Failed to convert name to mdns name");	
-	ret = strcmp(n1, n2);
+	ret = strcmp((char *)n1, (char *)n2);
 	FAIL_UNLESS(ret == 0, "Failed to increment foo to foo-9");
 
 	/* over increment */

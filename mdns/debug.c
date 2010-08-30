@@ -41,9 +41,9 @@ void debug_print_txt(char *txt, uint16_t len)
 }
 
 /* print a RFC-1035 format domain name */
-void debug_print_name(struct mdns_message *m, char *name)
+void debug_print_name(struct mdns_message *m, uint8_t *name)
 {
-	char *s = name;
+	uint8_t *s = name;
 	int first = 1;
 
 	while(*s) {
@@ -51,7 +51,7 @@ void debug_print_name(struct mdns_message *m, char *name)
 			if(m == NULL)
 				break;
 			/* go print at start of message+offset */
-			s = (char *)m->header+((uint8_t)(((*s & ~(0xC0))<<8) | *(s+1)));
+			s = (uint8_t *)m->header+((uint8_t)(((*s & ~(0xC0))<<8) | *(s+1)));
 			continue;
 		}
 		else { /* label */
@@ -59,7 +59,7 @@ void debug_print_name(struct mdns_message *m, char *name)
 				DBG(".");
 			}
 			first = 0;
-			debug_print_txt(s+1, *s); /* print label text */
+			debug_print_txt((char *)s + 1, *s);
 			s += *s;
 		}
 		s++;
@@ -89,11 +89,11 @@ void debug_print_resource(struct mdns_message *m, struct mdns_resource *r)
 		break;
 	case T_NS:
 		DBG("NS ");
-		debug_print_name(m, (char *)r->rdata);
+		debug_print_name(m, (uint8_t *)r->rdata);
 		break;
 	case T_CNAME:
 		DBG("CNAME ");
-		debug_print_name(m, (char *)r->rdata);
+		debug_print_name(m, (uint8_t *)r->rdata);
 		break;
 	case T_SRV:
 		DBG("SRV ");
@@ -105,7 +105,7 @@ void debug_print_resource(struct mdns_message *m, struct mdns_resource *r)
 		break;
 	case T_PTR:
 		DBG("PTR ");
-		debug_print_name(m, (char *)r->rdata);
+		debug_print_name(m, (uint8_t *)r->rdata);
 		break;
 	case T_TXT:
 		DBG("TXT \"");

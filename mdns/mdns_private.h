@@ -52,7 +52,7 @@ extern char *eventnames[];
 #elif defined(MDNS_LOG) && defined(MDNS_DBG)
 #define LOG mdns_log
 void debug_print_message(struct mdns_message *m);
-void debug_print_name(struct mdns_message *m, char *name);
+void debug_print_name(struct mdns_message *m, uint8_t *name);
 #define DBG mdns_log
 
 #elif !defined(MDNS_LOG) && !defined(MDNS_DBG)
@@ -83,15 +83,16 @@ void debug_print_name(struct mdns_message *m, char *name);
 	} while (0)
 
 /* helpers for handling dns names */
-char *dname_put_label(char *dst, char *label);
-int dname_size(char *dname);
-int dname_increment(char *name);
-int dname_cmp(char *p1, char *n1, char *p2, char *n2);
-int dnameify(char *name, char sep, char *dest);
-int dname_copy(char *dst, char *p, char *src);
-char *dname_label_to_c(char *dst, char *p, char *src, int keepuscores);
-int dname_label_cmp(char *p1, char *l1, char *p2, char *l2);
-char *dname_label_next(char *p, char *n);
+uint8_t *dname_put_label(uint8_t *dst, char *label);
+int dname_size(uint8_t *dname);
+int dname_increment(uint8_t *name);
+int dname_cmp(uint8_t *p1, uint8_t *n1, uint8_t *p2, uint8_t *n2);
+int dnameify(char *name, uint8_t sep, uint8_t *dest);
+int dname_copy(uint8_t *dst, uint8_t *p, uint8_t *src);
+uint8_t *dname_label_to_c(char *dst, uint8_t *p, uint8_t *src,
+						  int keepuscores);
+int dname_label_cmp(uint8_t *p1, uint8_t *l1, uint8_t *p2, uint8_t *l2);
+uint8_t *dname_label_next(uint8_t *p, uint8_t *n);
 void txt_to_c_ncpy(char *dst, int dlen, char *txt, int tlen);
 void dname_tests(void);
 
@@ -157,20 +158,20 @@ void query_halt(void);
 int mdns_send_msg(struct mdns_message *m, int sock, short port);
 int mdns_send_ctrl_msg(int msg, uint16_t port);
 int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
-						 char *fqdn, int section, uint32_t ttl);
-int mdns_add_question(struct mdns_message *m, char *qname, uint16_t qtype,
+						 uint8_t *fqdn, int section, uint32_t ttl);
+int mdns_add_question(struct mdns_message *m, uint8_t *qname, uint16_t qtype,
 					  uint16_t qclass);
-int mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
+int mdns_add_answer(struct mdns_message *m, uint8_t *name, uint16_t type,
 					uint16_t class, uint32_t ttl);
 int mdns_add_answer_o(struct mdns_message *m, uint16_t offset, uint16_t type,
 					  uint16_t class, uint32_t ttl);
-int mdns_add_answer_lo(struct mdns_message *m, char *label, uint16_t offset,
+int mdns_add_answer_lo(struct mdns_message *m, uint8_t *label, uint16_t offset,
 					   uint16_t type, uint16_t class, uint32_t ttl);
-int mdns_add_authority(struct mdns_message *m, char *name, uint16_t type,
+int mdns_add_authority(struct mdns_message *m, uint8_t *name, uint16_t type,
 					   uint16_t class, uint32_t ttl);
 int mdns_add_uint32(struct mdns_message *m, uint32_t i);
-int mdns_add_name(struct mdns_message *m, char *name);
-int mdns_add_name_lo(struct mdns_message *m, char *label, uint16_t offset);
+int mdns_add_name(struct mdns_message *m, uint8_t *name);
+int mdns_add_name_lo(struct mdns_message *m, uint8_t *label, uint16_t offset);
 int mdns_query_init(struct mdns_message *m);
 int mdns_parse_message(struct mdns_message *m, int mlen);
 int mdns_response_init(struct mdns_message *m);

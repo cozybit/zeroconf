@@ -71,14 +71,14 @@ BEGIN_PACK struct mdns_header {
 
 /* mDNS question (query) representation */
 struct mdns_question {
-	char *qname;
+	uint8_t *qname;
 	uint16_t qtype; /* question type */
 	uint16_t qclass; /* question class */
 };
 
 /* mDNS resource record (RR) format */
 struct mdns_resource {
-	char *name;
+	uint8_t *name;
 	uint16_t type; /* resource type for the RDATA field */
 	uint16_t class; /* resource class for the RDATA field */
 	uint32_t ttl; /* how long the record may be cached */
@@ -94,7 +94,7 @@ struct rr_srv {
 	uint16_t priority;
 	uint16_t weight;
 	uint16_t port;
-	char target[0];
+	uint8_t target[0];
 };
 
 /* This defines the maximum size in bytes for the mDNS data.
@@ -112,10 +112,10 @@ SLIST_HEAD(rr_list, mdns_resource);
 
 /* mDNS message representation */
 struct mdns_message {
-	char data[MDNS_DATA_MAX]; /* raw data for packet. */
+	uint8_t data[MDNS_DATA_MAX]; /* raw data for packet. */
 	struct mdns_header *header;
-	char *cur; /* next byte to read or write */
-	char *end; /* end of message buffer */
+	uint8_t *cur; /* next byte to read or write */
+	uint8_t *end; /* end of message buffer */
 	int len; /* length of message buffer */
 	struct mdns_question questions[MDNS_MAX_QUESTIONS];
 	uint16_t num_questions;

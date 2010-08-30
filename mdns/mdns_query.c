@@ -48,7 +48,7 @@ struct service_instance {
 	char keyvals[MDNS_MAX_KEYVAL_LEN + 1];
 	char rawkeyvals[MDNS_MAX_KEYVAL_LEN + 1];
 	int rawkvlen;
-	char fqdn[MDNS_MAX_NAME_LEN + 1];
+	uint8_t fqdn[MDNS_MAX_NAME_LEN + 1];
 	/* we keep ttls for each record.  Note that these ttls are in milliseconds,
 	 * not seconds.  If a received ttl is too big, we simply make it as big as
 	 * possible.
@@ -67,7 +67,7 @@ struct service_monitor {
 	SLIST_ENTRY(service_monitor) list_item;
 	struct sinst_list sinsts;
 
-	char fqst[MDNS_MAX_NAME_LEN + 1];
+	uint8_t fqst[MDNS_MAX_NAME_LEN + 1];
 	/* save memory by adding a dname pointer to the fqst and fqsn instead of
 	 * copying them over and over.  These offsets can be used while
 	 * constructing packets, but aren't expected to be relevant in any other
@@ -104,7 +104,7 @@ static struct service_monitor smons[MDNS_MAX_SERVICE_MONITORS];
 union query_ctrl_data {
 	char raw[0];
 	struct service_monitor smon;
-	char fqst[MDNS_MAX_NAME_LEN + 1];
+	uint8_t fqst[MDNS_MAX_NAME_LEN + 1];
 };
 
 struct query_ctrl_msg {
@@ -188,7 +188,7 @@ done:
  * known to not contain pointers
  */
 static struct service_monitor *find_service_monitor(struct mdns_message *m,
-													char *fqst)
+													uint8_t *fqst)
 {
 	struct service_monitor *found = NULL;
 
@@ -236,7 +236,7 @@ static int add_service(struct service_monitor *smon)
 /* remove the service fqst from the monitor list.  If fqst is an empty string,
  * we unmonitor all services.
  */
-static void remove_service(char *fqst)
+static void remove_service(uint8_t *fqst)
 {
 	struct service_monitor *found;
 
@@ -273,7 +273,7 @@ static void remove_service(char *fqst)
  */
 static struct service_instance *find_service_instance(struct service_monitor *smon,
 													  struct mdns_message *m,
-													  char *fqsn)
+													  uint8_t *fqsn)
 {
 	struct service_instance *found = NULL;
 
@@ -305,7 +305,7 @@ static void reset_service_instance(struct service_instance *sinst)
  * m.  Return 0 on success or -1 on failure.
  */
 static int copy_servinfo(struct mdns_service *s, struct mdns_message *m,
-						 char *fqsn)
+						 uint8_t *fqsn)
 {
 	int ret;
 
@@ -321,9 +321,9 @@ static int copy_servinfo(struct mdns_service *s, struct mdns_message *m,
 	if (fqsn == NULL)
 		return -1;
 
-	if (dname_label_cmp(NULL, "\4_tcp", m->data, fqsn) == 0)
+	if (dname_label_cmp(NULL, (uint8_t *)"\4_tcp", m->data, fqsn) == 0)
 		s->proto = MDNS_PROTO_TCP;
-	else if (dname_label_cmp(NULL, "\4_udp", m->data, fqsn) == 0)
+	else if (dname_label_cmp(NULL, (uint8_t *)"\4_udp", m->data, fqsn) == 0)
 		s->proto = MDNS_PROTO_UDP;
 	else {
 		LOG("Failed to parse protocol.\n");
@@ -537,7 +537,8 @@ static int add_known_answers(struct mdns_message *m,
 		mdns_add_answer_o(m, smon->fqst_offset, T_PTR, C_IN,
 						  sinst->ptr_ttl/1000);
 		smon->fqsn_offset = m->cur - m->data;
-		mdns_add_name_lo(m, sinst->service.servname, smon->fqst_offset);
+		mdns_add_name_lo(m, (uint8_t *)sinst->service.servname,
+						 smon->fqst_offset);
 	}
 	return 0;
 

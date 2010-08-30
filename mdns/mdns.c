@@ -81,7 +81,7 @@ int mdns_parse_message(struct mdns_message *m, int mlen)
 	m->header = (struct mdns_header *)m->data;
 	m->len = mlen;
 	m->end = m->data + mlen - 1;
-	m->cur = (char *)m->header + sizeof(struct mdns_header);
+	m->cur = (uint8_t *)m->header + sizeof(struct mdns_header);
 	m->num_questions = ntohs(m->header->qdcount);
 	m->num_answers = ntohs(m->header->ancount);
 	m->num_authorities = ntohs(m->header->nscount);
@@ -194,8 +194,8 @@ int mdns_response_init(struct mdns_message *m)
  * checking is performed; the caller is responsible for ensuring that all
  * values will fit.  Return 0 for success or -1 for failure.
  */
-static int __mdns_add_tuple(struct mdns_message *m, char *name, uint16_t type,
-							uint16_t class, uint32_t ttl)
+static int __mdns_add_tuple(struct mdns_message *m, uint8_t *name,
+							uint16_t type, uint16_t class, uint32_t ttl)
 {
 	uint16_t len = (uint16_t)dname_size(name);
 	int size = ttl == (uint32_t)-1 ? len + 2*sizeof(uint16_t) :
@@ -217,7 +217,7 @@ static int __mdns_add_tuple(struct mdns_message *m, char *name, uint16_t type,
 /* add a question with name qname, type qtype, and class qclass to the message
  * m.  Return 0 for success, -1 for failure.
  */
-int mdns_add_question(struct mdns_message *m, char *qname, uint16_t qtype,
+int mdns_add_question(struct mdns_message *m, uint8_t *qname, uint16_t qtype,
 					  uint16_t qclass)
 {
 	if (__mdns_add_tuple(m, qname, qtype, qclass, (uint32_t)-1) == -1)
@@ -231,7 +231,7 @@ int mdns_add_question(struct mdns_message *m, char *qname, uint16_t qtype,
  * failure.  Note that this function does not add the resource record data.  It
  * just populates the common header.
  */
-int mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
+int mdns_add_answer(struct mdns_message *m, uint8_t *name, uint16_t type,
 					uint16_t class, uint32_t ttl)
 {
 	if (__mdns_add_tuple(m, name, type, class, ttl))
@@ -246,10 +246,10 @@ int mdns_add_answer(struct mdns_message *m, char *name, uint16_t type,
  * suffix.  This allows us to use a bit of compression when we have lots of
  * records with the same label (and we know the offset to that label!)
  */
-int mdns_add_answer_lo(struct mdns_message *m, char *label, uint16_t offset,
+int mdns_add_answer_lo(struct mdns_message *m, uint8_t *label, uint16_t offset,
 					   uint16_t type, uint16_t class, uint32_t ttl)
 {
-	uint16_t len = (uint16_t)strlen(label);
+	uint16_t len = (uint16_t)strlen((char *)label);
 	/* the size includes 1 byte for the label len and 2 for the offset */
 	int size = len + 2*sizeof(uint16_t) + sizeof(uint32_t) + 3;
 	CHECK_TAILROOM(m, size);
@@ -297,7 +297,7 @@ int mdns_add_answer_o(struct mdns_message *m, uint16_t offset, uint16_t type,
  * Return 0 for success, -1 for failure.  Note that this function does not add
  * the resource record data.  It just populates the common header.
  */
-int mdns_add_authority(struct mdns_message *m, char *name, uint16_t type,
+int mdns_add_authority(struct mdns_message *m, uint8_t *name, uint16_t type,
 					   uint16_t class, uint32_t ttl)
 {
 	if (__mdns_add_tuple(m, name, type, class, ttl))
@@ -323,7 +323,7 @@ int mdns_add_uint32(struct mdns_message *m, uint32_t i)
 /* add a dns name containing name to the message m.  This is used for cname,
  * ns, and ptr.
  */
-int mdns_add_name(struct mdns_message *m, char *name)
+int mdns_add_name(struct mdns_message *m, uint8_t *name)
 {
 	int len = dname_size(name);
 	CHECK_TAILROOM(m, len + sizeof(uint16_t));
@@ -337,9 +337,9 @@ int mdns_add_name(struct mdns_message *m, char *name)
 /* like add name, but instead of taking a dname, it takes a leading label
  * (which is a C-string) and an offset to the suffix.
  */
-int mdns_add_name_lo(struct mdns_message *m, char *label, uint16_t offset)
+int mdns_add_name_lo(struct mdns_message *m, uint8_t *label, uint16_t offset)
 {
-	int len = strlen(label);
+	int len = strlen((char *)label);
 	CHECK_TAILROOM(m, len + 1 + 2*sizeof(uint16_t));
 	set_uint16(m->cur, len + 1 + sizeof(uint16_t));
 	m->cur += sizeof(uint16_t);
@@ -369,7 +369,7 @@ static int mdns_add_txt(struct mdns_message *m, char *txt, uint16_t len)
  * target name.
  */
 static int mdns_add_srv(struct mdns_message *m, uint16_t priority,
-						uint16_t weight, uint16_t port, char *target)
+						uint16_t weight, uint16_t port, uint8_t *target)
 {
 	int len = dname_size(target);
 	CHECK_TAILROOM(m, len + 4*sizeof(uint16_t));
@@ -390,30 +390,30 @@ static int mdns_add_srv(struct mdns_message *m, uint16_t priority,
  * section of the message m.  Return 0 for success or -1 for error.
  */
 int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
-						 char *fqdn, int section, uint32_t ttl)
+						 uint8_t *fqdn, int section, uint32_t ttl)
 {
 
 	if (section == MDNS_SECTION_ANSWERS) {
 		/* If we're populating the answer section, we put all of the data */
-		if (mdns_add_answer(m, s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
+		if (mdns_add_answer(m, (uint8_t *)s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
 			mdns_add_srv(m, 0, 0, s->port, fqdn) != 0)
 			return -1;
-		if (mdns_add_answer(m, s->ptrname, T_PTR, C_FLUSH, ttl) != 0 ||
-			mdns_add_name(m, s->fqsn) != 0)
+		if (mdns_add_answer(m, (uint8_t *)s->ptrname, T_PTR, C_FLUSH, ttl) != 0 ||
+			mdns_add_name(m, (uint8_t *)s->fqsn) != 0)
 			return -1;
 		if (s->keyvals) {
-			if (mdns_add_answer(m, s->fqsn, T_TXT, C_FLUSH, ttl) != 0 ||
+			if (mdns_add_answer(m, (uint8_t *)s->fqsn, T_TXT, C_FLUSH, ttl) != 0 ||
 				mdns_add_txt(m, s->keyvals, s->kvlen) != 0)
 				return -1;
 		}
 
 	} else if (section == MDNS_SECTION_AUTHORITIES) {
 		/* For the authority section , we only need srv and txt */
-		if (mdns_add_authority(m, s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
+		if (mdns_add_authority(m, (uint8_t *)s->fqsn, T_SRV, C_FLUSH, ttl) != 0 ||
 			mdns_add_srv(m, 0, 0, s->port, fqdn) != 0)
 			return -1;
 		if (s->keyvals) {
-			if (mdns_add_authority(m, s->fqsn, T_TXT, C_FLUSH, ttl) != 0 ||
+			if (mdns_add_authority(m, (uint8_t *)s->fqsn, T_TXT, C_FLUSH, ttl) != 0 ||
 				mdns_add_txt(m, s->keyvals, s->kvlen) != 0)
 				return -1;
 		}
@@ -422,7 +422,7 @@ int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
 		/* we only add SRV records to the question section when we are probing.
 		 * And in this case we just add the fqsn.
 		 */
-		return mdns_add_question(m, s->fqsn, T_ANY, C_IN);
+		return mdns_add_question(m, (uint8_t *)s->fqsn, T_ANY, C_IN);
 	} else {
 		return -1;
 	}
