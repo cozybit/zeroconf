@@ -19,6 +19,9 @@
  * For example, specify "MDNS_SYSTEM_LINUX" for a linux target.  Be sure to
  * ONLY define one MDNS_SYSTEM.
  *
+ * MDNS_ENDIAN_BIG|MDNS_ENDIAN_LITTLE: You must define exactly one of these to
+ * specify the endianness of your target.
+ *
  * MDNS_QUERY_API: Developers who require the ability to query for services as
  * opposed to just responding to such queries should define MDNS_QUERY_API.
  * This enables the mdns_query_* functions described below.  These functions

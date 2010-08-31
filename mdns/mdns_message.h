@@ -33,6 +33,7 @@ BEGIN_PACK struct mdns_header {
 	uint16_t id;
 	union {
 		struct { uint16_t
+#ifdef MDNS_ENDIAN_LITTLE
 			rcode:4,	/* response code */
 			cd:1,		/* checking disabled  RFC-2535*/
 			ad:1,		/* authentic data RFC-2535 */
@@ -43,6 +44,18 @@ BEGIN_PACK struct mdns_header {
 			aa:1,		/* authoritative answer */
 			opcode:4,	/* should be 0 for mDNS messages */
 			qr:1;		/* query/response */
+#else
+			qr:1;
+			opcode:4,
+			aa:1,
+			tc:1,
+			rd:1,
+			ra:1,
+			z:1,
+			ad:1,
+			cd:1,
+			rcode:4,
+#endif
 		} fields;
 		uint16_t num;
 	} flags;

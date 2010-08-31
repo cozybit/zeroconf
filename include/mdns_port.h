@@ -42,6 +42,11 @@
 #error "mdns compiler is not defined"
 #endif
 
+#if defined(MDNS_ENDIAN_BIG) && defined(MDNS_ENDIAN_LITTLE)
+#error "Please define only one endianness"
+#elif !defined(MDNS_ENDIAN_BIG) && !defined(MDNS_ENDIAN_LITTLE)
+#error "Please define endianness of target"
+#endif
 
 /*
  * mdsn_thread_entry: Thread entry point function
