@@ -20,7 +20,9 @@
  * are stored as a service_instance, and the service_instance contains a
  * reference to an A record.  We have this indirection because many services
  * may have the same A record.  Accordingly, each A record maintains a
- * cross-reference list of service_instances that refer to it.
+ * cross-reference list of service_instances that refer to it.  This enables
+ * updates to the A record to be passed on to the user without endless amounts
+ * of searching.
  *
  * When we receive a message, we sort the answer records by type (see
  * mdns_parse_message).  This allows us to create and populate any new service
@@ -45,8 +47,12 @@ enum arec_state {
 	AREC_STATE_RESOLVED_DIRTY,
 };
 
+struct service_instance;
+SLIST_HEAD(sinst_list, service_instance);
+
 struct arec {
 	SLIST_ENTRY(arec) list_item;
+	struct sinst_list sinsts;
 	uint32_t ipaddr;
 	uint32_t ttl;
 	uint8_t fqdn[MDNS_MAX_NAME_LEN + 1];
@@ -68,6 +74,7 @@ struct service_instance {
 	char keyvals[MDNS_MAX_KEYVAL_LEN + 1];
 	char rawkeyvals[MDNS_MAX_KEYVAL_LEN + 1];
 	int rawkvlen;
+	SLIST_ENTRY(service_instance) alist_item;
 	struct arec *arec;
 	/* we keep ttls for each record.  Note that these ttls are in milliseconds,
 	 * not seconds.  If a received ttl is too big, we simply make it as big as
@@ -78,7 +85,6 @@ struct service_instance {
 	uint32_t txt_ttl;
 };
 
-SLIST_HEAD(sinst_list, service_instance);
 static struct sinst_list sinsts_free;
 static struct service_instance sinsts[MDNS_SERVICE_CACHE_SIZE];
 
@@ -253,6 +259,28 @@ static int add_service(struct service_monitor *smon)
 	return MDNS_SUCCESS;
 }
 
+static void cleanup_service(struct service_monitor *smon)
+{
+	struct service_instance *sinst;
+
+	while (!SLIST_EMPTY(&smon->sinsts)) {
+		sinst = SLIST_FIRST(&smon->sinsts);
+		SLIST_REMOVE_HEAD(&smon->sinsts, list_item);
+
+		if (sinst->arec != NULL) {
+			/* take us off of our a record's list */
+			SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
+						 alist_item);
+			if (SLIST_EMPTY(&sinst->arec->sinsts)) {
+				SLIST_REMOVE(&arecs_active, sinst->arec, arec, list_item);
+				SLIST_INSERT_HEAD(&arecs_free, sinst->arec, list_item);
+			}
+		}
+
+		SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
+	}
+}
+
 /* remove the service fqst from the monitor list.  If fqst is an empty string,
  * we unmonitor all services.
  */
@@ -268,6 +296,7 @@ static void remove_service(uint8_t *fqst)
 			DBG("\t");
 			debug_print_name(NULL, found->fqst);
 			DBG("\n");
+			cleanup_service(found);
 			SLIST_INSERT_HEAD(&smons_free, found, list_item);
 		}
 		return;
@@ -306,19 +335,10 @@ static struct service_instance *find_service_instance(struct service_monitor *sm
 
 static void reset_service_instance(struct service_instance *sinst)
 {
-	sinst->sname[0] = 0;
-	sinst->stype[0] = 0;
-	sinst->domain[0] = 0;
-	sinst->arec = NULL;
-	sinst->service.port = 0;
-	sinst->service.keyvals = NULL;
-	sinst->service.ipaddr = 0;
+	memset(sinst, 0, sizeof(struct service_instance));
 	sinst->service.servname = sinst->sname;
 	sinst->service.servtype = sinst->stype;
 	sinst->service.domain = sinst->domain;
-	sinst->service.flags = 0;
-	sinst->rawkvlen = 0;
-	sinst->rawkeyvals[0] = 0;
 }
 
 /* populate the service s with the bits and pieces in the fqsn from message
@@ -413,11 +433,45 @@ static void update_srv(struct service_instance *sinst, struct mdns_message *m,
 		s->port = srv->port;
 		s->flags |= SERVICE_IS_DIRTY_FLAG;
 	}
+
+	/* Now we have to make sure our service instance has an a record */
 	arec = find_arec(m, srv->target);
-	if (arec != sinst->arec) {
-		sinst->arec = arec;
-		s->flags |= SERVICE_IS_DIRTY_FLAG;
+	if (arec == NULL) {
+		/* there's no a record for this service.  Get one. */
+		arec = SLIST_FIRST(&arecs_free);
+		if (arec == NULL) {
+			/* the arec cache is full.  Let the user deal with it */
+			sinst->arec = NULL;
+			goto done;
+		}
+
+		SLIST_REMOVE_HEAD(&arecs_free, list_item);
+		SLIST_INSERT_HEAD(&arecs_active, arec, list_item);
+		memset(arec, 0, sizeof(struct arec));
+		dname_copy(arec->fqdn, m->data, srv->target);
 	}
+
+	if (sinst->arec != NULL && sinst->arec != arec) {
+		/* We have an arec for the hostname called out by the SRV, but
+		 * it differs from the one that the SRV originally had
+		 */
+		SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
+					 alist_item);
+		sinst->service.flags |= SERVICE_IS_DIRTY_FLAG;
+	}
+
+	if (arec->state != AREC_STATE_RESOLVED_DIRTY &&
+		arec->state != AREC_STATE_RESOLVED_CLEAN)
+		sinst->service.flags &= ~SERVICE_HAS_A_FLAG;
+	else
+		sinst->service.flags |= SERVICE_HAS_A_FLAG;
+
+	/* We have an arec, and we're not on any other arec's list */
+	SLIST_INSERT_HEAD(&arec->sinsts, sinst, alist_item);
+	sinst->arec = arec;
+
+done:
+	/* finally, update the ttl and flags */
 	sinst->srv_ttl = CONVERT_TTL(r->ttl);
 	sinst->service.flags |= SERVICE_HAS_SRV_FLAG;
 }
@@ -523,30 +577,25 @@ static int update_service_cache(struct mdns_message *m)
 			update_srv(sinst, m, r);
 			SLIST_REMOVE(&m->srvs, r, mdns_resource, list_item);
 
-			/* Now we have to decide what to do about the a record. */
 			if (sinst->arec == NULL) {
-				sinst->arec = SLIST_FIRST(&arecs_free);
-				if (sinst->arec == NULL) {
-					/* The A record cache is full.  If there's a suitable A
-					 * record in this message, we'll plop it into the overflow
-					 * A record and alert the user.  Otherwise, we've made our
-					 * best effort to discover the service and we're done.
-					 */
-					sinst->arec = &overflow_arec;
+				/* The A record cache is full.  If there's a suitable A record
+				 * in this message, we'll plop it into the overflow A record
+				 * and alert the user.  Otherwise, we've made our best effort
+				 * to discover the service and we're done.
+				 */
+				sinst->arec = &overflow_arec;
 
-					/* It's a bug of we're using the overflow A record but not
-					 * the overflow service instance
-					 */
-					ASSERT(status == MDNS_CACHE_FULL);
-				} else {
-					SLIST_REMOVE_HEAD(&arecs_free, list_item);
-					SLIST_INSERT_HEAD(&arecs_active, sinst->arec, list_item);
-				}
+				/* It's a bug of we're using the overflow A record but not the
+				 * overflow service instance
+				 */
+				ASSERT(status == MDNS_CACHE_FULL);
+
+				memset(sinst->arec, 0, sizeof(struct arec));
+				srv = (struct rr_srv *)r->rdata;
+				dname_copy(sinst->arec->fqdn, m->data, srv->target);
 			}
-			/* populate the arecord. */
-			memset(sinst->arec, 0, sizeof(struct arec));
-			srv = (struct rr_srv *)r->rdata;
-			dname_copy(sinst->arec->fqdn, m->data, srv->target);
+
+			/* populate/update the arecord if necessary */
 			SLIST_FOREACH_SAFE(a, &m->as, list_item, atmp) {
 				if (dname_cmp(m->data, a->name, NULL, sinst->arec->fqdn) != 0)
 					continue;
@@ -697,9 +746,6 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 
 	SLIST_FOREACH(smon, &smons_active, list_item) {
 
-		DBG("Considering ");
-		debug_print_name(NULL, smon->fqst);
-		DBG("\n");
 		if (smon->next_refresh <= elapsed) {
 			/* double the refresh period, topping out at 60s, and add a
 			 * suitable question
