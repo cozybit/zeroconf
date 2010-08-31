@@ -46,6 +46,11 @@ enum arec_state {
 	AREC_STATE_RESOLVED,
 };
 
+enum arec_event {
+	AREC_EVENT_RX_REC = 0,
+	AREC_EVENT_ADD_QUESTIONS,
+};
+
 struct service_instance;
 SLIST_HEAD(sinst_list, service_instance);
 
@@ -56,6 +61,8 @@ struct arec {
 	uint32_t ttl;
 	uint8_t fqdn[MDNS_MAX_NAME_LEN + 1];
 	enum arec_state state;
+	uint32_t next_refresh;
+	int ttl_percent;
 };
 
 SLIST_HEAD(arecs_list, arec);
@@ -155,6 +162,7 @@ static struct query_ctrl_msg ctrl_msg;
 
 #define UPDATE_TTL(ttl, elapsed) ((ttl) > (elapsed) ? (ttl) - (elapsed) : 0)
 #define CONVERT_TTL(ttl) ((ttl) > UINT32_MAX/1000 ? UINT32_MAX : (ttl) * 1000)
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 /* Send a control message msg to the server listening at localhost:port.
  * Expect an int response code from the server.
@@ -560,33 +568,143 @@ static void update_sinst(struct service_instance *sinst, struct mdns_message *m,
 	}
 }
 
-/* update the a record a with the data from the resource record a in the
- * message m.  Expect that the fqdn is already up to date, and we just want to
- * adjust the IP address and the ttl as necessary
+/* set the ip address of the a record and alert associated sinsts if
+ * necessary.
  */
-static void update_arec(struct arec *arec, struct mdns_message *m,
-						struct mdns_resource *a)
+static void set_ip(struct arec *arec, struct mdns_resource *a)
 {
-
 	uint32_t ipaddr = get_uint32(a->rdata);
 	struct service_instance *sinst;
 
+	if (arec->ipaddr == ipaddr)
+		return;
+	arec->ipaddr = ipaddr;
+	SLIST_FOREACH(sinst, &arec->sinsts, alist_item) {
+		update_sinst(sinst, NULL, arec, NULL, NULL);
+	}
+	arec->ttl = CONVERT_TTL(a->ttl);
+	/* next refresh is when 20% of the ttl remains */
+	arec->next_refresh = arec->ttl * 80 / 100;
+	arec->ttl_percent = 10;
+}
+
+/* we've tried and tried to get the A record but we can't.  Evict it from the
+ * cache along with any sinsts associated with it.
+ */
+static void evict_arec(struct arec *arec)
+{
+	struct service_instance *sinst;
+
+	SLIST_REMOVE(&arecs_active, arec, arec, list_item);
+	while (!SLIST_EMPTY(&arec->sinsts)) {
+		sinst = SLIST_FIRST(&arec->sinsts);
+		SLIST_REMOVE_HEAD(&arec->sinsts, alist_item);
+		/* TODO: tell the sinst that its arec is gone */
+	}
+	SLIST_INSERT_HEAD(&arecs_free, arec, list_item);
+}
+
+/* This is the arec state machine.  Update the A record considering the event
+ * that just happened.  The other arguments may or may not be valid depending
+ * on the event.  Alert any associated sinsts if necessary.  Return 1 if we
+ * need to send a query, otherwise return 0.
+ */
+static int update_arec(struct arec *arec, enum arec_event e,
+					   struct mdns_message *m, struct mdns_resource *a,
+					   uint32_t elapsed)
+{
+	int ret = 0;
+
 	switch (arec->state) {
-	case AREC_STATE_RESOLVED:
-		if (arec->ipaddr == ipaddr)
-			break;
-		/* ...otherwise fall through */
+	case AREC_STATE_INIT:
+		if (e == AREC_EVENT_RX_REC) {
+			DBG("Immediately resolved A record for ");
+			debug_print_name(NULL, arec->fqdn);
+			DBG("\n");
+			arec->state = AREC_STATE_RESOLVED;
+			set_ip(arec, a);
+
+		} else if (e == AREC_EVENT_ADD_QUESTIONS) {
+			/* time to send the first query for this arec */
+			DBG("Launching A record query for ");
+			debug_print_name(NULL, arec->fqdn);
+			DBG("\n");
+			if (mdns_add_question(m, arec->fqdn, T_A, C_IN) != 0) {
+				LOG("Warning: failed to add query for A record.\n");
+			}
+			ret = 1;
+			arec->state = AREC_STATE_QUERYING;
+			/* try to get the A record approximately once per second for 3
+			 * seconds until we get it, or fail.  Use the same algorithm as the
+			 * steady-state refresh period to simplify the code.  That is,
+			 * refresh when 20%, 10%, and 5% of the ttl remains.
+			 */
+			arec->ttl = 1000;
+			arec->next_refresh = arec->ttl * 80 / 100;
+			arec->ttl_percent = 10;
+		}
+		break;
 
 	case AREC_STATE_QUERYING:
-	case AREC_STATE_INIT:
-		arec->ipaddr = ipaddr;
-		arec->state = AREC_STATE_RESOLVED;
-		SLIST_FOREACH(sinst, &arec->sinsts, alist_item) {
-			update_sinst(sinst, m, arec, NULL, NULL);
+		if (e == AREC_EVENT_RX_REC) {
+			DBG("Resolved A record for ");
+			debug_print_name(NULL, arec->fqdn);
+			DBG("\n");
+			arec->state = AREC_STATE_RESOLVED;
+			set_ip(arec, a);
+			DBG("Next update in %d ms.\n", arec->next_refresh);
+
+		} else if (e == AREC_EVENT_ADD_QUESTIONS) {
+			/* still no response.  It's been "elapsed" ms since our last
+			 * invocation.  Either try again or give up
+			 */
+			arec->next_refresh = UPDATE_TTL(arec->next_refresh, elapsed);
+			if (arec->next_refresh == 0 && arec->ttl_percent < 5) {
+				/* we tried to refresh but failed.  So give up. */
+				DBG("Failed to resolved A record for ");
+				debug_print_name(NULL, arec->fqdn);
+				DBG(".  Evicting.\n");
+				evict_arec(arec);
+				break;
+			}
+
+			if (arec->next_refresh == 0) {
+				DBG("Still trying to refresh A record for ");
+				debug_print_name(NULL, arec->fqdn);
+				DBG("\n");
+				if (mdns_add_question(m, arec->fqdn, T_A, C_IN) != 0)
+					LOG("Warning: failed to add query for A record.\n");
+				ret = 1;
+				arec->ttl_percent >>= 1;
+				arec->next_refresh = arec->ttl * arec->ttl_percent / 100;
+			}
+		}
+		break;
+
+	case AREC_STATE_RESOLVED:
+		if (e == AREC_EVENT_RX_REC) {
+			set_ip(arec, a);
+
+		} else if (e == AREC_EVENT_ADD_QUESTIONS) {
+			/* We're supposed to attempt to refresh when 20%, 10%, and 5% of
+			 * the lifetime of the record remains.
+			 */
+			arec->next_refresh = UPDATE_TTL(arec->next_refresh, elapsed);
+			if (arec->next_refresh == 0) {
+				DBG("Refreshing A record for ");
+				debug_print_name(NULL, arec->fqdn);
+				DBG("\n");
+				if (mdns_add_question(m, arec->fqdn, T_A, C_IN) != 0)
+					LOG("Warning: failed to add query for A record.\n");
+				ret = 1;
+				arec->ttl_percent = 20;
+				arec->next_refresh = arec->ttl * arec->ttl_percent / 100;
+				arec->state = AREC_STATE_QUERYING;
+			}
 		}
 		break;
 	}
-	arec->ttl = CONVERT_TTL(a->ttl);
+	return ret;
 }
 
 static struct service_instance overflow_sinst;
@@ -595,7 +713,7 @@ static struct arec overflow_arec;
 /* we received a packet.  If it matches a service that we're monitoring, update
  * the cache and (if necessary) alert the user.
  */
-static int update_service_cache(struct mdns_message *m)
+static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 {
 	struct service_monitor *smon = NULL;
 	struct mdns_resource *ptr, *r, *rtmp, *a, *atmp;
@@ -691,7 +809,7 @@ static int update_service_cache(struct mdns_message *m)
 				if (dname_cmp(m->data, a->name, NULL, sinst->arec->fqdn) != 0)
 					continue;
 
-				update_arec(sinst->arec, m, a);
+				update_arec(sinst->arec, AREC_EVENT_RX_REC, m, a, elapsed);
 
 				/* Okay.  By now we've found a matching A record, updated it,
 				 * and updated the service that we're parsing.  If this is not
@@ -729,7 +847,7 @@ static int update_service_cache(struct mdns_message *m)
 		arec = find_arec(m, a->name);
 		if (arec == NULL)
 			continue;
-		update_arec(arec, m, a);
+		update_arec(arec, AREC_EVENT_RX_REC, m, a, elapsed);
 	}
 
 	SLIST_FOREACH(r, &m->txts, list_item) {
@@ -809,15 +927,23 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 {
 	struct service_monitor *smon;
 	int ret = 0;
+	struct arec *arec, *atmp;
 
 	*next_event = UINT32_MAX;
+
+	if (mdns_query_init(m) != 0)
+		return -1;
+
+	/* add questions for any unresolved A records. */
+	SLIST_FOREACH_SAFE(arec, &arecs_active, list_item, atmp) {
+		ret += update_arec(arec, AREC_EVENT_ADD_QUESTIONS, m, NULL, elapsed);
+		*next_event = MIN(*next_event, arec->next_refresh);
+	}
 
 	/* We make two passes.  One to update all of the refresh times and to
 	 * populate the questions section, and another to populated the known
 	 * answers section
 	 */
-	if (mdns_query_init(m) != 0)
-		return -1;
 
 	SLIST_FOREACH(smon, &smons_active, list_item) {
 
@@ -836,11 +962,10 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 			DBG("Added query for service ");
 			debug_print_name(NULL, smon->fqst);
 			DBG("\n");
-			ret = 1;
+			ret += 1;
 		} else {
 			smon->next_refresh -= elapsed;
-			if (smon->next_refresh < *next_event)
-				*next_event = smon->next_refresh;
+			*next_event = MIN(*next_event, smon->next_refresh);
 		}
 	}
 
@@ -860,11 +985,10 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 		if (smon->next_refresh == 0) {
 			add_known_answers(m, smon, elapsed);
 			smon->next_refresh = smon->refresh_period;
-			if (smon->next_refresh < *next_event)
-				*next_event = smon->next_refresh;
+			*next_event = MIN(*next_event, smon->next_refresh);
 		}
 	}
-	return 1;
+	return ret > 0 ? 1 : 0;
 }
 
 /* Main query thread */
@@ -892,6 +1016,7 @@ static void do_querier(void *data)
 		start_wait = mdns_time_ms();
 		active_fds = select(max_sock + 1, &fds, NULL, NULL, timeout);
 		stop_wait = mdns_time_ms();
+		sleep_time = interval(start_wait, stop_wait);
 
 		if (active_fds < 0 && errno != EINTR)
 			LOG("error: select() failed: %d\n", errno);
@@ -940,9 +1065,8 @@ static void do_querier(void *data)
 			}
 			ret = mdns_parse_message(&rx_msg, len);
 			if (ret == 0)
-				update_service_cache(&rx_msg);
+				update_service_cache(&rx_msg, sleep_time);
 		}
-		sleep_time = interval(start_wait, stop_wait);
 		DBG("Preparing next query\n");
 		ret = prepare_query(&tx_msg, sleep_time, &next_event);
 		if (ret == 1)

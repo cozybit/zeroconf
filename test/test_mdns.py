@@ -183,20 +183,28 @@ class mdnsTest(unittest.TestCase):
 		q.flags = 0
 		return q;
 
+	def prepareAQuery(self, fqdn):
+		q = dns.message.make_query(fqdn, dns.rdatatype.A, dns.rdataclass.IN)
+		q.id = 0
+		q.flags = 0
+		return q;
+
 	def prepareServiceResponse(self, fqdn, fqst, fqsn, port, ip=None, txt=None):
 
 		r = dns.message.Message()
 		r.flags = dns.flags.QR | dns.flags.AA
 		r.id = 0
 
-		srv = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
-								  dns.rdatatype.SRV,
-								  "0 0 %d %s" % (port, fqdn))
-		r.answer.append(srv)
+		if fqsn != None and port != None:
+			srv = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+									  dns.rdatatype.SRV,
+									  "0 0 %d %s" % (port, fqdn))
+			r.answer.append(srv)
 
-		ptr = dns.rrset.from_text(fqst, 255, dns.rdataclass.FLUSH,
-								  dns.rdatatype.PTR, fqsn)
-		r.answer.append(ptr)
+		if fqsn != None and fqst != None:
+			ptr = dns.rrset.from_text(fqst, 255, dns.rdataclass.FLUSH,
+									  dns.rdatatype.PTR, fqsn)
+			r.answer.append(ptr)
 
 		if txt != None:
 			txt = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
@@ -209,6 +217,7 @@ class mdnsTest(unittest.TestCase):
 			r.answer.append(a)
 		return r
 
+	# A Foo service delivers all of its records in a single response.
 	def createFooN(self, i, txt=None):
 		fqdnTemplate = "node-%d.local."
 		fqst = "_foo._tcp.local."
@@ -230,18 +239,43 @@ class mdnsTest(unittest.TestCase):
 			expected += ":100 (" + txt + ")"
 		return [response, expected]
 
-	def startFoo(self):
+	# A Bar service delivers its PTR, SRV, and TXT records in one message, and
+	# the querier must query for the A record.
+	def createBarN(self, i, txt=None):
+		fqdnTemplate = "barnode-%d.local."
+		fqst = "_bar._tcp.local."
+		fqsnTemplate = "MyBarService-%d." + fqst
+		ipTemplate =  "192.168.3.%d"
+		txtArg = None
+		if txt != None:
+			txtArg = txt.replace(":", " ")
+		SRVresponse = self.prepareServiceResponse(fqdnTemplate % (i), fqst,
+												  fqsnTemplate % (i), 100,
+												  txt=txtArg)
+		Aresponse = self.prepareServiceResponse(fqdnTemplate % (i), None,
+												None, None,
+												ip = ipTemplate % (i))
+		expected = fqsnTemplate % (i) + " at " + ipTemplate % (i)
+		if txt == None:
+			expected += ":100 (no key vals)"
+		elif txt == '""':
+			expected += ":100 ()"
+		else:
+			expected += ":100 (" + txt + ")"
+		return [SRVresponse, Aresponse, expected]
+
+	def startServiceDiscovery(self, fqsn):
 		test_sniffer.start()
-		expected = self.prepareServiceQuery("_foo._tcp.local.")
+		expected = self.prepareServiceQuery(fqsn)
 		ret = uut.start("")
 		self.failIf(ret != 0, "Failed to launch mdns")
-		ret = uut.monitor("_foo._tcp.local foo.results")
-		self.failIf(ret != 0, "Failed to monitor foo service")
+		ret = uut.monitor(fqsn)
+		self.failIf(ret != 0, "Failed to monitor service")
 		q = self.getNextPacket(test_sniffer)
 		self.expectEqual(expected, q)
 
 	def discoverNFoos(self, n):
-		self.startFoo()
+		self.startServiceDiscovery("_foo._tcp.local")
 
 		outputs = []
 		for i in range(1, n + 1):
@@ -932,7 +966,7 @@ class mdnsTest(unittest.TestCase):
 
 	def test_KnownAnswerSupression(self):
 
-		self.startFoo()
+		self.startServiceDiscovery("_foo._tcp.local")
 		outputs = []
 		responses = []
 		for i in range(1, 5):
@@ -952,7 +986,7 @@ class mdnsTest(unittest.TestCase):
 			self.expectEqual("_foo._tcp.local.", str(a.name))
 
 	def test_DiscoverServiceWithTXT(self):
-		self.startFoo()
+		self.startServiceDiscovery("_foo._tcp.local")
 		outputs = []
 		[response, output] = self.createFooN(1, "k1=v1")
 		outputs.append(output)
@@ -968,3 +1002,49 @@ class mdnsTest(unittest.TestCase):
 		for o in outputs:
 			self.failIf("DISCOVERED: " + o not in results,
 					"Failed to find result:\n" + output)
+
+	def test_DiscoverServiceWithoutARecord(self):
+		[SRVresp, Aresp, output] = self.createBarN(1, '""')
+		self.startServiceDiscovery("_bar._tcp.local")
+		mdns_tool.inject(SRVresp, '224.0.0.251')
+
+		# next we expect a query for the missing A record
+		q = self.getNextPacket(test_sniffer)
+		a = self.prepareAQuery("barnode-1.local")
+		self.expectEqual(a, q)
+
+		# now we send the A record back
+		mdns_tool.inject(Aresp, '224.0.0.251')
+
+		results = uut.get_results()
+		self.failIf("DISCOVERED: " + output not in results,
+					"Failed to find result:\n" + output)
+
+	def test_ARecordRefresh(self):
+		fqdn = "barnode-1.local."
+		[SRVresp, Aresp, output] = self.createBarN(1, '""')
+		self.startServiceDiscovery("_bar._tcp.local")
+		mdns_tool.inject(SRVresp, '224.0.0.251')
+
+		# next we expect a query for the missing A record
+		q = self.getNextPacket(test_sniffer)
+		a = self.prepareAQuery(fqdn)
+		self.expectEqual(a, q)
+
+		# Send our Aresp with a ttl of 3 and expect a refresh
+		Aresp.answer[0].ttl = 3
+		mdns_tool.inject(Aresp, '224.0.0.251')
+
+		results = uut.get_results()
+		self.failIf("DISCOVERED: " + output not in results,
+					"Failed to find result:\n" + output)
+
+		# we may get some expected service queries in the meantime
+		retries = 3
+		aq = dns.rrset.from_text(fqdn, 0, dns.rdataclass.IN,
+								 dns.rdatatype.A)
+		while retries > 0:
+			q = self.getNextPacket(test_sniffer, 3)
+			for qr in q.question:
+				if qr == aq:
+					return
