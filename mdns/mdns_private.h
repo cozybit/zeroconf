@@ -120,7 +120,6 @@ void dname_tests(void);
 #define SERVICE_CHECKED_FLAG	1
 #define SERVICE_HAS_A_FLAG		2
 #define SERVICE_HAS_SRV_FLAG	4
-#define SERVICE_IS_DIRTY_FLAG	8
 #define SERVICE_IS_READY (SERVICE_HAS_A_FLAG|SERVICE_HAS_SRV_FLAG)
 
 /* internal API functions for responder */
