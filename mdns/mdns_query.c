@@ -1081,6 +1081,11 @@ static void do_querier(void *data)
 			timeout = &tv;
 		}
 	}
+
+	/* some targets don't like it if we just bail on a thread without
+	 * yeilding
+	 */
+	mdns_thread_yield();
 }
 
 /* Launch the query thread */

@@ -65,7 +65,7 @@ void debug_print_name(struct mdns_message *m, uint8_t *name);
 #error "MDNS_DBG is only supported if MDNS_LOG is enabled"
 #endif
 
-/* helpers for accessing elements */
+/* helpers for accessing elements.  value arguments are in host byte order */
 #define get_uint16(p) ((*(uint8_t *)(p) << 8) | *((uint8_t *)(p) + 1))
 #define get_uint32(p) ((*(uint8_t *)(p) << 24) | \
 					   (*((uint8_t *)(p) + 1) << 16) | \

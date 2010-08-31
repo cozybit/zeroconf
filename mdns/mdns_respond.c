@@ -774,6 +774,10 @@ static void do_responder(void *data)
 			break;
 		}
 	}
+	/* some targets don't like it if we just bail on a thread without
+	 * yeilding
+	 */
+	mdns_thread_yield();
 }
 
 /* return 0 for invalid, 1 for valid */
@@ -877,7 +881,7 @@ int responder_launch(uint32_t ipaddr, char *domain, char *hostname,
 	domname = domain;
 	reset_fqdn();
 
-	ipaddr_to_inaddrarpa(htonl(ipaddr), in_addr_arpa);
+	ipaddr_to_inaddrarpa(ntohl(ipaddr), in_addr_arpa);
 
 	mc_sock = mdns_socket_mcast(inet_addr("224.0.0.251"), htons(5353));
 	if (mc_sock < 0) {
