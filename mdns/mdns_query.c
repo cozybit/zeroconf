@@ -296,26 +296,33 @@ static int add_service(struct service_monitor *smon)
 	return MDNS_SUCCESS;
 }
 
+/* cleanup the sinst and put it back on the free list.  Caller is responsible
+ * for notifying user if necessary.  Note that this function fixes up the arec
+ * list too.
+ */
+static void cleanup_sinst(struct service_instance *sinst)
+{
+	SLIST_REMOVE(&sinst->smon->sinsts, sinst, service_instance, list_item);
+	if (sinst->arec) {
+		SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
+					 alist_item);
+		if (SLIST_EMPTY(&sinst->arec->sinsts)) {
+			SLIST_REMOVE(&arecs_active, sinst->arec, arec, list_item);
+			SLIST_INSERT_HEAD(&arecs_free, sinst->arec, list_item);
+		}
+	}
+	SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
+}
+
+/* cleanup a service.  Caller is responsible for removing it from the active
+ * list and moving it to the free list
+ */
 static void cleanup_service(struct service_monitor *smon)
 {
-	struct service_instance *sinst;
+	struct service_instance *sinst, *stmp;
 
-	while (!SLIST_EMPTY(&smon->sinsts)) {
-		sinst = SLIST_FIRST(&smon->sinsts);
-		SLIST_REMOVE_HEAD(&smon->sinsts, list_item);
-
-		if (sinst->arec != NULL) {
-			/* take us off of our a record's list */
-			SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
-						 alist_item);
-			if (SLIST_EMPTY(&sinst->arec->sinsts)) {
-				SLIST_REMOVE(&arecs_active, sinst->arec, arec, list_item);
-				SLIST_INSERT_HEAD(&arecs_free, sinst->arec, list_item);
-			}
-		}
-
-		SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
-	}
+	SLIST_FOREACH_SAFE(sinst, &smon->sinsts, list_item, stmp)
+		cleanup_sinst(sinst);
 }
 
 /* remove the service fqst from the monitor list.  If fqst is an empty string,
@@ -350,6 +357,7 @@ static void remove_service(uint8_t *fqst)
 		return;
 	}
 	SLIST_REMOVE(&smons_active, found, service_monitor, list_item);
+	cleanup_service(found);
 	SLIST_INSERT_HEAD(&smons_free, found, list_item);
 }
 
@@ -541,24 +549,6 @@ done:
 	sinst->next_refresh = ADD(sinst->srv_ttl0 * 80 / 100, elapsed);
 	sinst->service.flags |= SERVICE_HAS_SRV_FLAG;
 	return ret > 0 ? 1 : 0;
-}
-
-/* cleanup the sinst and put it back on the free list.  Caller is responsible
- * for notifying user if necessary.  Note that this function fixes up the arec
- * list too.
- */
-static void cleanup_sinst(struct service_instance *sinst)
-{
-	SLIST_REMOVE(&sinst->smon->sinsts, sinst, service_instance, list_item);
-	if (sinst->arec) {
-		SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
-					 alist_item);
-		if (SLIST_EMPTY(&sinst->arec->sinsts)) {
-			SLIST_REMOVE(&arecs_active, sinst->arec, arec, list_item);
-			SLIST_INSERT_HEAD(&arecs_free, sinst->arec, list_item);
-		}
-	}
-	SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
 }
 
 /* apply the elapsed time to the service instance.  If it's time to refresh,
@@ -982,15 +972,11 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 	/* Any SRV, TXT, or A records that remain in the message are either not of
 	 * interest, or are related to existing service instances.  These appear
 	 * for a few reasons.  Like if we previously got a message with a PTR of
-	 * interest but no SRV/TXT, or we got an SRV of interest but no A.
+	 * interest but no SRV/TXT, or we got an SRV of interest but no A.  Do the
+	 * TXT and SRV records first.  This will ensure that if there is an A
+	 * record in the list that goes with the SRV, it will be resolved right
+	 * away.
 	 */
-	SLIST_FOREACH(a, &m->as, list_item) {
-		arec = find_arec(m, a->name);
-		if (arec == NULL)
-			continue;
-		update_arec(arec, AREC_EVENT_RX_REC, m, a, elapsed);
-	}
-
 	SLIST_FOREACH(r, &m->txts, list_item) {
 		smon = find_service_monitor(m, dname_label_next(m->data, r->name));
 		if (smon == NULL)
@@ -1005,6 +991,13 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
 		update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL, elapsed);
+	}
+
+	SLIST_FOREACH(a, &m->as, list_item) {
+		arec = find_arec(m, a->name);
+		if (arec == NULL)
+			continue;
+		update_arec(arec, AREC_EVENT_RX_REC, m, a, elapsed);
 	}
 
 	return 0;
