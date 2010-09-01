@@ -298,7 +298,7 @@ class mdnsTest(unittest.TestCase):
 		ret = uut.start("")
 		self.failIf(ret != 0, "Failed to launch mdns")
 		ret = uut.monitor(fqsn)
-		self.failIf(ret != 0, "Failed to monitor service")
+		self.failIf(ret != 0, "Failed to monitor service: %d" % ret)
 		q = self.getNextPacket(test_sniffer)
 		self.expectEqual(expected, q)
 
@@ -1134,3 +1134,23 @@ class mdnsTest(unittest.TestCase):
 		ret = uut.monitor("_foo._udp.local")
 		expected = "MyFoobarService._foo._udp.local. at " + ipaddr + ":555 (tag=val)"
 		self.expectResult("DISCOVERED: " + expected)
+
+	def test_DiscoverMultipleServices(self):
+		snTemplate = "My New Service %d"
+		hnTemplate = "newnode-%d"
+		fqst = "_newservice._tcp.local"
+
+		outputs = []
+		for i in range(0, 5):
+			s = mdns_tool.service(snTemplate % i, "local", "_newservice._tcp",
+								  100, hnTemplate % i, ipaddr="5.5.5.%d" % i)
+			s.publish()
+			output = "DISCOVERED: " + snTemplate % i + "." + fqst + \
+					 ". at 5.5.5.%d:100 ()" % i
+			outputs.append(output)
+		time.sleep(2)
+		self.startServiceDiscovery(fqst)
+		time.sleep(1)
+
+		for o in outputs:
+			self.expectResult(o)

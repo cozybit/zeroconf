@@ -312,6 +312,10 @@ static void cleanup_sinst(struct service_instance *sinst)
 		}
 	}
 	SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
+	/* just in case any of our callers wants to know when to refresh this dead
+	 * record, make the refresh time never.
+	 */
+	sinst->next_refresh = UINT32_MAX;
 }
 
 /* cleanup a service.  Caller is responsible for removing it from the active
@@ -533,8 +537,8 @@ static int update_srv(struct service_instance *sinst, struct mdns_message *m,
 		}
 
 		SLIST_REMOVE_HEAD(&arecs_free, list_item);
-		SLIST_INSERT_HEAD(&arecs_active, arec, list_item);
 		memset(arec, 0, sizeof(struct arec));
+		SLIST_INSERT_HEAD(&arecs_active, arec, list_item);
 		dname_copy(arec->fqdn, m->data, srv->target);
 	}
 	ret += set_arec(sinst, arec);
@@ -734,6 +738,11 @@ static void evict_arec(struct arec *arec)
 	 * Accordingly, the arec's sinsts list should be empty.
 	 */
 	ASSERT(SLIST_EMPTY(&arec->sinsts));
+
+	/* just in case any of our callers wants to know when to refresh this dead
+	 * record, make the refresh time never.
+	 */
+	arec->next_refresh = UINT32_MAX;
 }
 
 /* This is the arec state machine.  Update the A record considering the event
@@ -982,6 +991,12 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
+		if (sinst == NULL) {
+			DBG("Warning: Service ");
+			debug_print_name(m, r->name);
+			DBG("should be in cache but it's not.");
+			continue;
+		}
 		update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r, elapsed);
 	}
 
@@ -990,6 +1005,12 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
+		if (sinst == NULL) {
+			DBG("Warning: Service ");
+			debug_print_name(m, r->name);
+			DBG("should be in cache but it's not.");
+			continue;
+		}
 		update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL, elapsed);
 	}
 
