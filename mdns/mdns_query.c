@@ -1181,7 +1181,8 @@ static void do_querier(void *data)
 		start_wait = mdns_time_ms();
 		active_fds = select(max_sock + 1, &fds, NULL, NULL, timeout);
 		stop_wait = mdns_time_ms();
-		sleep_time = interval(start_wait, stop_wait);
+		/* round up to prevent ttls of 1ms from never expiring */
+		sleep_time = ADD(interval(start_wait, stop_wait), 1);
 
 		if (active_fds < 0 && errno != EINTR)
 			LOG("error: select() failed: %d\n", errno);
