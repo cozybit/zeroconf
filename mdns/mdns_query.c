@@ -1109,7 +1109,7 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 			DBG("\n");
 			ret += 1;
 		} else {
-			smon->next_refresh -= elapsed;
+			smon->next_refresh = SUBTRACT(smon->next_refresh, elapsed);
 			*next_event = MIN(*next_event, smon->next_refresh);
 		}
 

@@ -11,7 +11,8 @@ char *statenames[] = {
 	"FIRST_PROBE_SENT",
 	"SECOND_PROBE_SENT",
 	"THIRD_PROBE_SENT",
-	"IDLE",
+	"READY_TO_RESPOND",
+	"READY_TO_SEND",
 };
 
 char *eventnames[] = {

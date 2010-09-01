@@ -643,7 +643,7 @@ static void do_responder(void *data)
 				continue;
 			}
 			ret = mdns_parse_message(&rx_msg, len);
-			if (ret != 0 || from.sin_addr.s_addr == my_ipaddr)
+			if (ret != 0)
 				continue;
 			event = EVENT_RX;
 		} else {
@@ -672,10 +672,13 @@ static void do_responder(void *data)
 				mdns_send_msg(&tx_msg, mc_sock, htons(5353));
 				SET_TIMEOUT(&probe_wait_time, 250);
 				state = SECOND_PROBE_SENT;
-			} else if (event == EVENT_RX) {
+			} else if (event == EVENT_RX &&
+					   from.sin_addr.s_addr != my_ipaddr) {
 				state = process_probe_resp(&tx_msg, &rx_msg, state,
 										   &probe_wait_time, start_wait,
 										   stop_wait);
+			} else {
+				recalc_timeout(&probe_wait_time, start_wait, stop_wait, 250);
 			}
 			timeout = &probe_wait_time;
 			break;
@@ -686,10 +689,13 @@ static void do_responder(void *data)
 				mdns_send_msg(&tx_msg, mc_sock, htons(5353));
 				SET_TIMEOUT(&probe_wait_time, 250);
 				state = THIRD_PROBE_SENT;
-			} else if (event == EVENT_RX) {
+			} else if (event == EVENT_RX &&
+					   from.sin_addr.s_addr != my_ipaddr) {
 				state = process_probe_resp(&tx_msg, &rx_msg, state,
 										   &probe_wait_time, start_wait,
 										   stop_wait);
+			} else {
+				recalc_timeout(&probe_wait_time, start_wait, stop_wait, 250);
 			}
 			timeout = &probe_wait_time;
 			break;
@@ -704,11 +710,14 @@ static void do_responder(void *data)
 				timeout = NULL;
 				state = READY_TO_RESPOND;
 
-			} else if (event == EVENT_RX) {
+			} else if (event == EVENT_RX &&
+					   from.sin_addr.s_addr != my_ipaddr) {
 				state = process_probe_resp(&tx_msg, &rx_msg, state,
 										   &probe_wait_time, start_wait,
 										   stop_wait);
 				timeout = &probe_wait_time;
+			} else {
+				recalc_timeout(&probe_wait_time, start_wait, stop_wait, 250);
 			}
 			break;
 

@@ -1128,3 +1128,9 @@ class mdnsTest(unittest.TestCase):
 		sq = dns.rrset.from_text(fqsn, 0, dns.rdataclass.IN,
 								 dns.rdatatype.ANY)
 		self.expectQuestion(sq, 3)
+
+	def test_MonitorSingleLocalService(self):
+		uut.start_and_wait("-n node -b " + ipaddr + ' -s MyFoobarService:foo:555:udp:tag=val')
+		ret = uut.monitor("_foo._udp.local")
+		expected = "MyFoobarService._foo._udp.local. at " + ipaddr + ":555 (tag=val)"
+		self.expectResult("DISCOVERED: " + expected)
