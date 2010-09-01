@@ -444,10 +444,14 @@ static int copy_servinfo(struct mdns_service *s, struct mdns_message *m,
  */
 static int update_txt(struct service_instance *sinst, struct mdns_resource *r)
 {
-	int len, ret = 0;
+	int len, ret = 0, rlen;
 
 	len = r->rdlength < sinst->rawkvlen ? r->rdlength : sinst->rawkvlen;
+	rlen = r->rdlength;
+
+	/* is this an update? */
 	if (sinst->service.keyvals == NULL ||
+		(rlen != sinst->rawkvlen && rlen < MDNS_MAX_KEYVAL_LEN + 1) ||
 		memcmp(r->rdata, sinst->rawkeyvals, len) != 0) {
 		len = r->rdlength < MDNS_MAX_KEYVAL_LEN + 1 ?
 			r->rdlength : MDNS_MAX_KEYVAL_LEN + 1;

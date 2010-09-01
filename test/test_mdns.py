@@ -334,7 +334,13 @@ class mdnsTest(unittest.TestCase):
 		results = uut.get_results()
 		self.failIf(r not in results, "Failed to find result:\n" + r)
 
-
+	def newLocalService(self, servname, servtype, domain, port, hostname, ip):
+		s = mdns_tool.service(servname, domain, servtype, port, hostname,
+							  ipaddr=ip)
+		s.publish()
+		output = servname + "." + servtype + "." + domain + ". at " + ip + \
+				 ":" + str(port) + " ()"
+		return [s, output]
 
 	#################### unittest functions ####################
 	def setUp(self):
@@ -1138,19 +1144,133 @@ class mdnsTest(unittest.TestCase):
 	def test_DiscoverMultipleServices(self):
 		snTemplate = "My New Service %d"
 		hnTemplate = "newnode-%d"
-		fqst = "_newservice._tcp.local"
+		st = "_newservice._tcp"
+		domain = "local"
+		port = 100
+		ipTemplate = "5.5.5.%d"
+		fqst = st + "." + domain
 
 		outputs = []
 		for i in range(0, 5):
-			s = mdns_tool.service(snTemplate % i, "local", "_newservice._tcp",
-								  100, hnTemplate % i, ipaddr="5.5.5.%d" % i)
-			s.publish()
-			output = "DISCOVERED: " + snTemplate % i + "." + fqst + \
-					 ". at 5.5.5.%d:100 ()" % i
+			[s, output] = self.newLocalService(snTemplate % i, st, domain,
+											   port, hnTemplate % i,
+											   ipTemplate % i)
 			outputs.append(output)
 		time.sleep(2)
 		self.startServiceDiscovery(fqst)
 		time.sleep(1)
 
 		for o in outputs:
-			self.expectResult(o)
+			self.expectResult("DISCOVERED: " + o)
+
+	def test_DiscoverMultipleServiceTypes(self):
+		snTemplate = "My New Service %d"
+		hnTemplate = "newnode-%d"
+		st = "_newservice._tcp"
+		domain = "local"
+		port = 100
+		ipTemplate = "5.5.5.%d"
+		fqst = st + "." + domain
+		outputs = []
+		for i in range(0, 5):
+			[s, output] = self.newLocalService(snTemplate % i, st, domain,
+											   port, hnTemplate % i,
+											   ipTemplate % i)
+			outputs.append(output)
+		self.startServiceDiscovery(fqst)
+
+		snTemplate = "My Other Service %d"
+		hnTemplate = "othernode-%d"
+		st = "_otherservice._tcp"
+		port = 255
+		ipTemplate = "1.2.3.%d"
+		fqst = st + "." + domain
+		for i in range(0, 5):
+			[s, output] = self.newLocalService(snTemplate % i, st, domain,
+											   port, hnTemplate % i,
+											   ipTemplate % i)
+			outputs.append(output)
+
+		time.sleep(2)
+		uut.monitor(fqst)
+		time.sleep(1)
+
+		for o in outputs:
+			self.expectResult("DISCOVERED: " + o)
+
+	def test_UpdateServiceInfo(self):
+		fqst = "_xyzservice._tcp.local"
+		sn = "MyXYZ"
+		fqsn = sn + "." + fqst + "."
+		fqdn = "xyznode.local."
+		ip = "10.3.3.4"
+		port = 1234
+		self.startServiceDiscovery(fqst)
+		fqst = fqst + "."
+
+		# first establish the un-updated service
+		r = self.prepareServiceResponse(fqdn, fqst, fqsn, port, ip, None)
+		mdns_tool.inject(r, '224.0.0.251')
+		o = "DISCOVERED: " + fqsn + " at " + ip + ":" + str(port) + " (no key vals)"
+		self.expectResult(o)
+		time.sleep(random.uniform(0.0, 0.1))
+
+		# update the port and check the results
+		r = self.prepareServiceResponse(fqdn, fqst, fqsn, port + 2, ip, None)
+		mdns_tool.inject(r, '224.0.0.251')
+		o = "UPDATED: " + fqsn + " at " + ip + ":" + str(port + 2) + " (no key vals)"
+		self.expectResult(o)
+		time.sleep(random.uniform(0.0, 0.1))
+
+		# update the ipaddr and check the results
+		ip = "2.3.4.5"
+		r = self.prepareServiceResponse(fqdn, fqst, fqsn, port, ip, None)
+		mdns_tool.inject(r, '224.0.0.251')
+		o = "UPDATED: " + fqsn + " at " + ip + ":" + str(port) + " (no key vals)"
+		self.expectResult(o)
+		time.sleep(random.uniform(0.0, 0.1))
+
+		# update only the A record and check
+		ip = "6.7.8.9"
+		r = self.prepareServiceResponse(fqdn, None, None, None, ip)
+		mdns_tool.inject(r, '224.0.0.251')
+		o = "UPDATED: " + fqsn + " at " + ip + ":" + str(port) + " (no key vals)"
+		self.expectResult(o)
+		time.sleep(random.uniform(0.0, 0.1))
+
+		# update the fqdn
+		fqdn = "newnodename.local."
+		r = self.prepareServiceResponse(fqdn, fqst, fqsn, port, ip, None)
+		mdns_tool.inject(r, '224.0.0.251')
+		o = "UPDATED: " + fqsn + " at " + ip + ":" + str(port) + " (no key vals)"
+		self.expectResult(o)
+		time.sleep(random.uniform(0.0, 0.1))
+
+		# add a txt record and see what happens
+		fqdn = "newnodename.local."
+		txt = "this=that foo=bar"
+		r = self.prepareServiceResponse(fqdn, fqst, fqsn, port, ip, txt)
+		mdns_tool.inject(r, '224.0.0.251')
+		o = "UPDATED: " + fqsn + " at " + ip + ":" + str(port) + \
+			" (" + txt.replace(" ", ":") + ")"
+		self.expectResult(o)
+		time.sleep(random.uniform(0.0, 0.1))
+
+		# update the txt record and see what happens
+		fqdn = "newnodename.local."
+		txt = "this=that foo=bar whoops=yeah"
+		r = self.prepareServiceResponse(fqdn, fqst, fqsn, port, ip, txt)
+		mdns_tool.inject(r, '224.0.0.251')
+		o = "UPDATED: " + fqsn + " at " + ip + ":" + str(port) + \
+			" (" + txt.replace(" ", ":") + ")"
+		self.expectResult(o)
+		time.sleep(random.uniform(0.0, 0.1))
+
+		# and a minor change to the txt
+		fqdn = "newnodename.local."
+		txt = "this=that foo=bar whoops=year"
+		r = self.prepareServiceResponse(fqdn, fqst, fqsn, port, ip, txt)
+		mdns_tool.inject(r, '224.0.0.251')
+		o = "UPDATED: " + fqsn + " at " + ip + ":" + str(port) + \
+			" (" + txt.replace(" ", ":") + ")"
+		self.expectResult(o)
