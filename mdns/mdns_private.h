@@ -120,7 +120,9 @@ void dname_tests(void);
 #define SERVICE_CHECKED_FLAG	1
 #define SERVICE_HAS_A_FLAG		2
 #define SERVICE_HAS_SRV_FLAG	4
-#define SERVICE_IS_READY (SERVICE_HAS_A_FLAG|SERVICE_HAS_SRV_FLAG)
+#define SERVICE_IS_READY(s) \
+	(((s)->flags & (SERVICE_HAS_A_FLAG|SERVICE_HAS_SRV_FLAG)) ==	\
+	 (SERVICE_HAS_A_FLAG|SERVICE_HAS_SRV_FLAG))
 
 /* internal API functions for responder */
 int responder_launch(uint32_t ipaddr, char *domain, char *hostname,

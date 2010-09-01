@@ -76,6 +76,14 @@ enum sinst_state {
 	SINST_STATE_UPDATING,
 };
 
+enum sinst_event {
+	SINST_EVENT_GOT_TXT = 0,
+	SINST_EVENT_GOT_SRV,
+	SINST_EVENT_GOT_AREC,
+	SINST_EVENT_LOST_AREC,
+	SINST_EVENT_ADD_QUESTIONS,
+};
+
 struct service_monitor;
 
 /* Each service instance that we detect is stored in a service instance */
@@ -100,6 +108,12 @@ struct service_instance {
 	enum sinst_state state;
 	struct service_monitor *smon;
 };
+
+/* perform callback for service instance s and status code c */
+#define DO_CALLBACK(s, c) do { \
+	if ((s)->smon->cb((s)->smon->cbdata, &(s)->service, (c)) != MDNS_SUCCESS) \
+		LOG("Warning: callback returned unexpected value.\n"); \
+	} while (0)
 
 static struct sinst_list sinsts_free;
 static struct service_instance sinsts[MDNS_SERVICE_CACHE_SIZE];
@@ -510,62 +524,97 @@ done:
 	return ret > 0 ? 1 : 0;
 }
 
-/* march the sinst through its state machine with the provided records.  The
- * sinst must at least be initialized with a fqsn.
+/* cleanup the sinst and put it back on the free list.  Caller is responsible
+ * for notifying user if necessary.  Note that this function fixes up the arec
+ * list too.
  */
-static void update_sinst(struct service_instance *sinst, struct mdns_message *m,
-						 struct arec *arec, struct mdns_resource *srvrr,
-						 struct mdns_resource *txt)
+static void cleanup_sinst(struct service_instance *sinst)
+{
+	SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
+				 alist_item);
+	if (SLIST_EMPTY(&sinst->arec->sinsts)) {
+		SLIST_REMOVE(&arecs_active, sinst->arec, arec, list_item);
+		SLIST_INSERT_HEAD(&arecs_free, sinst->arec, list_item);
+	}
+	SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
+				 alist_item);
+	SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
+}
+
+/* march the sinst through its state machine subject to the event.  The sinst
+ * must at least be initialized with a fqsn.  The arguments are variously
+ * required depending on the event.
+ */
+static int update_sinst(struct service_instance *sinst, enum sinst_event e,
+						struct mdns_message *m, struct arec *arec,
+						struct mdns_resource *srvrr,
+						struct mdns_resource *txt)
 {
 	struct mdns_service *s = &sinst->service;
-	int changes = 0, ret;
+	int changes = 0;
 
-	/* start by applying any changes */
-	if (srvrr != NULL) {
-		changes += update_srv(sinst, m, srvrr);
-	}
-	if (txt) {
-		changes += update_txt(sinst, txt);
-	}
-	if (arec != NULL) {
-		changes += set_arec(sinst, arec);
-	}
+	/* apply state-independent updates */
+	if (e == SINST_EVENT_GOT_SRV)
+		changes = update_srv(sinst, m, srvrr);
+	else if (e == SINST_EVENT_GOT_TXT)
+		changes = update_txt(sinst, txt);
+	else if (e == SINST_EVENT_GOT_AREC)
+		changes = set_arec(sinst, arec);
 
 	/* now decide if we change state */
 	switch (sinst->state) {
 	case SINST_STATE_INIT:
-		if ((s->flags & SERVICE_IS_READY) == SERVICE_IS_READY) {
-			ret = sinst->smon->cb(sinst->smon->cbdata, &sinst->service,
-								  MDNS_DISCOVERED);
-			if (ret != MDNS_SUCCESS)
-				LOG("Warning: callback returned unexpected value: %d\n", ret);
+		if (e == SINST_EVENT_LOST_AREC) {
+			/* if we lose a record, we just abandon ship.  We haven't alerted
+			 * the user yet, so no need to send a DISAPPEAR message.
+			 */
+			cleanup_sinst(sinst);
+			break;
+		}
+
+		if (changes == 0)
+			break;
+
+		if (SERVICE_IS_READY(s)) {
+			DO_CALLBACK(sinst, MDNS_DISCOVERED);
 			sinst->state = SINST_STATE_CLEAN;
 		}
 		break;
 
 	case SINST_STATE_CLEAN:
+		if (e == SINST_EVENT_LOST_AREC) {
+			cleanup_sinst(sinst);
+			DO_CALLBACK(sinst, MDNS_DISAPPEARED);
+			break;
+		}
+
 		if (changes == 0)
 			break;
 
-		if ((s->flags & SERVICE_IS_READY) == SERVICE_IS_READY) {
-			ret = sinst->smon->cb(sinst->smon->cbdata, &sinst->service,
-								  MDNS_UPDATED);
-			if (ret != MDNS_SUCCESS)
-				LOG("Warning: callback returned unexpected value: %d\n", ret);
+		if (SERVICE_IS_READY(s)) {
+			DO_CALLBACK(sinst, MDNS_UPDATED);
 		} else {
 			sinst->state = SINST_STATE_UPDATING;
 		}
 		break;
 
 	case SINST_STATE_UPDATING:
-		if ((s->flags & SERVICE_IS_READY) == SERVICE_IS_READY) {
-			ret = sinst->smon->cb(sinst->smon->cbdata, &sinst->service,
-								  MDNS_UPDATED);
-			if (ret != MDNS_SUCCESS)
-				LOG("Warning: callback returned unexpected value: %d\n", ret);
+		if (e == SINST_EVENT_LOST_AREC) {
+			cleanup_sinst(sinst);
+			DO_CALLBACK(sinst, MDNS_DISAPPEARED);
+			break;
+		}
+
+		if (changes == 0)
+			break;
+
+		if (SERVICE_IS_READY(s)) {
+			DO_CALLBACK(sinst, MDNS_UPDATED);
+			sinst->state = SINST_STATE_CLEAN;
 		}
 		break;
 	}
+	return changes > 0 ? 1 : 0;
 }
 
 /* set the ip address of the a record and alert associated sinsts if
@@ -579,9 +628,9 @@ static void set_ip(struct arec *arec, struct mdns_resource *a)
 	if (arec->ipaddr == ipaddr)
 		return;
 	arec->ipaddr = ipaddr;
-	SLIST_FOREACH(sinst, &arec->sinsts, alist_item) {
-		update_sinst(sinst, NULL, arec, NULL, NULL);
-	}
+	SLIST_FOREACH(sinst, &arec->sinsts, alist_item)
+		update_sinst(sinst, SINST_EVENT_GOT_AREC, NULL, arec, NULL, NULL);
+
 	arec->ttl = CONVERT_TTL(a->ttl);
 	/* next refresh is when 20% of the ttl remains */
 	arec->next_refresh = arec->ttl * 80 / 100;
@@ -595,13 +644,14 @@ static void evict_arec(struct arec *arec)
 {
 	struct service_instance *sinst;
 
-	SLIST_REMOVE(&arecs_active, arec, arec, list_item);
-	while (!SLIST_EMPTY(&arec->sinsts)) {
-		sinst = SLIST_FIRST(&arec->sinsts);
-		SLIST_REMOVE_HEAD(&arec->sinsts, alist_item);
-		/* TODO: tell the sinst that its arec is gone */
-	}
-	SLIST_INSERT_HEAD(&arecs_free, arec, list_item);
+	SLIST_FOREACH(sinst, &arec->sinsts, alist_item)
+		update_sinst(sinst, SINST_EVENT_LOST_AREC, NULL, NULL, NULL, NULL);
+
+	/* update_slist should remove the sinst from the arec's list.  And, when
+	 * the sinst list is empty, it should move the arec to the free list.
+	 * Accordingly, the arec's sinsts list should be empty.
+	 */
+	ASSERT(SLIST_EMPTY(&arec->sinsts));
 }
 
 /* This is the arec state machine.  Update the A record considering the event
@@ -773,7 +823,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		/* start by checking all of the TXT records. */
 		SLIST_FOREACH_SAFE(r, &m->txts, list_item, rtmp) {
 			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) == 0) {
-				update_sinst(sinst, m, NULL, NULL, r);
+				update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r);
 				SLIST_REMOVE(&m->txts, r, mdns_resource, list_item);
 			}
 		}
@@ -783,7 +833,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) != 0)
 				continue;
 
-			update_sinst(sinst, m, NULL, r, NULL);
+			update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL);
 			SLIST_REMOVE(&m->srvs, r, mdns_resource, list_item);
 
 			if (sinst->arec == NULL) {
@@ -801,7 +851,8 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 				memset(&overflow_arec, 0, sizeof(struct arec));
 				srv = (struct rr_srv *)r->rdata;
 				dname_copy(overflow_arec.fqdn, m->data, srv->target);
-				update_sinst(sinst, m, &overflow_arec, NULL, NULL);
+				update_sinst(sinst, SINST_EVENT_GOT_AREC, m, &overflow_arec,
+							 NULL, NULL);
 			}
 
 			/* populate/update the arecord if necessary */
@@ -855,7 +906,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
-		update_sinst(sinst, m, NULL, NULL, r);
+		update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r);
 	}
 
 	SLIST_FOREACH(r, &m->srvs, list_item) {
@@ -863,7 +914,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
-		update_sinst(sinst, m, NULL, r, NULL);
+		update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL);
 	}
 
 	return 0;
@@ -926,6 +977,8 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 						 uint32_t *next_event)
 {
 	struct service_monitor *smon;
+	struct service_monitor *sinst;
+
 	int ret = 0;
 	struct arec *arec, *atmp;
 
