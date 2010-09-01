@@ -100,11 +100,16 @@ struct service_instance {
 	struct arec *arec;
 	/* we keep ttls for each record.  Note that these ttls are in milliseconds,
 	 * not seconds.  If a received ttl is too big, we simply make it as big as
-	 * possible.
+	 * possible.  Note that we have to regularly refresh the srv and txt
+	 * records, so we keep enough details around to refresh it properly.  In
+	 * practice, the txt and srv will probably have the same ttl, so we just
+	 * refresh with T_ANY when the srv expires.
 	 */
 	uint32_t ptr_ttl;
 	uint32_t srv_ttl;
-	uint32_t txt_ttl;
+	uint32_t srv_ttl0;
+	uint32_t next_refresh;
+	int ttl_percent;
 	enum sinst_state state;
 	struct service_monitor *smon;
 };
@@ -174,7 +179,8 @@ struct query_ctrl_msg {
 
 static struct query_ctrl_msg ctrl_msg;
 
-#define UPDATE_TTL(ttl, elapsed) ((ttl) > (elapsed) ? (ttl) - (elapsed) : 0)
+#define SUBTRACT(a, b) ((a) > (b) ? (a) - (b) : 0)
+#define ADD(a, b) ((a) > (UINT32_MAX - (b)) ? UINT32_MAX : (a) + (b))
 #define CONVERT_TTL(ttl) ((ttl) > UINT32_MAX/1000 ? UINT32_MAX : (ttl) * 1000)
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -370,6 +376,15 @@ static void reset_service_instance(struct service_instance *sinst)
 	sinst->service.servname = sinst->sname;
 	sinst->service.servtype = sinst->stype;
 	sinst->service.domain = sinst->domain;
+
+	/* start the ttl off at 1s.  If we actully have a suitable SRV in the
+	 * current message, we'll update it.  Otherwise, we'll be all set up for
+	 * an immediate refresh attempt.
+	 */
+	sinst->srv_ttl0 = 1000;
+	sinst->srv_ttl = 1000;
+	sinst->next_refresh = 0;
+	sinst->ttl_percent = 20;
 }
 
 /* populate the service s with the bits and pieces in the fqsn from message
@@ -431,7 +446,6 @@ static int update_txt(struct service_instance *sinst, struct mdns_resource *r)
 					  r->rdata, r->rdlength);
 		ret = 1;
 	}
-	sinst->txt_ttl = CONVERT_TTL(r->ttl);
 
 	return ret;
 }
@@ -486,7 +500,7 @@ static int set_arec(struct service_instance *sinst, struct arec *arec)
  * already one.  Return 1 if we updated the sinst.
  */
 static int update_srv(struct service_instance *sinst, struct mdns_message *m,
-					  struct mdns_resource *r)
+					  struct mdns_resource *r, uint32_t elapsed)
 {
 	struct rr_srv *srv = (struct rr_srv *)r->rdata;
 	struct mdns_service *s = &sinst->service;
@@ -518,8 +532,13 @@ static int update_srv(struct service_instance *sinst, struct mdns_message *m,
 	ret += set_arec(sinst, arec);
 
 done:
-	/* finally, update the ttl and flags */
-	sinst->srv_ttl = CONVERT_TTL(r->ttl);
+	/* finally, update the ttl and flags.  We augment the ttl by the elapsed
+	 * time so we can do a wholesale inspection and update later.
+	 */
+	sinst->srv_ttl = ADD(CONVERT_TTL(r->ttl), elapsed);
+	sinst->srv_ttl0 = CONVERT_TTL(r->ttl);
+	sinst->ttl_percent = 20;
+	sinst->next_refresh = ADD(sinst->srv_ttl0 * 80 / 100, elapsed);
 	sinst->service.flags |= SERVICE_HAS_SRV_FLAG;
 	return ret > 0 ? 1 : 0;
 }
@@ -530,15 +549,61 @@ done:
  */
 static void cleanup_sinst(struct service_instance *sinst)
 {
-	SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
-				 alist_item);
-	if (SLIST_EMPTY(&sinst->arec->sinsts)) {
-		SLIST_REMOVE(&arecs_active, sinst->arec, arec, list_item);
-		SLIST_INSERT_HEAD(&arecs_free, sinst->arec, list_item);
+	SLIST_REMOVE(&sinst->smon->sinsts, sinst, service_instance, list_item);
+	if (sinst->arec) {
+		SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
+					 alist_item);
+		if (SLIST_EMPTY(&sinst->arec->sinsts)) {
+			SLIST_REMOVE(&arecs_active, sinst->arec, arec, list_item);
+			SLIST_INSERT_HEAD(&arecs_free, sinst->arec, list_item);
+		}
 	}
-	SLIST_REMOVE(&sinst->arec->sinsts, sinst, service_instance,
-				 alist_item);
 	SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
+}
+
+/* apply the elapsed time to the service instance.  If it's time to refresh,
+ * add a suitable question to the message m and return 1.  If it's time to give
+ * up on this record, return -1.  If there's nothing to do at this time, return
+ * 0.
+ */
+static int apply_elapsed(struct service_instance *sinst, uint32_t elapsed,
+						 struct mdns_message *m)
+{
+	/* start by updating all of the ttls */
+	sinst->ptr_ttl = SUBTRACT(sinst->ptr_ttl, elapsed);
+	sinst->srv_ttl = SUBTRACT(sinst->ptr_ttl, elapsed);
+	sinst->next_refresh = SUBTRACT(sinst->next_refresh, elapsed);
+
+	if (sinst->next_refresh == 0) {
+		/* time to refresh */
+		if (sinst->ttl_percent < 5) {
+			DBG("Timed out resolving SRV record for ");
+			debug_print_name(NULL, sinst->service.fqsn);
+			DBG(".  Evicting.\n");
+			cleanup_sinst(sinst);
+			return -1;
+		}
+
+		if (sinst->ttl_percent == 20) {
+			/* this is the first refresh attempt.  Send it, and schedule the
+			 * next one for 80% of the ttl.
+			 */
+			sinst->next_refresh = sinst->srv_ttl0 * 80 / 100;
+		} else {
+			sinst->next_refresh = sinst->srv_ttl0 * sinst->ttl_percent / 100;
+		}
+		DBG("Refreshing SRV record for ");
+		debug_print_name(NULL, sinst->service.fqsn);
+		DBG(".\n");
+		sinst->ttl_percent >>= 1;
+		if (mdns_add_question(m, sinst->service.fqsn, T_ANY, C_IN) != 0) {
+			LOG("Warning: failed to add query for SRV record.\n");
+			return 0;
+		} else {
+			return 1;
+		}
+	}
+	return 0;
 }
 
 /* march the sinst through its state machine subject to the event.  The sinst
@@ -548,14 +613,14 @@ static void cleanup_sinst(struct service_instance *sinst)
 static int update_sinst(struct service_instance *sinst, enum sinst_event e,
 						struct mdns_message *m, struct arec *arec,
 						struct mdns_resource *srvrr,
-						struct mdns_resource *txt)
+						struct mdns_resource *txt, uint32_t elapsed)
 {
 	struct mdns_service *s = &sinst->service;
-	int changes = 0;
+	int changes = 0, ret;
 
 	/* apply state-independent updates */
 	if (e == SINST_EVENT_GOT_SRV)
-		changes = update_srv(sinst, m, srvrr);
+		changes = update_srv(sinst, m, srvrr, elapsed);
 	else if (e == SINST_EVENT_GOT_TXT)
 		changes = update_txt(sinst, txt);
 	else if (e == SINST_EVENT_GOT_AREC)
@@ -569,6 +634,12 @@ static int update_sinst(struct service_instance *sinst, enum sinst_event e,
 			 * the user yet, so no need to send a DISAPPEAR message.
 			 */
 			cleanup_sinst(sinst);
+			break;
+		}
+
+		if (e == SINST_EVENT_ADD_QUESTIONS) {
+			ret = apply_elapsed(sinst, elapsed, m);
+			changes = ret == -1 ? 0 : ret;
 			break;
 		}
 
@@ -588,6 +659,19 @@ static int update_sinst(struct service_instance *sinst, enum sinst_event e,
 			break;
 		}
 
+		if (e == SINST_EVENT_ADD_QUESTIONS) {
+			ret = apply_elapsed(sinst, elapsed, m);
+			changes = 0;
+			if (ret == -1)
+				DO_CALLBACK(sinst, MDNS_DISAPPEARED);
+			else if (ret == 1) {
+				s->flags &= ~SERVICE_HAS_SRV_FLAG;
+				sinst->state = SINST_STATE_UPDATING;
+				changes = 1;
+			}
+			break;
+		}
+
 		if (changes == 0)
 			break;
 
@@ -602,6 +686,14 @@ static int update_sinst(struct service_instance *sinst, enum sinst_event e,
 		if (e == SINST_EVENT_LOST_AREC) {
 			cleanup_sinst(sinst);
 			DO_CALLBACK(sinst, MDNS_DISAPPEARED);
+			break;
+		}
+
+		if (e == SINST_EVENT_ADD_QUESTIONS) {
+			ret = apply_elapsed(sinst, elapsed, m);
+			changes = ret == -1 ? 0 : ret;
+			if (ret == -1)
+				DO_CALLBACK(sinst, MDNS_DISAPPEARED);
 			break;
 		}
 
@@ -629,7 +721,7 @@ static void set_ip(struct arec *arec, struct mdns_resource *a)
 		return;
 	arec->ipaddr = ipaddr;
 	SLIST_FOREACH(sinst, &arec->sinsts, alist_item)
-		update_sinst(sinst, SINST_EVENT_GOT_AREC, NULL, arec, NULL, NULL);
+		update_sinst(sinst, SINST_EVENT_GOT_AREC, NULL, arec, NULL, NULL, 0);
 
 	arec->ttl = CONVERT_TTL(a->ttl);
 	/* next refresh is when 20% of the ttl remains */
@@ -645,7 +737,7 @@ static void evict_arec(struct arec *arec)
 	struct service_instance *sinst;
 
 	SLIST_FOREACH(sinst, &arec->sinsts, alist_item)
-		update_sinst(sinst, SINST_EVENT_LOST_AREC, NULL, NULL, NULL, NULL);
+		update_sinst(sinst, SINST_EVENT_LOST_AREC, NULL, NULL, NULL, NULL, 0);
 
 	/* update_slist should remove the sinst from the arec's list.  And, when
 	 * the sinst list is empty, it should move the arec to the free list.
@@ -708,7 +800,7 @@ static int update_arec(struct arec *arec, enum arec_event e,
 			/* still no response.  It's been "elapsed" ms since our last
 			 * invocation.  Either try again or give up
 			 */
-			arec->next_refresh = UPDATE_TTL(arec->next_refresh, elapsed);
+			arec->next_refresh = SUBTRACT(arec->next_refresh, elapsed);
 			if (arec->next_refresh == 0 && arec->ttl_percent < 5) {
 				/* we tried to refresh but failed.  So give up. */
 				DBG("Failed to resolved A record for ");
@@ -739,7 +831,7 @@ static int update_arec(struct arec *arec, enum arec_event e,
 			/* We're supposed to attempt to refresh when 20%, 10%, and 5% of
 			 * the lifetime of the record remains.
 			 */
-			arec->next_refresh = UPDATE_TTL(arec->next_refresh, elapsed);
+			arec->next_refresh = SUBTRACT(arec->next_refresh, elapsed);
 			if (arec->next_refresh == 0) {
 				DBG("Refreshing A record for ");
 				debug_print_name(NULL, arec->fqdn);
@@ -809,10 +901,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 			SLIST_REMOVE(&smon->sinsts, sinst, service_instance, list_item);
 		}
 
-		/* TODO: increment ttl by elapsed time so it's correct when we
-		 * decrement it later!
-		 */
-		sinst->ptr_ttl = CONVERT_TTL(ptr->ttl);
+		sinst->ptr_ttl = ADD(CONVERT_TTL(ptr->ttl), elapsed);
 
 		/* Now we have a service instance that needs updating, and it may or
 		 * may not fit in the cache when we're done.  So make a best effort
@@ -823,7 +912,8 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		/* start by checking all of the TXT records. */
 		SLIST_FOREACH_SAFE(r, &m->txts, list_item, rtmp) {
 			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) == 0) {
-				update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r);
+				update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r,
+							 elapsed);
 				SLIST_REMOVE(&m->txts, r, mdns_resource, list_item);
 			}
 		}
@@ -833,7 +923,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) != 0)
 				continue;
 
-			update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL);
+			update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL, elapsed);
 			SLIST_REMOVE(&m->srvs, r, mdns_resource, list_item);
 
 			if (sinst->arec == NULL) {
@@ -852,7 +942,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 				srv = (struct rr_srv *)r->rdata;
 				dname_copy(overflow_arec.fqdn, m->data, srv->target);
 				update_sinst(sinst, SINST_EVENT_GOT_AREC, m, &overflow_arec,
-							 NULL, NULL);
+							 NULL, NULL, elapsed);
 			}
 
 			/* populate/update the arecord if necessary */
@@ -906,7 +996,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
-		update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r);
+		update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r, elapsed);
 	}
 
 	SLIST_FOREACH(r, &m->srvs, list_item) {
@@ -914,7 +1004,7 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
-		update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL);
+		update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL, elapsed);
 	}
 
 	return 0;
@@ -950,7 +1040,9 @@ static int add_known_answers(struct mdns_message *m,
 	SLIST_FOREACH(sinst, &smon->sinsts, list_item) {
 
 		/* first add the PTR record for the service. */
-		sinst->ptr_ttl = UPDATE_TTL(sinst->ptr_ttl, elapsed);
+		if (sinst->ptr_ttl == 0)
+			continue;
+
 		len = ptr_size(sinst);
 		if (len > TAILROOM(m))
 			goto fail;
@@ -977,7 +1069,7 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 						 uint32_t *next_event)
 {
 	struct service_monitor *smon;
-	struct service_monitor *sinst;
+	struct service_instance *sinst, *stmp;
 
 	int ret = 0;
 	struct arec *arec, *atmp;
@@ -1019,6 +1111,12 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 		} else {
 			smon->next_refresh -= elapsed;
 			*next_event = MIN(*next_event, smon->next_refresh);
+		}
+
+		SLIST_FOREACH_SAFE(sinst, &smon->sinsts, list_item, stmp) {
+			ret += update_sinst(sinst, SINST_EVENT_ADD_QUESTIONS, m, NULL,
+								NULL, NULL, elapsed);
+			*next_event = MIN(*next_event, sinst->next_refresh);
 		}
 	}
 

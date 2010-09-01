@@ -189,7 +189,7 @@ class mdnsTest(unittest.TestCase):
 		q.flags = 0
 		return q;
 
-	def prepareServiceResponse(self, fqdn, fqst, fqsn, port, ip=None, txt=None):
+	def prepareServiceResponse(self, fqdn, fqst, fqsn, port=None, ip=None, txt=None):
 
 		r = dns.message.Message()
 		r.flags = dns.flags.QR | dns.flags.AA
@@ -264,6 +264,34 @@ class mdnsTest(unittest.TestCase):
 			expected += ":100 (" + txt + ")"
 		return [SRVresponse, Aresponse, expected]
 
+	# A Baz service delivers only a PTR record in response to a query of its
+	# service type.  The SRV/TXT records and A record must be discovered
+	# seperately.
+	def createBazN(self, i, txt=None):
+		fqdnTemplate = "baznode-%d.local."
+		fqst = "_baz._tcp.local."
+		fqsnTemplate = "MyBazService-%d." + fqst
+		ipTemplate =  "192.168.3.%d"
+		txtArg = None
+		if txt != None:
+			txtArg = txt.replace(":", " ")
+		PTRresponse = self.prepareServiceResponse(None, fqst,
+												  fqsnTemplate % (i))
+		SRVresponse = self.prepareServiceResponse(fqdnTemplate % (i), fqst,
+												  fqsnTemplate % (i), 100,
+												  txt=txtArg)
+		Aresponse = self.prepareServiceResponse(fqdnTemplate % (i), None,
+												None, None,
+												ip = ipTemplate % (i))
+		expected = fqsnTemplate % (i) + " at " + ipTemplate % (i)
+		if txt == None:
+			expected += ":100 (no key vals)"
+		elif txt == '""':
+			expected += ":100 ()"
+		else:
+			expected += ":100 (" + txt + ")"
+		return [PTRresponse, SRVresponse, Aresponse, expected]
+
 	def startServiceDiscovery(self, fqsn):
 		test_sniffer.start()
 		expected = self.prepareServiceQuery(fqsn)
@@ -288,6 +316,25 @@ class mdnsTest(unittest.TestCase):
 		for expected in outputs:
 			self.failIf("DISCOVERED: " + expected not in results,
 						"Failed to find result:\n" + expected)
+
+	# expect a query with the expected question or timeout trying.
+	def expectQuestion(self, expected, timeout=None):
+		while True:
+			q = self.getNextPacket(test_sniffer, timeout)
+			for qr in q.question:
+				if qr == expected:
+					return
+
+	# expect the specified message to arrive on the sniffer
+	def expectMessage(self, expected):
+		m = self.getNextPacket(test_sniffer)
+		self.expectEqual(expected, m)
+
+	def expectResult(self, r):
+		results = uut.get_results()
+		self.failIf(r not in results, "Failed to find result:\n" + r)
+
+
 
 	#################### unittest functions ####################
 	def setUp(self):
@@ -927,9 +974,8 @@ class mdnsTest(unittest.TestCase):
 							  "foobar", ipaddr="5.5.5.5")
 		s.publish()
 		time.sleep(2)
-		results = uut.get_results()
 		expected = "DISCOVERED: My Foo Service._foo._tcp.local. at 5.5.5.5:100 ()"
-		self.failIf(expected not in results, "Failed to find result")
+		self.expectResult(expected)
 
 	def test_DiscoverSingleService(self):
 		self.discoverNFoos(1)
@@ -998,10 +1044,8 @@ class mdnsTest(unittest.TestCase):
 		outputs.append(output)
 		mdns_tool.inject(response, '224.0.0.251')
 
-		results = uut.get_results()
 		for o in outputs:
-			self.failIf("DISCOVERED: " + o not in results,
-					"Failed to find result:\n" + output)
+			self.expectResult("DISCOVERED: " + o)
 
 	def test_DiscoverServiceWithoutARecord(self):
 		[SRVresp, Aresp, output] = self.createBarN(1, '""')
@@ -1009,16 +1053,13 @@ class mdnsTest(unittest.TestCase):
 		mdns_tool.inject(SRVresp, '224.0.0.251')
 
 		# next we expect a query for the missing A record
-		q = self.getNextPacket(test_sniffer)
 		a = self.prepareAQuery("barnode-1.local")
-		self.expectEqual(a, q)
+		self.expectMessage(a)
 
 		# now we send the A record back
 		mdns_tool.inject(Aresp, '224.0.0.251')
 
-		results = uut.get_results()
-		self.failIf("DISCOVERED: " + output not in results,
-					"Failed to find result:\n" + output)
+		self.expectResult("DISCOVERED: " + output)
 
 	def test_ARecordRefresh(self):
 		fqdn = "barnode-1.local."
@@ -1027,24 +1068,63 @@ class mdnsTest(unittest.TestCase):
 		mdns_tool.inject(SRVresp, '224.0.0.251')
 
 		# next we expect a query for the missing A record
-		q = self.getNextPacket(test_sniffer)
 		a = self.prepareAQuery(fqdn)
-		self.expectEqual(a, q)
+		self.expectMessage(a)
 
 		# Send our Aresp with a ttl of 3 and expect a refresh
 		Aresp.answer[0].ttl = 3
 		mdns_tool.inject(Aresp, '224.0.0.251')
 
-		results = uut.get_results()
-		self.failIf("DISCOVERED: " + output not in results,
-					"Failed to find result:\n" + output)
+		self.expectResult("DISCOVERED: " + output)
 
 		# we may get some expected service queries in the meantime
-		retries = 3
 		aq = dns.rrset.from_text(fqdn, 0, dns.rdataclass.IN,
 								 dns.rdatatype.A)
-		while retries > 0:
-			q = self.getNextPacket(test_sniffer, 3)
-			for qr in q.question:
-				if qr == aq:
-					return
+		self.expectQuestion(aq, 3)
+
+	def test_DiscoverServiceWithoutSRVRecord(self):
+		[PTRresp, SRVresp, Aresp, output] = self.createBazN(1, '""')
+		self.startServiceDiscovery("_baz._tcp.local")
+		mdns_tool.inject(PTRresp, '224.0.0.251')
+
+		# next we expect a query for the missing SRV record
+		s = self.prepareServiceQuery("MyBazService-1._baz._tcp.local")
+		self.expectMessage(s)
+		mdns_tool.inject(SRVresp, '224.0.0.251')
+
+		# ...and finally for the A record
+		a = self.prepareAQuery("baznode-1.local")
+		self.expectMessage(a)
+		mdns_tool.inject(Aresp, '224.0.0.251')
+		self.expectResult("DISCOVERED: " + output)
+
+	def test_SRVRecordRefresh(self):
+		fqdn = "baznode-1.local."
+		fqsn = "MyBazService-1._baz._tcp.local."
+
+		[PTRresp, SRVresp, Aresp, output] = self.createBazN(1, '""')
+		self.startServiceDiscovery("_baz._tcp.local")
+		mdns_tool.inject(PTRresp, '224.0.0.251')
+
+		# next we expect a query for the missing SRV record
+		s = self.prepareServiceQuery(fqsn)
+		self.expectMessage(s)
+
+		# Send our SRVresp with a ttl of 3 and expect a refresh
+		SRVresp.answer[0].ttl = 3
+		mdns_tool.inject(SRVresp, '224.0.0.251')
+
+		# next we expect a query for the missing A record
+		a = self.prepareAQuery(fqdn)
+		self.expectMessage(a)
+
+		# Send our Aresp
+		mdns_tool.inject(Aresp, '224.0.0.251')
+
+		# That should complete the discovery
+		self.expectResult("DISCOVERED: " + output)
+		
+		# Now we expect a refresh for the SRV
+		sq = dns.rrset.from_text(fqsn, 0, dns.rdataclass.IN,
+								 dns.rdatatype.ANY)
+		self.expectQuestion(sq, 3)
