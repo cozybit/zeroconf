@@ -731,11 +731,13 @@ static void set_ip(struct arec *arec, struct mdns_resource *a)
 	struct service_instance *sinst;
 
 	if (arec->ipaddr == ipaddr)
-		return;
+		goto done;
+
 	arec->ipaddr = ipaddr;
 	SLIST_FOREACH(sinst, &arec->sinsts, alist_item)
 		update_sinst(sinst, SINST_EVENT_GOT_AREC, NULL, arec, NULL, NULL, 0);
 
+done:
 	arec->ttl = CONVERT_TTL(a->ttl);
 	/* next refresh is when 20% of the ttl remains */
 	arec->next_refresh = arec->ttl * 80 / 100;
@@ -826,7 +828,7 @@ static int update_arec(struct arec *arec, enum arec_event e,
 			arec->next_refresh = SUBTRACT(arec->next_refresh, elapsed);
 			if (arec->next_refresh == 0 && arec->ttl_percent < 5) {
 				/* we tried to refresh but failed.  So give up. */
-				DBG("Failed to resolved A record for ");
+				DBG("Failed to resolve A record for ");
 				debug_print_name(NULL, arec->fqdn);
 				DBG(".  Evicting.\n");
 				evict_arec(arec);
