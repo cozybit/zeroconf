@@ -1274,3 +1274,45 @@ class mdnsTest(unittest.TestCase):
 		o = "UPDATED: " + fqsn + " at " + ip + ":" + str(port) + \
 			" (" + txt.replace(" ", ":") + ")"
 		self.expectResult(o)
+
+	def test_DiscoverPTRGoodbye(self):
+		self.discoverNFoos(1)
+
+		# send a goodbye packet
+		[response, output] = self.createFooN(1)
+		for a in response.answer:
+			if a.rdtype == dns.rdatatype.PTR:
+				ptr = a
+				break
+		ptr.ttl = 0
+		response.answer = [ptr]
+		mdns_tool.inject(response, '224.0.0.251')
+		self.expectResult("DISAPPEARED: " + output)
+
+	def test_DiscoverSRVGoodbye(self):
+		self.discoverNFoos(1)
+
+		# send a goodbye packet
+		[response, output] = self.createFooN(1)
+		for a in response.answer:
+			if a.rdtype == dns.rdatatype.SRV:
+				srv = a
+				break
+		srv.ttl = 0
+		response.answer = [srv]
+		mdns_tool.inject(response, '224.0.0.251')
+		self.expectResult("DISAPPEARED: " + output)
+
+	def test_DiscoverAGoodbye(self):
+		self.discoverNFoos(1)
+
+		# send a goodbye packet
+		[response, output] = self.createFooN(1)
+		for a in response.answer:
+			if a.rdtype == dns.rdatatype.A:
+				arec = a
+				break
+		arec.ttl = 0
+		response.answer = [arec]
+		mdns_tool.inject(response, '224.0.0.251')
+		self.expectResult("DISAPPEARED: " + output)

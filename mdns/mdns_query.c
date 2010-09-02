@@ -523,6 +523,11 @@ static int update_srv(struct service_instance *sinst, struct mdns_message *m,
 	struct arec *arec;
 	int ret = 0;
 
+	if (r->ttl == 0) {
+		cleanup_sinst(sinst);
+		return -1;
+	}
+
 	/* we found a service record for this sinst. */
 	if (s->port != srv->port) {
 		s->port = srv->port;
@@ -569,7 +574,7 @@ static int apply_elapsed(struct service_instance *sinst, uint32_t elapsed,
 {
 	/* start by updating all of the ttls */
 	sinst->ptr_ttl = SUBTRACT(sinst->ptr_ttl, elapsed);
-	sinst->srv_ttl = SUBTRACT(sinst->ptr_ttl, elapsed);
+	sinst->srv_ttl = SUBTRACT(sinst->srv_ttl, elapsed);
 	sinst->next_refresh = SUBTRACT(sinst->next_refresh, elapsed);
 
 	if (sinst->next_refresh == 0) {
@@ -641,7 +646,7 @@ static int update_sinst(struct service_instance *sinst, enum sinst_event e,
 			break;
 		}
 
-		if (changes == 0)
+		if (changes <= 0)
 			break;
 
 		if (SERVICE_IS_READY(s)) {
@@ -673,6 +678,11 @@ static int update_sinst(struct service_instance *sinst, enum sinst_event e,
 		if (changes == 0)
 			break;
 
+		if (changes == -1) {
+			DO_CALLBACK(sinst, MDNS_DISAPPEARED);
+			break;
+		}
+
 		if (SERVICE_IS_READY(s)) {
 			DO_CALLBACK(sinst, MDNS_UPDATED);
 		} else {
@@ -697,6 +707,11 @@ static int update_sinst(struct service_instance *sinst, enum sinst_event e,
 
 		if (changes == 0)
 			break;
+
+		if (changes == -1) {
+			DO_CALLBACK(sinst, MDNS_DISAPPEARED);
+			break;
+		}
 
 		if (SERVICE_IS_READY(s)) {
 			DO_CALLBACK(sinst, MDNS_UPDATED);
@@ -759,6 +774,11 @@ static int update_arec(struct arec *arec, enum arec_event e,
 					   uint32_t elapsed)
 {
 	int ret = 0;
+
+	if (e == AREC_EVENT_RX_REC && a->ttl == 0) {
+		evict_arec(arec);
+		return 0;
+	}
 
 	switch (arec->state) {
 	case AREC_STATE_INIT:
@@ -876,8 +896,18 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 
 		/* This PTR record is interesting.  Analyze it. */
 		sinst = find_service_instance(smon, m, ptr->rdata);
-		if (sinst != NULL)
+		if (sinst != NULL) {
+			/* sneak a bit of state machine logic in here */
+			if (ptr->ttl == 0) {
+				if (sinst->state == SINST_STATE_CLEAN ||
+					sinst->state == SINST_STATE_UPDATING)
+					DO_CALLBACK(sinst, MDNS_DISAPPEARED);
+				cleanup_sinst(sinst);
+			} else {
+				sinst->ptr_ttl = ADD(CONVERT_TTL(ptr->ttl), elapsed);
+			}
 			continue;
+		}
 
 		/* This is a new service instance. */
 		sinst = SLIST_FIRST(&sinsts_free);
@@ -953,12 +983,8 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
-		if (sinst == NULL) {
-			DBG("Warning: Service ");
-			debug_print_name(m, r->name);
-			DBG("should be in cache but it's not.");
+		if (sinst == NULL)
 			continue;
-		}
 		update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r, elapsed);
 	}
 
@@ -967,12 +993,8 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 		sinst = find_service_instance(smon, m, r->name);
-		if (sinst == NULL) {
-			DBG("Warning: Service ");
-			debug_print_name(m, r->name);
-			DBG("should be in cache but it's not.");
+		if (sinst == NULL)
 			continue;
-		}
 		update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL, elapsed);
 	}
 
