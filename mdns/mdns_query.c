@@ -862,7 +862,7 @@ static int update_arec(struct arec *arec, enum arec_event e,
 				if (mdns_add_question(m, arec->fqdn, T_A, C_IN) != 0)
 					LOG("Warning: failed to add query for A record.\n");
 				ret = 1;
-				arec->ttl_percent = 20;
+				arec->ttl_percent = 10;
 				arec->next_refresh = arec->ttl * arec->ttl_percent / 100;
 				arec->state = AREC_STATE_QUERYING;
 			}

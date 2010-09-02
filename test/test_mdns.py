@@ -1083,10 +1083,13 @@ class mdnsTest(unittest.TestCase):
 
 		self.expectResult("DISCOVERED: " + output)
 
-		# we may get some expected service queries in the meantime
+		# wait for 3 refresh attempts, then check that the service disappears
 		aq = dns.rrset.from_text(fqdn, 0, dns.rdataclass.IN,
 								 dns.rdatatype.A)
 		self.expectQuestion(aq, 3)
+		self.expectQuestion(aq, 3)
+		self.expectQuestion(aq, 3)
+		self.expectResult("DISAPPEARED: " + output)
 
 	def test_DiscoverServiceWithoutSRVRecord(self):
 		[PTRresp, SRVresp, Aresp, output] = self.createBazN(1, '""')
@@ -1134,6 +1137,9 @@ class mdnsTest(unittest.TestCase):
 		sq = dns.rrset.from_text(fqsn, 0, dns.rdataclass.IN,
 								 dns.rdatatype.ANY)
 		self.expectQuestion(sq, 3)
+		self.expectQuestion(sq, 3)
+		self.expectQuestion(sq, 3)
+		self.expectResult("DISAPPEARED: " + output)
 
 	def test_MonitorSingleLocalService(self):
 		uut.start_and_wait("-n node -b " + ipaddr + ' -s MyFoobarService:foo:555:udp:tag=val')
