@@ -861,9 +861,8 @@ static struct arec overflow_arec;
 static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 {
 	struct service_monitor *smon = NULL;
-	struct mdns_resource *ptr, *r, *rtmp, *a, *atmp;
+	struct mdns_resource *ptr, *r, *rtmp, *a;
 	struct service_instance *sinst = NULL;
-	int ret;
 	struct rr_srv *srv;
 	struct arec *arec;
 
@@ -875,111 +874,70 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		if (smon == NULL)
 			continue;
 
-		/* TODO: if the ttl is 0, shouldn't we just skip all of this
-		 * processing?
-		 */
-
 		/* This PTR record is interesting.  Analyze it. */
 		sinst = find_service_instance(smon, m, ptr->rdata);
-		if (sinst == NULL) {
-			/* This is a new service instance. */
-			sinst = SLIST_FIRST(&sinsts_free);
-			if (sinst == NULL) {
-				/* no more space in cache.  Use the overflow instance. */
-				sinst = &overflow_sinst;
-			} else {
-				SLIST_REMOVE_HEAD(&sinsts_free, list_item);
-			}
+		if (sinst != NULL)
+			continue;
+
+		/* This is a new service instance. */
+		sinst = SLIST_FIRST(&sinsts_free);
+		if (sinst != NULL) {
+			SLIST_REMOVE_HEAD(&sinsts_free, list_item);
 			reset_service_instance(sinst);
+			SLIST_INSERT_HEAD(&smon->sinsts, sinst, list_item);
 			sinst->smon = smon;
 			if (copy_servinfo(&sinst->service, m, ptr->rdata) == -1) {
 				LOG("Warning: failed to copy service info.\n");
+				SLIST_REMOVE_HEAD(&smon->sinsts, list_item);
 				SLIST_INSERT_HEAD(&sinsts_free, sinst, list_item);
 				continue;
 			}
-		} else {
-			/* this is an existing service instance.  If we get it dirty, we
-			 * will update the user.
-			 */
-			SLIST_REMOVE(&smon->sinsts, sinst, service_instance, list_item);
+			sinst->ptr_ttl = ADD(CONVERT_TTL(ptr->ttl), elapsed);
+			continue;
 		}
 
-		sinst->ptr_ttl = ADD(CONVERT_TTL(ptr->ttl), elapsed);
-
-		/* Now we have a service instance that needs updating, and it may or
-		 * may not fit in the cache when we're done.  So make a best effort
-		 * here by collecting all of the relevant records, and alerting the
-		 * user if this is an overflow item.
+		/* If we get here, it means that we don't have any room in our cache.
+		 * So make a best effort here using the overflow data structures by
+		 * collecting all of the relevant records, and alerting the user if
+		 * this is an overflow item.
 		 */
+		sinst = &overflow_sinst;
+		reset_service_instance(sinst);
+		sinst->smon = smon;
+		if (copy_servinfo(&sinst->service, m, ptr->rdata) == -1) {
+			LOG("Warning: failed to copy service info.\n");
+			continue;
+		}
 
-		/* start by checking all of the TXT records. */
 		SLIST_FOREACH_SAFE(r, &m->txts, list_item, rtmp) {
 			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) == 0) {
-				update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r,
-							 elapsed);
+				update_txt(sinst, r);
 				SLIST_REMOVE(&m->txts, r, mdns_resource, list_item);
 			}
 		}
 
-		/* ...then check the SRV records */
 		SLIST_FOREACH_SAFE(r, &m->srvs, list_item, rtmp) {
 			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) != 0)
 				continue;
 
-			update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL, elapsed);
+			srv = (struct rr_srv *)r->rdata;
+			sinst->service.port = srv->port;
+			memset(&overflow_arec, 0, sizeof(struct arec));
+			sinst->arec = &overflow_arec;
+			dname_copy(overflow_arec.fqdn, m->data, srv->target);
 			SLIST_REMOVE(&m->srvs, r, mdns_resource, list_item);
+		}
 
-			if (sinst->arec == NULL) {
-				/* The A record cache is full.  If there's a suitable A record
-				 * in this message, we'll plop it into the overflow A record
-				 * and alert the user.  Otherwise, we've made our best effort
-				 * to discover the service and we're done.
-				 */
-
-				/* It's a bug of we're using the overflow A record but not the
-				 * overflow service instance
-				 */
-				ASSERT(sinst == &overflow_sinst);
-
-				memset(&overflow_arec, 0, sizeof(struct arec));
-				srv = (struct rr_srv *)r->rdata;
-				dname_copy(overflow_arec.fqdn, m->data, srv->target);
-				update_sinst(sinst, SINST_EVENT_GOT_AREC, m, &overflow_arec,
-							 NULL, NULL, elapsed);
-			}
-
-			/* populate/update the arecord if necessary */
-			SLIST_FOREACH_SAFE(a, &m->as, list_item, atmp) {
+		if (sinst->arec) {
+			SLIST_FOREACH(a, &m->as, list_item) {
 				if (dname_cmp(m->data, a->name, NULL, sinst->arec->fqdn) != 0)
 					continue;
-
-				update_arec(sinst->arec, AREC_EVENT_RX_REC, m, a, elapsed);
-
-				/* Okay.  By now we've found a matching A record, updated it,
-				 * and updated the service that we're parsing.  If this is not
-				 * the overflow A record, we are done processing the resource
-				 * record in which the A record arrived.  So we remove it from
-				 * the message.  If this is the overflow record, we have to
-				 * leave it in the message so other services with the same IP
-				 * addr get updated correctly.
-				 */
-				if (sinst->arec != &overflow_arec)
-					SLIST_REMOVE(&m->as, a, mdns_resource, list_item);
+				sinst->service.ipaddr = get_uint32(a->rdata);
 				break;
 			}
-			break;
 		}
 
-		/* If we can cache the result, great.  Otherwise, alert the user that
-		 * we did our best.
-		 */
-		if (sinst == &overflow_sinst) {
-			ret = smon->cb(smon->cbdata, &sinst->service, MDNS_CACHE_FULL);
-			if (ret != MDNS_SUCCESS)
-				LOG("Warning: callback returned unexpected value: %d\n", ret);
-		} else {
-			SLIST_INSERT_HEAD(&smon->sinsts, sinst, list_item);
-		}
+		DO_CALLBACK(sinst, MDNS_CACHE_FULL);
 	}
 
 	/* Any SRV, TXT, or A records that remain in the message are either not of
