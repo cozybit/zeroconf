@@ -293,7 +293,7 @@ uint8_t *dname_label_to_c(char *dst, uint8_t *p, uint8_t *src,
  * to dst with dlen and null terminate it.  Add a : between each string of the
  * txt record.  copy at most dlen bytes, including the trailing null.
  */
-void txt_to_c_ncpy(char *dst, int dlen, char *txt, int tlen)
+void txt_to_c_ncpy(char *dst, int dlen, uint8_t *txt, int tlen)
 {
 	int remaining = dlen - 1;
 
@@ -489,11 +489,14 @@ static void increment_name_tests(void)
 
 void txt_to_c_ncpy_tests(void)
 {
-	char txt0[] = {1, 0};
-	char txt1[] = {5, 'k', '1', '=', 'v', '1'};
-	char txt2[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'v', '2',
-				   5, 'k', '3', '=', 'v', '3',};
+	uint8_t txt0[] = {1, 0};
+	uint8_t txt1[] = {5, 'k', '1', '=', 'v', '1'};
+	uint8_t txt2[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'v', '2',
+					  5, 'k', '3', '=', 'v', '3',};
 	char result[MDNS_MAX_NAME_LEN + 1];
+	uint8_t maxtxt[MDNS_MAX_NAME_LEN + 1];
+	int i;
+
 	test_title("txt_to_c_ncpy");
 	txt_to_c_ncpy(result, sizeof(result), txt0, sizeof(txt0));
 	FAIL_UNLESS(strcmp(result, "") == 0, "Failed to copy empty TXT record");
@@ -503,6 +506,17 @@ void txt_to_c_ncpy_tests(void)
 	txt_to_c_ncpy(result, sizeof(result), txt2, sizeof(txt2));
 	FAIL_UNLESS(strcmp(result, "k1=v1:k2=v2:k3=v3") == 0,
 				"Failed to copy multiple kvs");
+
+	maxtxt[0] = sizeof(maxtxt) - 1;
+	maxtxt[1] = 'k';
+	maxtxt[1] = '=';
+	for (i = 2; i < sizeof(maxtxt); i++)
+		maxtxt[i] = 'v';
+	txt_to_c_ncpy(result, sizeof(result), maxtxt, sizeof(maxtxt));
+	FAIL_UNLESS(memcmp(result, maxtxt + 1, sizeof(maxtxt) - 1) == 0,
+				"Failed to copy max txt");
+	FAIL_UNLESS(result[sizeof(result) - 1] == 0,
+				"Failed to NULL terminate result");
 }
 
 void dname_tests(void)
