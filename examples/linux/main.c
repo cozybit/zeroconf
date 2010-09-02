@@ -309,21 +309,13 @@ static int parse_service(struct mdns_service *service, char *str)
 }
 
 /* All this callback does is dump results to a file in tmp */
-static char filename[MDNS_MAX_NAME_LEN + sizeof("/tmp/.results")];
+#define RESULTS_FILE "/tmp/mdns.results"
 static int linux_query_cb(void *data, const struct mdns_service *s, int status)
 {
 	FILE *f;
 
 	LOG("Got callback for %s\n", s->servname);
-	if (data == NULL) {
-		snprintf(filename, sizeof(filename), "/tmp/%s.%s.results",
-				 s->servtype, s->proto == MDNS_PROTO_TCP ? "tcp" : "udp");
-	} else {
-		/* Eventually a non-NULL pointer will mean something. */
-		return MDNS_SUCCESS;
-	}
-
-	f = fopen(filename, "a");
+	f = fopen(RESULTS_FILE, "a");
 	if (f == NULL) {
 		LOG("Failed to open output file in linux handler\n");
 		return MDNS_SUCCESS;
@@ -359,12 +351,12 @@ done:
 "command can be one of the following:\n" \
 "launch        start mdns daemon\n" \
 "halt          stop mdns daemon\n" \
-"monitor <fqst> [outfile]\n" \
+"monitor <fqst>\n" \
 "              send a query for the service specified by the\n" \
 "              fully-qualified service type <fqst> (e.g.,\n" \
 "              \"_printer._tcp.local\").  Expect the hostname,\n" \
 "              ip address, port, and the associated txt record (if any)\n" \
-"              to be printed to stdout or outfile if specified.\n" \
+"              to be printed to /tmp/mdns.results\n" \
 "unmonitor [<fqst>]\n" \
 "              stop monitoring the specified service type.  If fqst\n" \
 "              is not specified, unmonitor all services\n" \
@@ -398,7 +390,7 @@ int main(int argc, char **argv)
 	char *domain = NULL;
 	char *hostname = NULL;
 	int num_services = 0, i;
-	char *outfile, *fqst;
+	char *fqst;
 
 	memset(services, 0, sizeof(services));
 
@@ -467,10 +459,7 @@ int main(int argc, char **argv)
 			printf("monitor requires a fully qualified service type arg.\n");
 			return -1;
 		}
-		fqst = argv[optind++];
-		outfile = NULL;
-		if (optind < argc)
-			outfile = argv[optind];
+		fqst = argv[optind];
 		return mdns_query_monitor(fqst, linux_query_cb, NULL);
 
 	} else if (strcmp(cmd, "unmonitor") == 0) {
