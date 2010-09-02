@@ -30,6 +30,10 @@ your target does not have ssh).
 
    $ nosetests -w ./test -s -v test_mdns:mdnsTest.test_AnswerAllSRVProbes
 
+7: Some tests are run manually, such as the querier stress test:
+
+   $ nosetests -w ./test -s -v test_mdns:mdnsTest.manual_QuerierStressTest
+
 Adding new test targets
 =======================
 

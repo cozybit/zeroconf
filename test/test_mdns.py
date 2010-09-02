@@ -189,36 +189,36 @@ class mdnsTest(unittest.TestCase):
 		q.flags = 0
 		return q;
 
-	def prepareServiceResponse(self, fqdn, fqst, fqsn, port=None, ip=None, txt=None):
+	def prepareServiceResponse(self, fqdn, fqst, fqsn, port=None, ip=None, txt=None, ttl=255):
 
 		r = dns.message.Message()
 		r.flags = dns.flags.QR | dns.flags.AA
 		r.id = 0
 
 		if fqsn != None and port != None:
-			srv = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+			srv = dns.rrset.from_text(fqsn, ttl, dns.rdataclass.FLUSH,
 									  dns.rdatatype.SRV,
 									  "0 0 %d %s" % (port, fqdn))
 			r.answer.append(srv)
 
 		if fqsn != None and fqst != None:
-			ptr = dns.rrset.from_text(fqst, 255, dns.rdataclass.FLUSH,
+			ptr = dns.rrset.from_text(fqst, ttl, dns.rdataclass.FLUSH,
 									  dns.rdatatype.PTR, fqsn)
 			r.answer.append(ptr)
 
 		if txt != None:
-			txt = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+			txt = dns.rrset.from_text(fqsn, ttl, dns.rdataclass.FLUSH,
 									  dns.rdatatype.TXT, txt)
 			r.answer.append(txt)
 
 		if ip != None:
-			a = dns.rrset.from_text(fqdn, 255, dns.rdataclass.FLUSH,
+			a = dns.rrset.from_text(fqdn, ttl, dns.rdataclass.FLUSH,
 									  dns.rdatatype.A, ip)
 			r.answer.append(a)
 		return r
 
 	# A Foo service delivers all of its records in a single response.
-	def createFooN(self, i, txt=None):
+	def createFooN(self, i, txt=None, ttl=255):
 		fqdnTemplate = "node-%d.local."
 		fqst = "_foo._tcp.local."
 		fqsnTemplate = "MyFooService-%d." + fqst
@@ -229,7 +229,7 @@ class mdnsTest(unittest.TestCase):
 		response = self.prepareServiceResponse(fqdnTemplate % (i), fqst,
 											   fqsnTemplate % (i), 100,
 											   ipTemplate % (i),
-											   txtArg)
+											   txtArg, ttl)
 		expected = fqsnTemplate % (i) + " at " + ipTemplate % (i)
 		if txt == None:
 			expected += ":100 (no key vals)"
@@ -241,7 +241,7 @@ class mdnsTest(unittest.TestCase):
 
 	# A Bar service delivers its PTR, SRV, and TXT records in one message, and
 	# the querier must query for the A record.
-	def createBarN(self, i, txt=None):
+	def createBarN(self, i, txt=None, ttl=255):
 		fqdnTemplate = "barnode-%d.local."
 		fqst = "_bar._tcp.local."
 		fqsnTemplate = "MyBarService-%d." + fqst
@@ -267,7 +267,7 @@ class mdnsTest(unittest.TestCase):
 	# A Baz service delivers only a PTR record in response to a query of its
 	# service type.  The SRV/TXT records and A record must be discovered
 	# seperately.
-	def createBazN(self, i, txt=None):
+	def createBazN(self, i, txt=None, ttl=255):
 		fqdnTemplate = "baznode-%d.local."
 		fqst = "_baz._tcp.local."
 		fqsnTemplate = "MyBazService-%d." + fqst
@@ -292,13 +292,38 @@ class mdnsTest(unittest.TestCase):
 			expected += ":100 (" + txt + ")"
 		return [PTRresponse, SRVresponse, Aresponse, expected]
 
-	def startServiceDiscovery(self, fqsn):
+	def createBigTxtN(self, i, txt=None, ttl=255):
+		fqdnTemplate = "bignode-%d.local."
+		fqst = "_bigtxt._tcp.local."
+		fqsnTemplate = "MyBigTxtService-%d." + fqst
+		ipTemplate =  "192.168.9.%d"
+		txtArg = None
+		if txt != None:
+			txtArg = txt.replace(":", " ")
+		response = self.prepareServiceResponse(fqdnTemplate % (i), fqst,
+											   fqsnTemplate % (i), 100,
+											   ipTemplate % (i),
+											   txtArg, ttl)
+		expected = fqsnTemplate % (i) + " at " + ipTemplate % (i)
+		if txt == None:
+			expected += ":100 (no key vals)"
+		elif txt == '""':
+			expected += ":100 ()"
+		else:
+			expected += ":100 (" + txt + ")"
+		return [response, expected]
+
+	def addMonitoredService(self, fqst):
+		expected = self.prepareServiceQuery(fqst)
+		ret = uut.monitor(fqst)
+		self.failIf(ret != 0, "Failed to monitor " + fqst + ": %d" % ret)
+		return expected
+
+	def startServiceDiscovery(self, fqst):
 		test_sniffer.start()
-		expected = self.prepareServiceQuery(fqsn)
 		ret = uut.start("")
 		self.failIf(ret != 0, "Failed to launch mdns")
-		ret = uut.monitor(fqsn)
-		self.failIf(ret != 0, "Failed to monitor service: %d" % ret)
+		expected = self.addMonitoredService(fqst)
 		q = self.getNextPacket(test_sniffer)
 		self.expectEqual(expected, q)
 
@@ -341,6 +366,17 @@ class mdnsTest(unittest.TestCase):
 		output = servname + "." + servtype + "." + domain + ". at " + ip + \
 				 ":" + str(port) + " ()"
 		return [s, output]
+
+	def isAnswerFor(self, r, msg):
+		for q in msg.question:
+			for a in r.answer:
+				if q.name == a.name:
+					for aa in msg.answer:
+						# known answer?
+						if aa.name == a.name and aa.rdtype == a.rdtype:
+							return False
+					return True
+		return False
 
 	#################### unittest functions ####################
 	def setUp(self):
@@ -1322,3 +1358,58 @@ class mdnsTest(unittest.TestCase):
 		response.answer = [arec]
 		mdns_tool.inject(response, '224.0.0.251')
 		self.expectResult("DISAPPEARED: " + output)
+
+	def manual_QuerierStressTest(self):
+		# This is a stress test that is meant to run for a while.  Here we
+		# throw everything at the querier, including multiple service type
+		# monitoring, more instances than can fit in the cache, and bigger TXT
+		# records than we support.
+
+		# advertise a local foo service
+		test_sniffer.start()
+		ret = uut.start_and_wait("-n node -b " + ipaddr + ' -s LocalFoobarService:foo:555:tcp:tag=val')
+		self.failIf(ret != 0, "Failed to launch mdns")
+
+		# listen for expected services
+		self.addMonitoredService("_foo._tcp.local")
+		self.addMonitoredService("_bigtxt._tcp.local")
+		self.addMonitoredService("_bar._tcp.local")
+		self.addMonitoredService("_baz._tcp.local")
+
+		# create and announce a bunch of services, all with small ttls
+		responses = []
+		for i in range(0, 19):
+			[r, o] = self.createFooN(i, ttl=10)
+			mdns_tool.inject(r, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+			responses.append(r)
+
+			[s, a, o] = self.createBarN(i, ttl=10)
+			mdns_tool.inject(s, '224.0.0.251')
+			mdns_tool.inject(a, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+			responses.extend([s, a])
+
+			[p, s, a, o] = self.createBazN(i, ttl=10)
+			mdns_tool.inject(p, '224.0.0.251')
+			mdns_tool.inject(s, '224.0.0.251')
+			mdns_tool.inject(a, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+			responses.extend([p, s, a])
+
+			[r, o] = self.createBigTxtN(i, "k=" + "v" * 253, ttl=10)
+			mdns_tool.inject(r, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+			responses.append(r)
+
+		# respond to queries
+		while 1:
+			msg = self.getNextPacket(test_sniffer, 10)
+			if msg.opcode() != dns.opcode.QUERY or \
+				   msg.flags & dns.flags.QR != 0:
+				continue
+
+			for r in responses:
+				if self.isAnswerFor(r, msg):
+					mdns_tool.inject(r, '224.0.0.251')
+					time.sleep(random.uniform(0.0, 0.1))
