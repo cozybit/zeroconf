@@ -524,6 +524,9 @@ static int update_srv(struct service_instance *sinst, struct mdns_message *m,
 	int ret = 0;
 
 	if (r->ttl == 0) {
+		DBG("Got SRV goodbye for ");
+		debug_print_name(NULL, sinst->service.fqsn);
+		DBG(".\n");
 		cleanup_sinst(sinst);
 		return -1;
 	}
@@ -778,6 +781,9 @@ static int update_arec(struct arec *arec, enum arec_event e,
 	int ret = 0;
 
 	if (e == AREC_EVENT_RX_REC && a->ttl == 0) {
+		DBG("Got A record goodbye for ");
+		debug_print_name(NULL, arec->fqdn);
+		DBG(".\n");
 		evict_arec(arec);
 		return 0;
 	}
@@ -900,6 +906,9 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		sinst = find_service_instance(smon, m, ptr->rdata);
 		if (sinst != NULL) {
 			/* sneak a bit of state machine logic in here */
+			DBG("Got PTR with ttl=%d for ", ptr->ttl);
+			debug_print_name(NULL, sinst->service.fqsn);
+			DBG(".\n");
 			if (ptr->ttl == 0) {
 				if (sinst->state == SINST_STATE_CLEAN ||
 					sinst->state == SINST_STATE_UPDATING)
@@ -933,6 +942,9 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		 * collecting all of the relevant records, and alerting the user if
 		 * this is an overflow item.
 		 */
+		if (ptr->ttl == 0)
+			continue;
+
 		sinst = &overflow_sinst;
 		reset_service_instance(sinst);
 		sinst->smon = smon;
@@ -942,14 +954,16 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		}
 
 		SLIST_FOREACH_SAFE(r, &m->txts, list_item, rtmp) {
-			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) == 0) {
+			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) == 0 &&
+				r->ttl != 0) {
 				update_txt(sinst, r);
 				SLIST_REMOVE(&m->txts, r, mdns_resource, list_item);
 			}
 		}
 
 		SLIST_FOREACH_SAFE(r, &m->srvs, list_item, rtmp) {
-			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) != 0)
+			if (dname_cmp(m->data, r->name, NULL, sinst->service.fqsn) != 0 ||
+				r->ttl == 0)
 				continue;
 
 			srv = (struct rr_srv *)r->rdata;
@@ -962,7 +976,8 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 
 		if (sinst->arec) {
 			SLIST_FOREACH(a, &m->as, list_item) {
-				if (dname_cmp(m->data, a->name, NULL, sinst->arec->fqdn) != 0)
+				if (dname_cmp(m->data, a->name, NULL, sinst->arec->fqdn) != 0 ||
+					a->ttl == 0)
 					continue;
 				sinst->service.ipaddr = get_uint32(a->rdata);
 				break;
@@ -987,6 +1002,9 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		sinst = find_service_instance(smon, m, r->name);
 		if (sinst == NULL)
 			continue;
+		DBG("Got TXT with ttl=%d for ", r->ttl);
+		debug_print_name(NULL, sinst->service.fqsn);
+		DBG(".\n");
 		update_sinst(sinst, SINST_EVENT_GOT_TXT, m, NULL, NULL, r, elapsed);
 	}
 
@@ -997,6 +1015,9 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		sinst = find_service_instance(smon, m, r->name);
 		if (sinst == NULL)
 			continue;
+		DBG("Got SRV with ttl=%d for ", r->ttl);
+		debug_print_name(NULL, sinst->service.fqsn);
+		DBG(".\n");
 		update_sinst(sinst, SINST_EVENT_GOT_SRV, m, NULL, r, NULL, elapsed);
 	}
 
@@ -1004,6 +1025,9 @@ static int update_service_cache(struct mdns_message *m, uint32_t elapsed)
 		arec = find_arec(m, a->name);
 		if (arec == NULL)
 			continue;
+		DBG("Got A with ttl=%d for ", a->ttl);
+		debug_print_name(NULL, arec->fqdn);
+		DBG(".\n");
 		update_arec(arec, AREC_EVENT_RX_REC, m, a, elapsed);
 	}
 

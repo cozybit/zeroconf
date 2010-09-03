@@ -276,13 +276,13 @@ class mdnsTest(unittest.TestCase):
 		if txt != None:
 			txtArg = txt.replace(":", " ")
 		PTRresponse = self.prepareServiceResponse(None, fqst,
-												  fqsnTemplate % (i))
+												  fqsnTemplate % (i), ttl=ttl)
 		SRVresponse = self.prepareServiceResponse(fqdnTemplate % (i), fqst,
 												  fqsnTemplate % (i), 100,
-												  txt=txtArg)
+												  txt=txtArg, ttl=ttl)
 		Aresponse = self.prepareServiceResponse(fqdnTemplate % (i), None,
 												None, None,
-												ip = ipTemplate % (i))
+												ip = ipTemplate % (i), ttl=ttl)
 		expected = fqsnTemplate % (i) + " at " + ipTemplate % (i)
 		if txt == None:
 			expected += ":100 (no key vals)"
@@ -373,7 +373,8 @@ class mdnsTest(unittest.TestCase):
 				if q.name == a.name:
 					for aa in msg.answer:
 						# known answer?
-						if aa.name == a.name and aa.rdtype == a.rdtype:
+						aa.ttl = a.ttl
+						if aa == a:
 							return False
 					return True
 		return False
@@ -1412,4 +1413,38 @@ class mdnsTest(unittest.TestCase):
 			for r in responses:
 				if self.isAnswerFor(r, msg):
 					mdns_tool.inject(r, '224.0.0.251')
+					time.sleep(random.uniform(0.0, 0.1))
+
+	def manual_DisappearingServicesStressTest(self):
+
+		self.startServiceDiscovery("_foo._tcp.local")
+
+		# create and announce a bunch of services, all with small ttls
+		responses = []
+		for i in range(0, 19):
+			[r, o] = self.createFooN(i, ttl=10)
+			mdns_tool.inject(r, '224.0.0.251')
+			time.sleep(random.uniform(0.0, 0.1))
+			responses.append(r)
+
+		# respond to queries
+		disappear = 1
+		while 1:
+			msg = self.getNextPacket(test_sniffer, 65)
+			if msg.opcode() != dns.opcode.QUERY or \
+				   msg.flags & dns.flags.QR != 0:
+				continue
+
+			for r in responses:
+				if self.isAnswerFor(r, msg):
+					if disappear % 7 == 0:
+						# send a goodbye 1/7 of the time
+						for rr in r.answer:
+							rr.ttl = 0
+						mdns_tool.inject(r, '224.0.0.251')
+						for rr in r.answer:
+							rr.ttl = 10
+					else:
+						mdns_tool.inject(r, '224.0.0.251')
+					disappear = disappear + 1
 					time.sleep(random.uniform(0.0, 0.1))
