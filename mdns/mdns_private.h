@@ -95,6 +95,12 @@ int dname_label_cmp(uint8_t *p1, uint8_t *l1, uint8_t *p2, uint8_t *l2);
 uint8_t *dname_label_next(uint8_t *p, uint8_t *n);
 void txt_to_c_ncpy(char *dst, int dlen, uint8_t *txt, int tlen);
 int dname_overrun(uint8_t *p, uint8_t *e, uint8_t *n);
+/* d points to a dname pointer in a message.  return the offset in the
+ * packet.
+ */
+#define POINTER(d) ((((*(d) & ~0xC0) << 8) | *((d) + 1)) & 0xFFFFU)
+#define IS_POINTER(c) ((c) & 0xC0)
+
 void dname_tests(void);
 
 #ifdef MDNS_TESTS

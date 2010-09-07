@@ -48,11 +48,11 @@ void debug_print_name(struct mdns_message *m, uint8_t *name)
 	int first = 1;
 
 	while(*s) {
-		if(*s & 0xC0) { /* pointer */
+		if(IS_POINTER(*s)) { /* pointer */
 			if(m == NULL)
 				break;
 			/* go print at start of message+offset */
-			s = (uint8_t *)m->header+((uint8_t)(((*s & ~(0xC0))<<8) | *(s+1)));
+			s = m->data + POINTER(s);
 			continue;
 		}
 		else { /* label */

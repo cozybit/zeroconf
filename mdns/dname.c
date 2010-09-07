@@ -16,12 +16,6 @@
 #include "mdns_private.h"
 #include "mdns_message.h"
 
-/* d points to a dname pointer in a message.  return the offset in the
- * packet.
- */
-#define POINTER(d) ((((*(d) & ~0xC0) << 8) | *((d) + 1)) & 0xFFFFU)
-#define IS_POINTER(c) ((c) & 0xC0)
-
 /* write the normal c string "label" to "dst" with appropriate dns length and
  * null termination.  Return a pointer to the byte after the last one written,
  * or 0 if the label was too long.
@@ -383,13 +377,6 @@ uint8_t p1[] = {0xBD, 0x38, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00
 			 0x00, 0x00, 0x01, 0x00, 0x01, 0xC0, 0x0C, 0x00, 0x01, 0x00, 0x01,
 			 0x00, 0x00, 0x00, 0xFF, 0x00, 0x04, 0xC0, 0xA8, 0x01, 0x51, };
 
-uint8_t p2[] = {64, 't', 'h', 'i', 's', 'n', 'a', 'm', 'e', 'i', 's', 't', 'h',
-			 'e', 'm', 'a', 'x', 'l', 'a', 'b', 'e', 'l', 'l', 'e', 'n', 'g',
-			 't', 'h', 'p', 'l', 'u', 's', '1', '0', '0', '0', '0', '0', '0',
-			 '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0',
-			 '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', 5,
-			 'l', 'o', 'c', 'a', 'l', 0};
-
 uint8_t p3[] = {5, 'f', 'o', 'o', '-', '2', 5, 'l', 'o', 'c', 'a', 'l', 0};
 
 uint8_t p4[] = {5, 'k', '1', '=', 'v', '1', 5, 'k', '2', '=', 'k', '3', 0};
@@ -408,8 +395,6 @@ static void dname_size_tests(void)
 	FAIL_UNLESS(ret == 11, "Failed to find length of foo.local");
 	ret = dname_size(&p1[27]);
 	FAIL_UNLESS(ret == 2, "Failed to find length of name with pointer");
-	ret = dname_size(&p2[0]);
-	FAIL_UNLESS(ret == -1, "should have failed to parse max + 1 label");
 }
 
 static void dname_cmp_tests(void)
