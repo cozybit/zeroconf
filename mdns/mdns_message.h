@@ -45,7 +45,7 @@ BEGIN_PACK struct mdns_header {
 			opcode:4,	/* should be 0 for mDNS messages */
 			qr:1;		/* query/response */
 #else
-			qr:1;
+			qr:1,
 			opcode:4,
 			aa:1,
 			tc:1,
@@ -54,7 +54,7 @@ BEGIN_PACK struct mdns_header {
 			z:1,
 			ad:1,
 			cd:1,
-			rcode:4,
+			rcode:4;
 #endif
 		} fields;
 		uint16_t num;
