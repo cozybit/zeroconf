@@ -20,6 +20,13 @@ uut = mdns_subject.mdns_subject(conf)
 # Setup the sniffer
 test_sniffer = mdns_tool.sniffer(ipaddr, sniffdev)
 
+def handler(type, value, tb):
+	test_sniffer.stop()
+	uut.stop()
+	sys.__excepthook__(type, value, tb)
+
+sys.excepthook = handler
+
 class mdnsTest(unittest.TestCase):
 
 	#################### helper functions ####################
