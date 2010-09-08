@@ -614,8 +614,9 @@ static void do_responder(void *data)
 		 */
 		if (FD_ISSET(ctrl_sock, &fds)) {
 			DBG("Responder got control message.\n");
+			in_size = sizeof(struct sockaddr_in);
 			ret = recvfrom(ctrl_sock, &msg, sizeof(msg), MSG_DONTWAIT,
-						   (struct sockaddr *)0, 0);
+						   (struct sockaddr *)&from, &in_size);
 			if (ret == -1) {
 				LOG("Warning: responder failed to get control message\n");
 			} else {
@@ -636,6 +637,7 @@ static void do_responder(void *data)
 		}
 
 		if (FD_ISSET(mc_sock, &fds)) {
+			in_size = sizeof(struct sockaddr_in);
 			len = recvfrom(mc_sock, rx_msg.data, sizeof(rx_msg.data),
 						   MSG_DONTWAIT, (struct sockaddr*)&from, &in_size);
 			if (len < 0) {

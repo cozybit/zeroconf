@@ -195,6 +195,8 @@ int query_send_ctrl_msg(struct query_ctrl_msg *msg, uint16_t port)
 	fd_set fds;
 	struct timeval t;
 	int status;
+	struct sockaddr_in from;
+	socklen_t size = sizeof(struct sockaddr_in);
 
 	s = mdns_socket_loopback(htons(port), 0);
 	if (s < 0) {
@@ -232,7 +234,8 @@ int query_send_ctrl_msg(struct query_ctrl_msg *msg, uint16_t port)
 		goto done;
 	}
 
-	ret = recvfrom(s, &status, sizeof(status), 0, NULL, 0);
+	ret = recvfrom(s, &status, sizeof(status), 0, (struct sockaddr *)&from,
+				   &size);
 	if (ret == -1)
 	{
 		LOG("error: failed to recv response to control message: %d\n", errno);
