@@ -1133,6 +1133,8 @@ class mdnsTest(unittest.TestCase):
 		self.expectQuestion(aq, 3)
 		self.expectQuestion(aq, 3)
 		self.expectQuestion(aq, 3)
+
+		time.sleep(3*0.05)
 		self.expectResult("DISAPPEARED: " + output)
 
 	def test_DiscoverServiceWithoutSRVRecord(self):
@@ -1183,6 +1185,10 @@ class mdnsTest(unittest.TestCase):
 		self.expectQuestion(sq, 3)
 		self.expectQuestion(sq, 3)
 		self.expectQuestion(sq, 3)
+
+		# The third refresh attempt comes at 95% of the TTL.  Wait for it to
+		# expire, then check for the result.
+		time.sleep(3*0.05)
 		self.expectResult("DISAPPEARED: " + output)
 
 	def test_MonitorSingleLocalService(self):
