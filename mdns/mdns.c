@@ -168,8 +168,8 @@ int mdns_parse_message(struct mdns_message *m, int mlen)
 
 	if (m->num_authorities > MDNS_MAX_AUTHORITIES) {
 		LOG("Warning: Only parsing first %d authorities of %d\n",
-			MDNS_MAX_ANSWERS, m->num_answers);
-		m->num_answers = MDNS_MAX_AUTHORITIES;
+			MDNS_MAX_ANSWERS, m->num_authorities);
+		m->num_authorities = MDNS_MAX_AUTHORITIES;
 	}
 	for(i = 0; i < m->num_authorities; i++) {
 		len = parse_resource(m, &m->authorities[i]);
