@@ -1212,7 +1212,7 @@ class mdnsTest(unittest.TestCase):
 											   port, hnTemplate % i,
 											   ipTemplate % i)
 			outputs.append(output)
-		time.sleep(2)
+		time.sleep(3)
 		self.startServiceDiscovery(fqst)
 		time.sleep(1)
 
@@ -1247,7 +1247,7 @@ class mdnsTest(unittest.TestCase):
 											   ipTemplate % i)
 			outputs.append(output)
 
-		time.sleep(2)
+		time.sleep(3)
 		uut.monitor(fqst)
 		time.sleep(1)
 
