@@ -51,24 +51,30 @@
 /*
  * mdsn_thread_entry: Thread entry point function
  */
-typedef void (*mdns_thread_entry)(void *data);
+typedef void (*mdns_thread_entry)(void);
 
 /*
  * mdns_thread_create: Create a thread
  *
- * mdns_thread_create should create and launch the thread.  mdns launches only
- * a single thread, so the implementation of this function can be fairly
- * simple.
+ * mdns_thread_create should create and launch the thread.  mdns launches one
+ * thread for the responder and one for the querier.
  *
  * entry: thread entry point function
  * data: data to be passed to entry when thread is launched
+ *
+ * id: some targets may wish to know which thread is being created with a
+ * specific call to mdns_thread_create.  To facilitate this, a thread id is
+ * passed at thread creation time.  One of the MDNS_THREAD_* id values will be
+ * passed at thread creation time.
  *
  * Returns: NULL on failure; a pointer to an opaque type that represents the
  * thread on success.  This return type is passed to the other thread
  * functions.
  *
  */
-void *mdns_thread_create(mdns_thread_entry entry, void *data);
+#define MDNS_THREAD_RESPONDER 1
+#define MDNS_THREAD_QUERIER	2
+void *mdns_thread_create(mdns_thread_entry entry, int id);
 
 /*
  * mdns_thread_delete: Delete a thread
@@ -84,7 +90,7 @@ void mdns_thread_delete(void *t);
  * Some mdns routines need to yeild after sending commands to the mdns thread.
  * This allows the mdns thread to run and respond to the command.
  */
-void mdns_thread_yield(void);
+void mdns_thread_yield(void *t);
 
 /*
  * mdns_log: printf-like function to write log messages

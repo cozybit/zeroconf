@@ -45,7 +45,7 @@ static void linux_mdns_signal(int sig)
 /* Our "thread" is really a process.  We only support one thread with this
  * function, so we'll fail if the thread is already running.
  */
-void *mdns_thread_create(mdns_thread_entry entry, void *data)
+void *mdns_thread_create(mdns_thread_entry entry, int id)
 {
 	static int instance = 0;
 	char mylogfile[50];
@@ -125,7 +125,7 @@ void *mdns_thread_create(mdns_thread_entry entry, void *data)
 		srand(time(0));
 
 		/* launch the entry function */
-		entry(data);
+		entry();
 		return NULL;
 	}
 }
@@ -136,7 +136,7 @@ void mdns_thread_delete(void *t)
 	return;
 }
 
-void mdns_thread_yield(void)
+void mdns_thread_yield(void *t)
 {
 	sleep(0);
 }

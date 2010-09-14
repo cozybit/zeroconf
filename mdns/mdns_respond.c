@@ -572,7 +572,7 @@ static int process_probe_resp(struct mdns_message *tx, struct mdns_message *rx,
 }
 
 /* This is the mdns thread function */
-static void do_responder(void *data)
+static void do_responder(void)
 {
 	int max_sock;
 	int msg, ret;
@@ -788,7 +788,7 @@ static void do_responder(void *data)
 	/* some targets don't like it if we just bail on a thread without
 	 * yeilding
 	 */
-	mdns_thread_yield();
+	mdns_thread_yield(responder_thread);
 }
 
 /* return 0 for invalid, 1 for valid */
@@ -943,7 +943,7 @@ int responder_launch(uint32_t ipaddr, char *domain, char *hostname,
 		return -1;
 	}
 
-	responder_thread = mdns_thread_create(do_responder, NULL);
+	responder_thread = mdns_thread_create(do_responder, MDNS_THREAD_RESPONDER);
 	if (responder_thread == NULL)
 		return -1;
 	return 0;
@@ -957,7 +957,7 @@ void responder_halt(void)
 	if (ret != 0) {
 		LOG("Warning: failed to send HALT message to responder: %d\n", errno);
 	} else {
-		mdns_thread_yield();
+		mdns_thread_yield(responder_thread);
 	}
 	if (responder_enabled != 0)
 		LOG("Warning: failed to halt responder.  Forcing.\n");

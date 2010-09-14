@@ -1170,7 +1170,7 @@ static int prepare_query(struct mdns_message *m, uint32_t elapsed,
 }
 
 /* Main query thread */
-static void do_querier(void *data)
+static void do_querier(void)
 {
 	int max_sock;
 	struct sockaddr_in from;
@@ -1264,7 +1264,7 @@ static void do_querier(void *data)
 	/* some targets don't like it if we just bail on a thread without
 	 * yeilding
 	 */
-	mdns_thread_yield();
+	mdns_thread_yield(query_thread);
 }
 
 /* Launch the query thread */
@@ -1309,7 +1309,7 @@ int query_launch(void)
 		return mc_sock;
 	}
 
-	query_thread = mdns_thread_create(do_querier, NULL);
+	query_thread = mdns_thread_create(do_querier, MDNS_THREAD_QUERIER);
 	if (query_thread == NULL)
 		return -1;
 
@@ -1331,7 +1331,7 @@ void query_halt(void)
 	if (ret != 0) {
 		LOG("Warning: failed to send HALT message to querier: %d\n", ret);
 	} else {
-		mdns_thread_yield();
+		mdns_thread_yield(query_thread);
 	}
 	if (query_enabled != 0)
 		LOG("Warning: failed to halt querier.  Forcing.\n");
