@@ -734,13 +734,13 @@ static int update_sinst(struct service_instance *sinst, enum sinst_event e,
 static void set_ip(struct arec *arec, struct mdns_resource *a)
 {
 	uint32_t ipaddr = get_uint32(a->rdata);
-	struct service_instance *sinst;
+	struct service_instance *sinst, *sinst_tmp;
 
 	if (arec->ipaddr == ipaddr)
 		goto done;
 
 	arec->ipaddr = ipaddr;
-	SLIST_FOREACH(sinst, &arec->sinsts, alist_item)
+	SLIST_FOREACH_SAFE(sinst, &arec->sinsts, alist_item, sinst_tmp)
 		update_sinst(sinst, SINST_EVENT_GOT_AREC, NULL, arec, NULL, NULL, 0);
 
 done:
