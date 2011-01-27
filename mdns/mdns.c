@@ -384,7 +384,7 @@ int mdns_add_name_lo(struct mdns_message *m, uint8_t *label, uint16_t offset)
  * to mdns_add_name, but it doesn't have the trailing 0.  That is implied by the
  * length of the record.
  */
-static int mdns_add_txt(struct mdns_message *m, char *txt, uint16_t len)
+int mdns_add_txt(struct mdns_message *m, char *txt, uint16_t len)
 {
 	CHECK_TAILROOM(m, len + sizeof(uint16_t));
 	set_uint16(m->cur, len);
@@ -397,7 +397,7 @@ static int mdns_add_txt(struct mdns_message *m, char *txt, uint16_t len)
 /* add a dns SRV record to message m with given priority, weight, port, and
  * target name.
  */
-static int mdns_add_srv(struct mdns_message *m, uint16_t priority,
+int mdns_add_srv(struct mdns_message *m, uint16_t priority,
 						uint16_t weight, uint16_t port, uint8_t *target)
 {
 	int len = dname_size(target);

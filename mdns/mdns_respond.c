@@ -158,7 +158,7 @@ static int max_response_growth(int num_services)
  */
 static int prepare_response(struct mdns_message *rx, struct mdns_message *tx)
 {
-	int i, srv_ret = 0;
+	int i;
 	int ret = RS_NO_SEND;
 	struct mdns_question *q;
 	struct mdns_service **s;
@@ -168,6 +168,12 @@ static int prepare_response(struct mdns_message *rx, struct mdns_message *tx)
 
 	mdns_response_init(tx);
 	tx->header->id = rx->header->id;
+
+	/* We never want to include a record more than once.  To facilitate this,
+	 * we track whether we've added a service's SRV and TXT.
+	 */
+	for (s = user_services; s != NULL && *s != NULL; s++)
+		(*s)->flags &= ~(SRV_ADDED | TXT_ADDED);
 
 	for(i = 0; i < rx->num_questions; i++) {
 		q = &rx->questions[i];
@@ -188,15 +194,63 @@ static int prepare_response(struct mdns_message *rx, struct mdns_message *tx)
 					return RS_ERROR;
 				ret |= RS_SEND;
 			}
+
 			/* if the querier wants PTRs to services that we offer, add those */
 			for (s = user_services; s != NULL && *s != NULL; s++) {
 				if (dname_cmp(rx->data, q->qname, NULL, (*s)->ptrname) == 0 ||
 					dname_cmp(rx->data, q->qname, NULL, (*s)->fqsn) == 0) {
-					srv_ret = mdns_add_srv_ptr_txt(tx, *s, fqdn,
-												   MDNS_SECTION_ANSWERS, 255);
-					if (srv_ret != 0)
+
+					/* Only add records to the response as necessary */
+					if (!((*s)->flags & SRV_ADDED)) {
+						if (mdns_add_answer(tx, (*s)->fqsn, T_SRV, C_FLUSH, 255))
+							return RS_ERROR;
+						else if (mdns_add_srv(tx, 0, 0, (*s)->port, fqdn))
+							return RS_ERROR;
+						(*s)->flags |= SRV_ADDED;
+					}
+
+					if (mdns_add_answer(tx, (*s)->ptrname, T_PTR, C_FLUSH, 255))
+						return RS_ERROR;
+					else if (mdns_add_name(tx, (*s)->fqsn))
+						return RS_ERROR;
+
+					if ((*s)->keyvals && !((*s)->flags & TXT_ADDED)) {
+						if (mdns_add_answer(tx, (*s)->fqsn, T_TXT, C_FLUSH, 255))
+							return RS_ERROR;
+						else if (mdns_add_txt(tx, (*s)->keyvals, (*s)->kvlen) != 0)
+							return RS_ERROR;
+						(*s)->flags |= TXT_ADDED;
+					}
+
+					ret |= RS_SEND_DELAY;
+				}
+			}
+		}
+
+		if (q->qtype == T_SRV) {
+			for (s = user_services; s != NULL && *s != NULL; s++) {
+				if (dname_cmp(rx->data, q->qname, NULL, (*s)->fqsn) == 0 &&
+					!((*s)->flags & SRV_ADDED)) {
+					if (mdns_add_answer(tx, (*s)->fqsn, T_SRV, C_FLUSH, 255))
+						return RS_ERROR;
+					else if (mdns_add_srv(tx, 0, 0, (*s)->port, fqdn))
 						return RS_ERROR;
 					ret |= RS_SEND_DELAY;
+					(*s)->flags |= SRV_ADDED;
+				}
+			}
+		}
+
+		if (q->qtype == T_TXT) {
+			for (s = user_services; s != NULL && *s != NULL; s++) {
+				if (dname_cmp(rx->data, q->qname, NULL, (*s)->fqsn) == 0 &&
+					(*s)->keyvals && !((*s)->flags & TXT_ADDED)) {
+					if (mdns_add_answer(tx, (*s)->fqsn, T_TXT, C_FLUSH, 255))
+						return RS_ERROR;
+					else if (mdns_add_txt(tx, (*s)->keyvals, (*s)->kvlen) != 0)
+						return RS_ERROR;
+					ret |= RS_SEND_DELAY;
+					(*s)->flags |= TXT_ADDED;
 				}
 			}
 		}

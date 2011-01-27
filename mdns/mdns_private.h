@@ -126,6 +126,9 @@ void dname_tests(void);
 #define SERVICE_CHECKED_FLAG	1
 #define SERVICE_HAS_A_FLAG		2
 #define SERVICE_HAS_SRV_FLAG	4
+#define SRV_ADDED				8
+#define TXT_ADDED				16
+
 #define SERVICE_IS_READY(s) \
 	(((s)->flags & (SERVICE_HAS_A_FLAG|SERVICE_HAS_SRV_FLAG)) ==	\
 	 (SERVICE_HAS_A_FLAG|SERVICE_HAS_SRV_FLAG))
@@ -167,6 +170,9 @@ int mdns_send_msg(struct mdns_message *m, int sock, short port);
 int mdns_send_ctrl_msg(int msg, uint16_t port);
 int mdns_add_srv_ptr_txt(struct mdns_message *m, struct mdns_service *s,
 						 uint8_t *fqdn, int section, uint32_t ttl);
+int mdns_add_srv(struct mdns_message *m, uint16_t priority,
+				 uint16_t weight, uint16_t port, uint8_t *target);
+int mdns_add_txt(struct mdns_message *m, char *txt, uint16_t len);
 int mdns_add_question(struct mdns_message *m, uint8_t *qname, uint16_t qtype,
 					  uint16_t qclass);
 int mdns_add_answer(struct mdns_message *m, uint8_t *name, uint16_t type,

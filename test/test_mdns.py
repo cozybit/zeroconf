@@ -108,6 +108,31 @@ class mdnsTest(unittest.TestCase):
 
 		self.failIf(foundA == False, "Failed to find A record for " + fqdn)
 
+	def verifySRVRecord(self, r, fqst, fqsn, port, fqdn, txt=None):
+		foundSRV = False
+		foundTXT = False
+		for a in r.answer:
+			rr = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+									 dns.rdatatype.SRV, "0 0 " + str(port) +
+									 " " + fqdn)
+			if a == rr:
+				foundSRV = True
+
+			if txt != None:
+				if txt == "":
+					rr = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+											 dns.rdatatype.TXT, "\"\"")
+				else:
+					rr = dns.rrset.from_text(fqsn, 255, dns.rdataclass.FLUSH,
+											 dns.rdatatype.TXT, txt)
+				if a == rr:
+					foundTXT = True
+
+		self.failIf(foundSRV == False, "Failed to find SRV record for " +
+					fqsn + " on " + fqdn)
+		self.failIf(txt != None and foundTXT == False,
+					"Failed to find expected TXT record")
+
 	# launch mdns with "args" and wait to see the first probe
 	def waitForFirstProbe(self, args):
 		# fire up the sniffer
@@ -1461,3 +1486,30 @@ class mdnsTest(unittest.TestCase):
 						mdns_tool.inject(r, '224.0.0.251')
 					disappear = disappear + 1
 					time.sleep(random.uniform(0.0, 0.1))
+
+	def test_SRVByName(self):
+		ret = uut.start_and_wait("-n MCA-C5 -b " + ipaddr +
+			' -s controller-debian:rio:9620:tcp:foo=goo')
+		self.expectEqual(0, ret)
+
+		q = dns.message.make_query("controller-debian._rio._tcp.local",
+                                   dns.rdatatype.SRV,
+								   dns.rdataclass.IN)
+		r = self.sendQuery(q)
+		self.verifySRVRecord(r, "_rio._tcp.local.",
+								"controller-debian._rio._tcp.local.", 9620,
+								"MCA-C5.local.")
+
+	def test_SRVTXTByName(self):
+		ret = uut.start_and_wait("-n MCA-C5 -b " + ipaddr +
+			' -s controller-debian:rio:9620:tcp:foo=goo')
+		self.expectEqual(0, ret)
+
+		fqsn = "controller-debian._rio._tcp.local."
+		q = dns.message.make_query(fqsn, dns.rdatatype.SRV, dns.rdataclass.IN)
+		q2 = dns.rrset.from_text(fqsn, 0, dns.rdataclass.IN, dns.rdatatype.TXT)
+		q.question.append(q2)
+		r = self.sendQuery(q)
+		self.verifySRVRecord(r, "_rio._tcp.local.",
+								"controller-debian._rio._tcp.local.", 9620,
+								"MCA-C5.local.", "foo=goo")
