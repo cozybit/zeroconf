@@ -1,5 +1,5 @@
 /*
- * Copyright (C) cozybit, Inc. 2007-2010. All Rights Reserved.
+ * Copyright (C) cozybit, Inc. 2007-2011. All Rights Reserved.
  *
  * Use and redistribution subject to licensing terms.
  */
