@@ -1,0 +1,54 @@
+	The Software (as defined below) will only be licensed to You (as defined below) upon the condition that You accept all of the terms and conditions contained in this license (License).  Please read this License carefully.  If You are not willing to be bound by these terms, please destroy or return this Software.
+
+1.	Definitions.
+(i)	Derivative Work means any derivative work, as defined by U.S. copyright law, of the Software, including any modification, enhancement, upgrade, or improvement to the Software.
+(ii)	License means this document.
+(iii)	Software means all the files in this source tree that contain the following notice:
+
+"
+	Licensed under the Evaluation License (EVALUATION.LICENSE.txt) that is included in this source tree.
+"
+
+(iv)	 You (or Your) means an individual or legal entity exercising rights under, and complying with all of the terms of, this License.  For legal entities, You includes any entity that controls, is controlled by, or is under common control with You.  For purposes of this License, control means ownership, directly or indirectly, of more than fifty percent (50%) of the equity capital of the legal entity.
+
+2.	License Grant.  Subject to Your compliance with the terms and conditions of this License, cozybit Inc., hereby grants a nontransferable, non-exclusive, royalty-free, restricted license to You (and subsidiaries within Your own organization who agree in writing to be bound by the terms of this License) to use the Software to internally evaluate and determine Your interest in cozybit's zeroconf stack for the Evaluation Period specified in Paragraph 4 below.
+
+3.	License Restrictions.  You shall use the Software only for Evaluation purposes as specified in Paragraph 2 above, subject to the terms and conditions of this License, and You shall not:
+
+(i)	use, or cause or permit the use of, the Software in whole or in part for any purpose other than as permitted under this License;
+(ii)	distribute, sell, lease, license or otherwise make the Software available to a third party outside Your organization; 
+
+The Software is owned by cozybit Inc., and cozybit Inc. retains all right, title, and interest in and to the Software.  Nothing in this License shall be construed as conferring any license, of cozybit Inc. or any third partys intellectual property rights, whether by estoppel, implication, or otherwise,  other than the right to use the Software in the manner and to the extent authorized by this License.  
+
+4.	Evaluation Period.  The Evaluation Period shall continue for a period of one year (1 year) days after the date on which You obtain the Software, whereupon this License shall be terminated automatically, and You shall return or destroy the Software as specified in Paragraph 11 below.  Your continued use of the Software after expiration of the Evaluation Period requires execution of an appropriate license agreement with cozybit Inc..  To negotiate such license agreement, contact cozybit Inc.
+
+5.	Evaluation Feedback.  You agree to provide reasonable feedback related to the performance and usability of the Software.  Such feedback shall include the usability of the Software, bug reports, test results, problems or deficiencies encountered by You while using the Software, suggested solutions to such problems or deficiencies, and recommended action for modification of the Software.  The feedback shall be provided to cozybit Inc. by e-mail zeroconf@cozybit.com.  The parties agree that all oral or written feedback provided by You to cozybit Inc. shall be considered the property of cozybit Inc., may be used by cozybit Inc. for any purpose, and You shall keep all feedback confidential pursuant to Paragraph 10 below.
+
+6.  	Support.  cozybit Inc. is under no obligation to support the Software in any way, or to provide You with updates, bug fixes, builds, or error corrections (collectively Software Updates).  If cozybit Inc., at its sole option, provides Software Updates to You, the Software Updates will be considered part of the Software, and subject to the terms and conditions of this License.
+
+7.	Disclaimer of Warranties.  You acknowledges that the Software is a research tool, provided as is, with all faults, without any maintenance, debugging, support or improvement.  COZYBIT INC. MAKES NO REPRESENTATIONS AND EXTENDS NO WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED.  COZYBIT INC. DISCLAIMS ALL EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.  You shall not make any statements, representations or warranties with respect to any person or entity that are inconsistent with any limitation or disclaimer included in this Paragraph 7.
+
+8.	Limitation of Liability.  You assume the entire risk as to the quality, results, performance and/or non-performance of the Software.  You shall have the sole responsibility to adequately protect and backup Your data or equipment used in connection with the Software.  In no event shall cozybit Inc. (including its trustees, fellows, officers, employees, students, and agents) be responsible or liable for any indirect, special, consequential, incidental, punitive or other damages whatsoever (including lost profits, business, revenue, use, data, or other economic advantage) in connection with, arising out of, or related to this License, regardless of the theory of liability, whether for breach or in tort (including negligence), even if cozybit Inc. may have been previously advised of the possibility of such damage.   You shall not make any statements or accept any liabilities or responsibilities with respect to any person or entity that are inconsistent with any limitation included in this Paragraph 8. 
+
+9.	No Obligation.  This License does not represent or imply either: (a) any commitment whatsoever by You to purchase, acquire, commercially license or otherwise use (pursuant to other appropriate agreements) the Software and any other products or services of cozybit Inc.; or (b) any encouragement or inducement whatsoever to either You or cozybit Inc. to expend funds or other resources in the development or modification of the Software or any other products or services.
+
+10.	Confidentiality.  You acknowledge that the Software is proprietary and confidential to cozybit Inc..  You agree to protect the Software and any feedback provided by You from unauthorized disclosure, use, or release and to treat the Software and feedback with at least the same level of care as You use to protect Your own proprietary computer programs and/or confidential information, but in no event less than a reasonable standard of care.  If You become aware of any unauthorized licensing, copying, or use of the Software, You shall promptly notify cozybit Inc. at the address set forth in Paragraph 4 above.  Any information received by either party from the other party regarding the Software or the Evaluation, which was designated in writing as confidential at the time of disclosure (Confidential Information), shall be kept in confidence by the recipient and used only for Evaluation purposes, provided, however, that the disclosing party acknowledges that the recipient shall not have any obligation of confidentiality with respect to information that:
+(i)	Was in the public domain prior to its disclosure, or becomes publicly available other than through a breach of this License;
+(ii)	Was known to the recipient prior to its disclosure, or is at any time developed by the recipient independently of such disclosure; 
+(iii)	Was rightfully disclosed to the recipient by a third party without a duty of confidentiality; or
+(iv)	Is explicitly approved for release by written authorization of the disclosing party;
+(v)	Is required to be disclosed by law or court order.
+
+cozybit Inc. designated representative for facilitating this License and for receiving Confidential Information from You is Javier Cardona.  You designated representative for facilitating this License and receiving Confidential Information from cozybit Inc. is the individual specified in the Registration Form.
+
+11.  Termination.  In the event that You breach any of Your obligations under this License, and if such breach has not been remedied within ten (10) days after the date of notice in writing of such breach, cozybit Inc. may terminate this License immediately by written notice to You.  Upon expiration or termination of this License, You shall (i) promptly cease use of the Software; and (ii) return to cozybit Inc. the original and all copies of the Software in Your possession or, at the option of cozybit Inc., You shall destroy all such Software, with such destruction to be certified in writing to cozybit Inc., to the attention of Javier Cardona, by a responsible representative of You.  Rights and obligations under this License that by their natures should survive will remain in effect after termination or expiration of this License.  
+
+12.	Export Controls.  The Software may be subject to U.S. export control laws and may be subject to export or import regulations in other countries.  You agree to strictly comply with all such laws and regulations and acknowledges it has the responsibility, at its own expense, to obtain such licenses to export, re-export, or import as may be required. 
+
+13.	Entire Agreement. This License, including any appendices or exhibits, represents the parties entire agreement relating to the Software.  This License may not be extended, amended, modified, in whole or in part, except by further specific written agreement of the parties signed by their respective authorized officials.
+
+14.	Enforcement.  This License shall be governed by the substantive laws of the State of California, U.S.A., excluding its conflict of laws provisions.  If any provision of this Agreement is held to be invalid or unenforceable, such invalidity or unenforceability shall not in any way affect the validity or enforceability of the remaining provisions.
+
+15.	Waiver.  The failure of either party to enforce any provision of this License shall not constitute a waiver of that right or future enforcement of that or any other provision.
+
+16.	Assignment.  You may not assign or otherwise transfer any of its rights or obligations under this License, without the prior written consent of cozybit Inc.
