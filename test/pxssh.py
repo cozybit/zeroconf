@@ -1,3 +1,9 @@
+# Copyright © 2010-2011, cozybit Inc.
+# All rights reserved.
+#
+# Licensed under the Evaluation License (EVALUATION.LICENSE.txt) that is
+# included in this source tree.
+
 """This class extends pexpect.spawn to specialize setting up SSH connections.
 This adds methods for login, logout, and expecting the shell prompt.
 

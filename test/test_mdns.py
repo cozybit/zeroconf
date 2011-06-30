@@ -1,3 +1,9 @@
+# Copyright © 2010-2011, cozybit Inc.
+# All rights reserved.
+#
+# Licensed under the Evaluation License (EVALUATION.LICENSE.txt) that is
+# included in this source tree.
+
 import unittest, sys, os, ConfigParser, time, socket, struct
 import dns.query, dns.message
 import mdns_subject
