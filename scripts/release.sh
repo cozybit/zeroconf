@@ -62,6 +62,7 @@ cp -R mdns $DIR/.
 cp -R include $DIR/.
 cp -R examples $DIR/.
 cp -R scripts/version.sh $DIR/scripts/.
+cp -R licenses $DIR/.
 cp -R test $DIR/.
 cp Makefile $DIR/.
 cp README $DIR/.
